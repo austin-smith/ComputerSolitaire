@@ -24,6 +24,9 @@ struct ContentView: View {
     @State private var dropFrames: [DropTarget: CGRect] = [:]
     @State private var activeTarget: DropTarget?
     @State private var dragTranslation: CGSize = .zero
+    @State private var isShowingSettings = false
+
+    @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
 
     var body: some View {
         GeometryReader { geometry in
@@ -40,6 +43,7 @@ struct ContentView: View {
                         cardSize: cardSize,
                         dragTranslation: dragTranslation,
                         activeTarget: activeTarget,
+                        isCardTiltEnabled: isCardTiltEnabled,
                         dragGesture: dragGesture(for:)
                     )
                     TableauRowView(
@@ -48,6 +52,7 @@ struct ContentView: View {
                         tableauOffset: tableauOffset,
                         dragTranslation: dragTranslation,
                         activeTarget: activeTarget,
+                        isCardTiltEnabled: isCardTiltEnabled,
                         dragGesture: dragGesture(for:)
                     )
                     Spacer(minLength: 0)
@@ -81,6 +86,19 @@ struct ContentView: View {
                 }
                 .disabled(!viewModel.canUndo)
             }
+            ToolbarItem {
+                Button {
+                    isShowingSettings = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsView()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+            isShowingSettings = true
         }
     }
 
@@ -169,6 +187,7 @@ private enum CardTilt {
     static let angleRange: ClosedRange<Double> = -2.0...2.0
 }
 
+
 private struct HeaderView: View {
     let movesCount: Int
 
@@ -187,6 +206,7 @@ private struct TopRowView: View {
     let cardSize: CGSize
     let dragTranslation: CGSize
     let activeTarget: DropTarget?
+    let isCardTiltEnabled: Bool
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -196,6 +216,7 @@ private struct TopRowView: View {
                 viewModel: viewModel,
                 cardSize: cardSize,
                 dragTranslation: dragTranslation,
+                isCardTiltEnabled: isCardTiltEnabled,
                 dragGesture: dragGesture
             )
             Spacer()
@@ -207,6 +228,7 @@ private struct TopRowView: View {
                         cardSize: cardSize,
                         dragTranslation: dragTranslation,
                         isTargeted: activeTarget == .foundation(index),
+                        isCardTiltEnabled: isCardTiltEnabled,
                         dragGesture: dragGesture
                     )
                 }
@@ -221,6 +243,7 @@ private struct TableauRowView: View {
     let tableauOffset: CGFloat
     let dragTranslation: CGSize
     let activeTarget: DropTarget?
+    let isCardTiltEnabled: Bool
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -233,6 +256,7 @@ private struct TableauRowView: View {
                     offset: tableauOffset,
                     dragTranslation: dragTranslation,
                     isTargeted: activeTarget == .tableau(index),
+                    isCardTiltEnabled: isCardTiltEnabled,
                     dragGesture: dragGesture
                 )
             }
@@ -271,6 +295,7 @@ private struct WasteView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
     let dragTranslation: CGSize
+    let isCardTiltEnabled: Bool
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -294,10 +319,15 @@ private struct WasteView: View {
                 let dragOffset = isDragged ? dragTranslation : .zero
                 let depth = CGFloat(visibleWaste.count - 1 - index)
                 let xOffset = -depth * fanSpacing
-                let cardView = CardView(card: card, isSelected: viewModel.isSelected(card: card), cardSize: cardSize)
-                    .offset(x: xOffset + dragOffset.width, y: dragOffset.height)
-                    .zIndex(isTopCard ? 2 : Double(index))
-                    .allowsHitTesting(isTopCard)
+                let cardView = CardView(
+                    card: card,
+                    isSelected: viewModel.isSelected(card: card),
+                    cardSize: cardSize,
+                    isCardTiltEnabled: isCardTiltEnabled
+                )
+                .offset(x: xOffset + dragOffset.width, y: dragOffset.height)
+                .zIndex(isTopCard ? 2 : Double(index))
+                .allowsHitTesting(isTopCard)
 
                 if isTopCard {
                     cardView.gesture(dragGesture(.waste))
@@ -321,6 +351,7 @@ private struct FoundationView: View {
     let cardSize: CGSize
     let dragTranslation: CGSize
     let isTargeted: Bool
+    let isCardTiltEnabled: Bool
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -339,10 +370,15 @@ private struct FoundationView: View {
             if let card = viewModel.state.foundations[index].last {
                 let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
                 let dragOffset = isDragged ? dragTranslation : .zero
-                CardView(card: card, isSelected: viewModel.isSelected(card: card), cardSize: cardSize)
-                    .offset(x: dragOffset.width, y: dragOffset.height)
-                    .zIndex(isDragged ? 20 : 0)
-                    .gesture(dragGesture(.foundation(index)))
+                CardView(
+                    card: card,
+                    isSelected: viewModel.isSelected(card: card),
+                    cardSize: cardSize,
+                    isCardTiltEnabled: isCardTiltEnabled
+                )
+                .offset(x: dragOffset.width, y: dragOffset.height)
+                .zIndex(isDragged ? 20 : 0)
+                .gesture(dragGesture(.foundation(index)))
             }
         }
         .onTapGesture {
@@ -369,6 +405,7 @@ private struct TableauPileView: View {
     let offset: CGFloat
     let dragTranslation: CGSize
     let isTargeted: Bool
+    let isCardTiltEnabled: Bool
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -409,12 +446,17 @@ private struct TableauPileView: View {
             ForEach(Array(pile.enumerated()), id: \.element.id) { index, card in
                 let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
                 let dragOffset = isDragged ? dragTranslation : .zero
-                let cardView = CardView(card: card, isSelected: viewModel.isSelected(card: card), cardSize: cardSize)
-                    .offset(x: dragOffset.width, y: offset * CGFloat(index) + dragOffset.height)
-                    .zIndex(isDragged ? 20 + Double(index) : Double(index))
-                    .onTapGesture {
-                        viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
-                    }
+                let cardView = CardView(
+                    card: card,
+                    isSelected: viewModel.isSelected(card: card),
+                    cardSize: cardSize,
+                    isCardTiltEnabled: isCardTiltEnabled
+                )
+                .offset(x: dragOffset.width, y: offset * CGFloat(index) + dragOffset.height)
+                .zIndex(isDragged ? 20 + Double(index) : Double(index))
+                .onTapGesture {
+                    viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
+                }
 
                 cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
             }
@@ -445,12 +487,14 @@ private struct CardView: View {
     let card: Card
     let isSelected: Bool
     let cardSize: CGSize
+    let isCardTiltEnabled: Bool
     @State private var flipRotation: Double
 
-    init(card: Card, isSelected: Bool, cardSize: CGSize) {
+    init(card: Card, isSelected: Bool, cardSize: CGSize, isCardTiltEnabled: Bool) {
         self.card = card
         self.isSelected = isSelected
         self.cardSize = cardSize
+        self.isCardTiltEnabled = isCardTiltEnabled
         _flipRotation = State(initialValue: card.isFaceUp ? 0 : 180)
     }
 
@@ -465,7 +509,7 @@ private struct CardView: View {
         let backAngle = flipRotation - 180
         let frontOpacity = flipRotation < 90 ? 1.0 : 0.0
         let backOpacity = flipRotation < 90 ? 0.0 : 1.0
-        let tiltAngle = Double.random(in: CardTilt.angleRange)
+        let tiltAngle = isCardTiltEnabled ? Double.random(in: CardTilt.angleRange) : 0
 
         ZStack {
             cardFront(
