@@ -281,22 +281,36 @@ private struct WasteView: View {
             }
             return false
         }()
+        let visibleWaste = viewModel.state.waste.suffix(3)
+        let isSelected = visibleWaste.contains(where: { viewModel.isSelected(card: $0) })
+        let fanSpacing = cardSize.width * 0.25
+        let fanWidth = fanSpacing * CGFloat(max(0, visibleWaste.count - 1))
 
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             PilePlaceholderView(cardSize: cardSize)
-            if let card = viewModel.state.waste.last {
-                let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+            ForEach(Array(visibleWaste.enumerated()), id: \.element.id) { index, card in
+                let isTopCard = index == visibleWaste.count - 1
+                let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
                 let dragOffset = isDragged ? dragTranslation : .zero
-                CardView(card: card, isSelected: viewModel.isSelected(card: card), cardSize: cardSize)
-                    .offset(x: dragOffset.width, y: dragOffset.height)
-                    .zIndex(isDragged ? 20 : 0)
-                    .gesture(dragGesture(.waste))
+                let depth = CGFloat(visibleWaste.count - 1 - index)
+                let xOffset = -depth * fanSpacing
+                let cardView = CardView(card: card, isSelected: viewModel.isSelected(card: card), cardSize: cardSize)
+                    .offset(x: xOffset + dragOffset.width, y: dragOffset.height)
+                    .zIndex(isTopCard ? 2 : Double(index))
+                    .allowsHitTesting(isTopCard)
+
+                if isTopCard {
+                    cardView.gesture(dragGesture(.waste))
+                } else {
+                    cardView
+                }
             }
         }
+        .frame(width: cardSize.width + fanWidth, height: cardSize.height, alignment: .trailing)
         .onTapGesture {
             viewModel.handleWasteTap()
         }
-        .zIndex(isDragSource ? 10 : 0)
+        .zIndex(isDragSource || isSelected ? 10 : 0)
         .accessibilityLabel("Waste")
     }
 }

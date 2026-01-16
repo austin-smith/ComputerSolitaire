@@ -291,9 +291,12 @@ final class SolitaireViewModel {
     private func drawFromStock() {
         guard !state.stock.isEmpty else { return }
         pushHistory()
-        var card = state.stock.removeLast()
-        card.isFaceUp = true
-        state.waste.append(card)
+        let drawCount = min(3, state.stock.count)
+        for _ in 0..<drawCount {
+            var card = state.stock.removeLast()
+            card.isFaceUp = true
+            state.waste.append(card)
+        }
         movesCount += 1
     }
 
