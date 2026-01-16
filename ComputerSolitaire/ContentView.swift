@@ -165,6 +165,10 @@ private enum Layout {
     }
 }
 
+private enum CardTilt {
+    static let angleRange: ClosedRange<Double> = -2.0...2.0
+}
+
 private struct HeaderView: View {
     let movesCount: Int
 
@@ -447,6 +451,7 @@ private struct CardView: View {
         let backAngle = flipRotation - 180
         let frontOpacity = flipRotation < 90 ? 1.0 : 0.0
         let backOpacity = flipRotation < 90 ? 0.0 : 1.0
+        let tiltAngle = Double.random(in: CardTilt.angleRange)
 
         ZStack {
             cardFront(
@@ -472,6 +477,7 @@ private struct CardView: View {
             .rotation3DEffect(.degrees(backAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.7)
         }
         .frame(width: cardSize.width, height: cardSize.height)
+        .rotationEffect(.degrees(tiltAngle))
         .scaleEffect(isSelected ? 1.03 : 1)
         .onChange(of: card.isFaceUp) { _, newValue in
             withAnimation(.easeInOut(duration: 0.32)) {
