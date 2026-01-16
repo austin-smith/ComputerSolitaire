@@ -552,30 +552,67 @@ private struct CardView: View {
         shadowRadius: CGFloat,
         shadowYOffset: CGFloat
     ) -> some View {
-        ZStack(alignment: .topLeading) {
+        let parchment = Color(red: 0.98, green: 0.96, blue: 0.91)
+        let inkColor = card.suit.isRed ? Color(red: 0.72, green: 0.16, blue: 0.18) : Color(red: 0.12, green: 0.12, blue: 0.12)
+        let ornamentColor = Color(red: 0.66, green: 0.58, blue: 0.48)
+        let cornerMark = VStack(alignment: .leading, spacing: 2) {
+            Text(card.rank.label)
+                .font(.system(size: cardSize.width * 0.28, weight: .bold, design: .serif))
+            Image(systemName: card.suit.symbolName)
+                .font(.system(size: cardSize.width * 0.2, weight: .semibold))
+        }
+
+        return ZStack {
             cardBase(
                 cornerRadius: cornerRadius,
-                fill: Color.white,
+                fill: parchment,
                 borderColor: borderColor,
                 borderWidth: borderWidth,
                 shadowColor: shadowColor,
                 shadowRadius: shadowRadius,
                 shadowYOffset: shadowYOffset
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.55), Color.clear],
+                            startPoint: UnitPoint.topLeading,
+                            endPoint: UnitPoint.bottomTrailing
+                        )
+                    )
+                    .blendMode(.softLight)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius * 0.92, style: .continuous)
+                    .strokeBorder(ornamentColor.opacity(0.6), lineWidth: 1)
+                    .padding(cardSize.width * 0.06)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius * 0.78, style: .continuous)
+                    .strokeBorder(
+                        ornamentColor.opacity(0.45),
+                        style: StrokeStyle(lineWidth: 0.6, dash: [4, 3])
+                    )
+                    .padding(cardSize.width * 0.1)
+            )
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(card.rank.label)
-                    .font(.system(size: cardSize.width * 0.28, weight: .bold, design: .rounded))
-                Image(systemName: card.suit.symbolName)
-                    .font(.system(size: cardSize.width * 0.22, weight: .semibold))
-            }
-            .foregroundStyle(card.suit.isRed ? Color.red : Color.black)
-            .padding(cardSize.width * 0.12)
+            cornerMark
+                .foregroundStyle(inkColor)
+                .padding(cardSize.width * 0.1)
+                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.topLeading)
+
+            cornerMark
+                .foregroundStyle(inkColor)
+                .rotationEffect(.degrees(180))
+                .padding(cardSize.width * 0.1)
+                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.bottomTrailing)
 
             Image(systemName: card.suit.symbolName)
-                .font(.system(size: cardSize.width * 0.48, weight: .semibold))
-                .foregroundStyle(card.suit.isRed ? Color.red.opacity(0.2) : Color.black.opacity(0.2))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .font(.system(size: cardSize.width * 0.52, weight: .regular))
+                .foregroundStyle(inkColor.opacity(0.12))
+                .rotationEffect(.degrees(8))
+                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.center)
         }
     }
 
@@ -587,15 +624,28 @@ private struct CardView: View {
         shadowRadius: CGFloat,
         shadowYOffset: CGFloat
     ) -> some View {
-        ZStack {
+        let lacquer = Color(red: 0.18, green: 0.26, blue: 0.52)
+        let trim = Color(red: 0.78, green: 0.85, blue: 0.95)
+
+        return ZStack {
             cardBase(
                 cornerRadius: cornerRadius,
-                fill: Color(red: 0.12, green: 0.32, blue: 0.58),
+                fill: lacquer,
                 borderColor: borderColor,
                 borderWidth: borderWidth,
                 shadowColor: shadowColor,
                 shadowRadius: shadowRadius,
                 shadowYOffset: shadowYOffset
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius * 0.92, style: .continuous)
+                    .strokeBorder(trim.opacity(0.55), lineWidth: 1)
+                    .padding(cardSize.width * 0.08)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius * 0.8, style: .continuous)
+                    .strokeBorder(trim.opacity(0.35), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
+                    .padding(cardSize.width * 0.12)
             )
 
             CardBackPattern()
@@ -622,22 +672,6 @@ private struct CardView: View {
     }
 }
 
-private struct CardBackView: View {
-    let cardSize: CGSize
-
-    var body: some View {
-        let cornerRadius = cardSize.width * 0.12
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color(red: 0.12, green: 0.32, blue: 0.58))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-            .frame(width: cardSize.width, height: cardSize.height)
-    }
-}
-
 private struct CardBackPattern: View {
     var body: some View {
         GeometryReader { geometry in
@@ -655,8 +689,49 @@ private struct CardBackPattern: View {
                     }
                 }
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
+
+                Path { path in
+                    let step: CGFloat = 10
+                    var y: CGFloat = 0
+                    while y < size.height {
+                        path.move(to: CGPoint(x: 0, y: y))
+                        path.addLine(to: CGPoint(x: size.width, y: y))
+                        y += step
+                    }
+                }
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
             }
         }
+    }
+}
+
+private struct CardBackView: View {
+    let cardSize: CGSize
+
+    var body: some View {
+        let cornerRadius = cardSize.width * 0.12
+        let lacquer = Color(red: 0.18, green: 0.26, blue: 0.52)
+        let trim = Color(red: 0.78, green: 0.85, blue: 0.95)
+
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(lacquer)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(trim.opacity(0.5), lineWidth: 1)
+                        .padding(cardSize.width * 0.06)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(trim.opacity(0.25), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
+                        .padding(cardSize.width * 0.1)
+                )
+                .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+
+            CardBackPattern()
+                .padding(cardSize.width * 0.18)
+        }
+        .frame(width: cardSize.width, height: cardSize.height)
     }
 }
 
@@ -685,24 +760,11 @@ private struct DropHighlightView: View {
 }
 
 private struct TableBackground: View {
+    @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
+
     var body: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.05, green: 0.25, blue: 0.18),
-                Color(red: 0.02, green: 0.18, blue: 0.13)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
-        .overlay(
-            RadialGradient(
-                colors: [Color.white.opacity(0.12), Color.clear],
-                center: .topLeading,
-                startRadius: 20,
-                endRadius: 420
-            )
-        )
+        (TableBackgroundColor(rawValue: tableBackgroundColorRawValue) ?? TableBackgroundColor.defaultValue).color
+            .ignoresSafeArea()
     }
 }
 
