@@ -273,6 +273,7 @@ final class SolitaireViewModel {
         return true
     }
 
+    @discardableResult
     func handleDrop(to destination: Destination) -> Bool {
         let moved = tryMoveSelection(to: destination)
         if !moved {

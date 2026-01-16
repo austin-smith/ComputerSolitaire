@@ -398,11 +398,7 @@ private struct TableauPileView: View {
                         viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
                     }
 
-                if card.isFaceUp {
-                    cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
-                } else {
-                    cardView
-                }
+                cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
             }
         }
         .frame(width: cardSize.width, height: height, alignment: .top)
@@ -431,40 +427,134 @@ private struct CardView: View {
     let card: Card
     let isSelected: Bool
     let cardSize: CGSize
+    @State private var flipRotation: Double
+
+    init(card: Card, isSelected: Bool, cardSize: CGSize) {
+        self.card = card
+        self.isSelected = isSelected
+        self.cardSize = cardSize
+        _flipRotation = State(initialValue: card.isFaceUp ? 0 : 180)
+    }
 
     var body: some View {
         let cornerRadius = cardSize.width * 0.12
+        let borderColor = isSelected ? Color.yellow.opacity(0.9) : Color.black.opacity(0.2)
+        let borderWidth: CGFloat = isSelected ? 3 : 1
+        let shadowColor = Color.black.opacity(isSelected ? 0.35 : 0.2)
+        let shadowRadius: CGFloat = isSelected ? 8 : 4
+        let shadowYOffset: CGFloat = isSelected ? 6 : 2
+        let frontAngle = flipRotation
+        let backAngle = flipRotation - 180
+        let frontOpacity = flipRotation < 90 ? 1.0 : 0.0
+        let backOpacity = flipRotation < 90 ? 0.0 : 1.0
 
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(card.isFaceUp ? Color.white : Color(red: 0.12, green: 0.32, blue: 0.58))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(isSelected ? Color.yellow.opacity(0.9) : Color.black.opacity(0.2), lineWidth: isSelected ? 3 : 1)
-                )
-                .shadow(color: Color.black.opacity(isSelected ? 0.35 : 0.2), radius: isSelected ? 8 : 4, x: 0, y: isSelected ? 6 : 2)
+        ZStack {
+            cardFront(
+                cornerRadius: cornerRadius,
+                borderColor: borderColor,
+                borderWidth: borderWidth,
+                shadowColor: shadowColor,
+                shadowRadius: shadowRadius,
+                shadowYOffset: shadowYOffset
+            )
+            .opacity(frontOpacity)
+            .rotation3DEffect(.degrees(frontAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.7)
 
-            if card.isFaceUp {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(card.rank.label)
-                        .font(.system(size: cardSize.width * 0.28, weight: .bold, design: .rounded))
-                    Image(systemName: card.suit.symbolName)
-                        .font(.system(size: cardSize.width * 0.22, weight: .semibold))
-                }
-                .foregroundStyle(card.suit.isRed ? Color.red : Color.black)
-                .padding(cardSize.width * 0.12)
-
-                Image(systemName: card.suit.symbolName)
-                    .font(.system(size: cardSize.width * 0.48, weight: .semibold))
-                    .foregroundStyle(card.suit.isRed ? Color.red.opacity(0.2) : Color.black.opacity(0.2))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            } else {
-                CardBackPattern()
-                    .padding(cardSize.width * 0.18)
-            }
+            cardBack(
+                cornerRadius: cornerRadius,
+                borderColor: borderColor,
+                borderWidth: borderWidth,
+                shadowColor: shadowColor,
+                shadowRadius: shadowRadius,
+                shadowYOffset: shadowYOffset
+            )
+            .opacity(backOpacity)
+            .rotation3DEffect(.degrees(backAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.7)
         }
         .frame(width: cardSize.width, height: cardSize.height)
         .scaleEffect(isSelected ? 1.03 : 1)
+        .onChange(of: card.isFaceUp) { _, newValue in
+            withAnimation(.easeInOut(duration: 0.32)) {
+                flipRotation = newValue ? 0 : 180
+            }
+        }
+    }
+
+    private func cardFront(
+        cornerRadius: CGFloat,
+        borderColor: Color,
+        borderWidth: CGFloat,
+        shadowColor: Color,
+        shadowRadius: CGFloat,
+        shadowYOffset: CGFloat
+    ) -> some View {
+        ZStack(alignment: .topLeading) {
+            cardBase(
+                cornerRadius: cornerRadius,
+                fill: Color.white,
+                borderColor: borderColor,
+                borderWidth: borderWidth,
+                shadowColor: shadowColor,
+                shadowRadius: shadowRadius,
+                shadowYOffset: shadowYOffset
+            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(card.rank.label)
+                    .font(.system(size: cardSize.width * 0.28, weight: .bold, design: .rounded))
+                Image(systemName: card.suit.symbolName)
+                    .font(.system(size: cardSize.width * 0.22, weight: .semibold))
+            }
+            .foregroundStyle(card.suit.isRed ? Color.red : Color.black)
+            .padding(cardSize.width * 0.12)
+
+            Image(systemName: card.suit.symbolName)
+                .font(.system(size: cardSize.width * 0.48, weight: .semibold))
+                .foregroundStyle(card.suit.isRed ? Color.red.opacity(0.2) : Color.black.opacity(0.2))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        }
+    }
+
+    private func cardBack(
+        cornerRadius: CGFloat,
+        borderColor: Color,
+        borderWidth: CGFloat,
+        shadowColor: Color,
+        shadowRadius: CGFloat,
+        shadowYOffset: CGFloat
+    ) -> some View {
+        ZStack {
+            cardBase(
+                cornerRadius: cornerRadius,
+                fill: Color(red: 0.12, green: 0.32, blue: 0.58),
+                borderColor: borderColor,
+                borderWidth: borderWidth,
+                shadowColor: shadowColor,
+                shadowRadius: shadowRadius,
+                shadowYOffset: shadowYOffset
+            )
+
+            CardBackPattern()
+                .padding(cardSize.width * 0.18)
+        }
+    }
+
+    private func cardBase(
+        cornerRadius: CGFloat,
+        fill: Color,
+        borderColor: Color,
+        borderWidth: CGFloat,
+        shadowColor: Color,
+        shadowRadius: CGFloat,
+        shadowYOffset: CGFloat
+    ) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(fill)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(borderColor, lineWidth: borderWidth)
+            )
+            .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: shadowYOffset)
     }
 }
 
