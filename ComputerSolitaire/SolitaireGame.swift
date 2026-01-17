@@ -1,6 +1,20 @@
 import Foundation
 import Observation
 
+enum DrawMode: Int, CaseIterable {
+    case one = 1
+    case three = 3
+
+    var title: String {
+        switch self {
+        case .one:
+            return "1-card"
+        case .three:
+            return "3-card"
+        }
+    }
+}
+
 enum Suit: CaseIterable {
     case spades
     case hearts
@@ -147,6 +161,7 @@ final class SolitaireViewModel {
     var selection: Selection?
     var isDragging: Bool = false
     private(set) var movesCount: Int = 0
+    private(set) var stockDrawCount: Int = 3
 
     private var history: [GameSnapshot] = []
 
@@ -162,12 +177,30 @@ final class SolitaireViewModel {
         !history.isEmpty
     }
 
-    func newGame() {
+    func newGame(drawMode: DrawMode = .three) {
         state = GameState.newGame()
         selection = nil
         isDragging = false
         movesCount = 0
+        stockDrawCount = drawMode.rawValue
+        state.wasteDrawCount = 0
         history.removeAll()
+    }
+
+    func updateDrawMode(_ drawMode: DrawMode) {
+        stockDrawCount = drawMode.rawValue
+        if drawMode == .one {
+            state.wasteDrawCount = min(1, state.waste.count)
+        } else {
+            state.wasteDrawCount = min(state.wasteDrawCount, drawMode.rawValue)
+        }
+        selection = nil
+        isDragging = false
+    }
+
+    func visibleWasteCards() -> [Card] {
+        let count = min(state.wasteDrawCount, stockDrawCount)
+        return Array(state.waste.suffix(count))
     }
 
     func undo() {
@@ -275,6 +308,18 @@ final class SolitaireViewModel {
         return true
     }
 
+    func canDrop(to destination: Destination) -> Bool {
+        guard let selection, let movingCard = selection.cards.first else { return false }
+
+        switch destination {
+        case .foundation(let index):
+            guard selection.cards.count == 1 else { return false }
+            return canMoveToFoundation(card: movingCard, foundationIndex: index)
+        case .tableau(let index):
+            return canMoveToTableau(card: movingCard, destinationPile: state.tableau[index])
+        }
+    }
+
     @discardableResult
     func handleDrop(to destination: Destination) -> Bool {
         let moved = tryMoveSelection(to: destination)
@@ -293,7 +338,7 @@ final class SolitaireViewModel {
     private func drawFromStock() {
         guard !state.stock.isEmpty else { return }
         pushHistory()
-        let drawCount = min(3, state.stock.count)
+        let drawCount = min(stockDrawCount, state.stock.count)
         for _ in 0..<drawCount {
             var card = state.stock.removeLast()
             card.isFaceUp = true
@@ -378,7 +423,11 @@ final class SolitaireViewModel {
         switch selection.source {
         case .waste:
             _ = state.waste.popLast()
-            state.wasteDrawCount = max(0, state.wasteDrawCount - 1)
+            if stockDrawCount == DrawMode.one.rawValue {
+                state.wasteDrawCount = min(1, state.waste.count)
+            } else {
+                state.wasteDrawCount = max(0, state.wasteDrawCount - 1)
+            }
         case .foundation(let pile):
             _ = state.foundations[pile].popLast()
         case .tableau(let pile, let index):

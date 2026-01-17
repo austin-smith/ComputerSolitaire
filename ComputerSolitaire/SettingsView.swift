@@ -1,19 +1,5 @@
 import SwiftUI
 
-enum DrawMode: Int, CaseIterable {
-    case one = 1
-    case three = 3
-
-    var title: String {
-        switch self {
-        case .one:
-            return "1-card"
-        case .three:
-            return "3-card"
-        }
-    }
-}
-
 enum TableBackgroundColor: String, CaseIterable, Identifiable {
     case ocean = "#0671b7"
     case blush = "#f8b7cd"
@@ -111,13 +97,9 @@ struct SettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.segmented)
-                        .disabled(true)
-                        Text("1-card draw is coming soon.")
+                        Text("Choose how many cards to draw from the stock.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    }
-                    .onAppear {
-                        drawModeRawValue = DrawMode.three.rawValue
                     }
                 }
             }

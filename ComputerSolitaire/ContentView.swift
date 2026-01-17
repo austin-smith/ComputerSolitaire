@@ -19,14 +19,65 @@ private struct DropTargetFrameKey: PreferenceKey {
     }
 }
 
+private struct CardFrameKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+private struct CardFramePreference: ViewModifier {
+    let cardID: UUID
+    let xOffset: CGFloat
+    let yOffset: CGFloat
+
+    func body(content: Content) -> some View {
+        content.background(
+            GeometryReader { proxy in
+                let frame = proxy.frame(in: .named("board"))
+                let adjustedFrame = CGRect(
+                    x: frame.minX + xOffset,
+                    y: frame.minY + yOffset,
+                    width: frame.width,
+                    height: frame.height
+                )
+                Color.clear
+                    .preference(key: CardFrameKey.self, value: [cardID: adjustedFrame])
+            }
+        )
+    }
+}
+
+private extension View {
+    func cardFramePreference(_ cardID: UUID, xOffset: CGFloat = 0, yOffset: CGFloat = 0) -> some View {
+        modifier(CardFramePreference(cardID: cardID, xOffset: xOffset, yOffset: yOffset))
+    }
+}
+
 struct ContentView: View {
     @State private var viewModel = SolitaireViewModel()
     @State private var dropFrames: [DropTarget: CGRect] = [:]
     @State private var activeTarget: DropTarget?
     @State private var dragTranslation: CGSize = .zero
+    @State private var dragReturnOffset: CGSize = .zero
+    @State private var isReturningDrag = false
+    @State private var returningCards: [Card] = []
+    @State private var isDroppingCards = false
+    @State private var droppingSelection: Selection?
+    @State private var dropAnimationOffset: CGSize = .zero
+    @State private var pendingDropDestination: Destination?
+    @State private var cardFrames: [UUID: CGRect] = [:]
+    @State private var cardTilts: [UUID: Double] = [:]
+    @State private var overlayTilt: Double = 0
     @State private var isShowingSettings = false
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
+    @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
+
+    private var drawMode: DrawMode {
+        DrawMode(rawValue: drawModeRawValue) ?? .three
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -41,18 +92,18 @@ struct ContentView: View {
                     TopRowView(
                         viewModel: viewModel,
                         cardSize: cardSize,
-                        dragTranslation: dragTranslation,
                         activeTarget: activeTarget,
                         isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts,
                         dragGesture: dragGesture(for:)
                     )
                     TableauRowView(
                         viewModel: viewModel,
                         cardSize: cardSize,
                         tableauOffset: tableauOffset,
-                        dragTranslation: dragTranslation,
                         activeTarget: activeTarget,
                         isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts,
                         dragGesture: dragGesture(for:)
                     )
                     Spacer(minLength: 0)
@@ -61,7 +112,7 @@ struct ContentView: View {
 
                 if viewModel.isWin {
                     WinOverlay {
-                        viewModel.newGame()
+                        viewModel.newGame(drawMode: drawMode)
                     }
                     .transition(.opacity)
                 }
@@ -71,15 +122,34 @@ struct ContentView: View {
             .onPreferenceChange(DropTargetFrameKey.self) { frames in
                 dropFrames = frames
             }
+            .onPreferenceChange(CardFrameKey.self) { frames in
+                cardFrames = frames
+            }
             .animation(.spring(response: 0.35, dampingFraction: 0.86), value: viewModel.state)
-            .animation(.easeInOut(duration: 0.12), value: viewModel.selection)
-            .animation(.easeOut(duration: 0.15), value: viewModel.isDragging)
             .animation(.easeInOut(duration: 0.12), value: activeTarget)
+            .overlay {
+                GeometryReader { _ in
+                    DragOverlayView(
+                        viewModel: viewModel,
+                        cardFrames: cardFrames,
+                        cardTilts: cardTilts,
+                        dragTranslation: dragTranslation,
+                        dragReturnOffset: dragReturnOffset,
+                        isReturningDrag: isReturningDrag,
+                        returningCards: returningCards,
+                        isDroppingCards: isDroppingCards,
+                        droppingCards: droppingSelection?.cards ?? [],
+                        dropAnimationOffset: dropAnimationOffset,
+                        overlayTilt: overlayTilt
+                    )
+                }
+                .accessibilityHidden(true)
+            }
         }
         .toolbar {
             ToolbarItemGroup {
                 Button("New Game") {
-                    viewModel.newGame()
+                    viewModel.newGame(drawMode: drawMode)
                 }
                 Button("Undo") {
                     viewModel.undo()
@@ -100,6 +170,13 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
             isShowingSettings = true
         }
+        .onChange(of: drawModeRawValue) { (_, newValue: Int) in
+            let mode = DrawMode(rawValue: newValue) ?? .three
+            viewModel.updateDrawMode(mode)
+        }
+        .onAppear {
+            viewModel.newGame(drawMode: drawMode)
+        }
     }
 
     private func dragGesture(for origin: DragOrigin) -> AnyGesture<DragGesture.Value> {
@@ -119,14 +196,27 @@ struct ContentView: View {
     }
 
     private func startDrag(from origin: DragOrigin) -> Bool {
+        dragTranslation = .zero
+        dragReturnOffset = .zero
+        isReturningDrag = false
+        let started: Bool
         switch origin {
         case .waste:
-            return viewModel.startDragFromWaste()
+            started = viewModel.startDragFromWaste()
         case .foundation(let index):
-            return viewModel.startDragFromFoundation(index: index)
+            started = viewModel.startDragFromFoundation(index: index)
         case .tableau(let pile, let index):
-            return viewModel.startDragFromTableau(pileIndex: pile, cardIndex: index)
+            started = viewModel.startDragFromTableau(pileIndex: pile, cardIndex: index)
         }
+
+        if started, let firstCard = viewModel.selection?.cards.first {
+            // Start with the card's current tilt, then animate to straight
+            overlayTilt = cardTilts[firstCard.id] ?? 0
+            withAnimation(.easeOut(duration: 0.15)) {
+                overlayTilt = 0
+            }
+        }
+        return started
     }
 
     private func finishDrag() {
@@ -138,15 +228,100 @@ struct ContentView: View {
 
         let target = activeTarget
         activeTarget = nil
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-            dragTranslation = .zero
-            if let target {
-                viewModel.handleDrop(to: destination(for: target))
+        if let target {
+            let dest = destination(for: target)
+            if viewModel.canDrop(to: dest) {
+                beginDropAnimation(to: target, destination: dest)
             } else {
-                viewModel.cancelDrag()
+                beginReturnAnimation()
+            }
+        } else {
+            beginReturnAnimation()
+        }
+    }
+
+    private func beginDropAnimation(to target: DropTarget, destination dest: Destination) {
+        guard let selection = viewModel.selection,
+              let firstCard = selection.cards.first,
+              let cardFrame = cardFrames[firstCard.id],
+              let targetFrame = dropFrames[target] else {
+            viewModel.handleDrop(to: dest)
+            dragTranslation = .zero
+            return
+        }
+
+        // Calculate offset from current dragged position to destination
+        let currentX = cardFrame.midX + dragTranslation.width
+        let currentY = cardFrame.midY + dragTranslation.height
+        let targetX = targetFrame.midX
+        let targetY = targetFrame.midY
+
+        droppingSelection = selection
+        pendingDropDestination = dest
+        isDroppingCards = true
+        dropAnimationOffset = .zero
+        // Keep viewModel.isDragging true to hide original card during animation
+
+        let offsetToTarget = CGSize(
+            width: targetX - currentX,
+            height: targetY - currentY
+        )
+
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+            dropAnimationOffset = offsetToTarget
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            // Clear old tilts so cards get fresh tilts at new position
+            if let cards = droppingSelection?.cards {
+                for card in cards {
+                    cardTilts.removeValue(forKey: card.id)
+                }
+            }
+
+            // Update game state without animation to prevent double-animation
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                if let dest = pendingDropDestination {
+                    viewModel.handleDrop(to: dest)
+                }
+                dragTranslation = .zero
+                dropAnimationOffset = .zero
+                isDroppingCards = false
+                droppingSelection = nil
+                pendingDropDestination = nil
             }
         }
     }
+
+    private func beginReturnAnimation() {
+        guard !isReturningDrag else { return }
+        let currentTranslation = dragTranslation
+        returningCards = viewModel.selection?.cards ?? []
+        let originalTilt = returningCards.first.flatMap { cardTilts[$0.id] } ?? 0
+        // Keep viewModel.isDragging true to hide original card during animation
+        isReturningDrag = true
+        dragReturnOffset = .zero
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+            dragReturnOffset = CGSize(width: -currentTranslation.width, height: -currentTranslation.height)
+            overlayTilt = originalTilt
+        }
+        let returnDuration = 0.32
+        DispatchQueue.main.asyncAfter(deadline: .now() + returnDuration) {
+            viewModel.cancelDrag()
+            dragTranslation = .zero
+            dragReturnOffset = .zero
+            isReturningDrag = false
+            returningCards = []
+        }
+    }
+
+    private func resetReturnState() {
+        dragReturnOffset = .zero
+        isReturningDrag = false
+    }
+
 
     private func destination(for target: DropTarget) -> Destination {
         switch target {
@@ -188,6 +363,61 @@ private enum CardTilt {
 }
 
 
+private struct DragOverlayView: View {
+    @Bindable var viewModel: SolitaireViewModel
+    let cardFrames: [UUID: CGRect]
+    let cardTilts: [UUID: Double]
+    let dragTranslation: CGSize
+    let dragReturnOffset: CGSize
+    let isReturningDrag: Bool
+    let returningCards: [Card]
+    let isDroppingCards: Bool
+    let droppingCards: [Card]
+    let dropAnimationOffset: CGSize
+    let overlayTilt: Double
+
+    var body: some View {
+        Group {
+            if isDroppingCards {
+                dragCards(droppingCards, additionalOffset: dropAnimationOffset)
+            } else if isReturningDrag {
+                dragCards(returningCards, additionalOffset: dragReturnOffset)
+            } else if viewModel.isDragging, let selection = viewModel.selection {
+                dragCards(selection.cards, additionalOffset: .zero)
+            }
+        }
+        .allowsHitTesting(false)
+        .zIndex(100)
+        .accessibilityElement(children: .ignore)
+    }
+
+    @ViewBuilder
+    private func dragCards(_ cards: [Card], additionalOffset: CGSize) -> some View {
+        if cards.isEmpty {
+            EmptyView()
+        } else {
+            ForEach(cards, id: \.id) { card in
+                if let frame = cardFrames[card.id] {
+                    CardView(
+                        card: card,
+                        isSelected: true,
+                        cardSize: frame.size,
+                        isCardTiltEnabled: false,
+                        cardTilts: .constant([:])
+                    )
+                    .rotationEffect(.degrees(overlayTilt))
+                    .position(x: frame.midX, y: frame.midY)
+                    .offset(
+                        x: dragTranslation.width + additionalOffset.width,
+                        y: dragTranslation.height + additionalOffset.height
+                    )
+                    .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 4)
+                }
+            }
+        }
+    }
+}
+
 private struct HeaderView: View {
     let movesCount: Int
 
@@ -204,9 +434,9 @@ private struct HeaderView: View {
 private struct TopRowView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
-    let dragTranslation: CGSize
     let activeTarget: DropTarget?
     let isCardTiltEnabled: Bool
+    @Binding var cardTilts: [UUID: Double]
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -215,8 +445,8 @@ private struct TopRowView: View {
             WasteView(
                 viewModel: viewModel,
                 cardSize: cardSize,
-                dragTranslation: dragTranslation,
                 isCardTiltEnabled: isCardTiltEnabled,
+                cardTilts: $cardTilts,
                 dragGesture: dragGesture
             )
             Spacer()
@@ -226,9 +456,9 @@ private struct TopRowView: View {
                         viewModel: viewModel,
                         index: index,
                         cardSize: cardSize,
-                        dragTranslation: dragTranslation,
                         isTargeted: activeTarget == .foundation(index),
                         isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts,
                         dragGesture: dragGesture
                     )
                 }
@@ -241,9 +471,9 @@ private struct TableauRowView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
     let tableauOffset: CGFloat
-    let dragTranslation: CGSize
     let activeTarget: DropTarget?
     let isCardTiltEnabled: Bool
+    @Binding var cardTilts: [UUID: Double]
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -254,9 +484,9 @@ private struct TableauRowView: View {
                     pileIndex: index,
                     cardSize: cardSize,
                     offset: tableauOffset,
-                    dragTranslation: dragTranslation,
                     isTargeted: activeTarget == .tableau(index),
                     isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
                     dragGesture: dragGesture
                 )
             }
@@ -294,8 +524,8 @@ private struct StockView: View {
 private struct WasteView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
-    let dragTranslation: CGSize
     let isCardTiltEnabled: Bool
+    @Binding var cardTilts: [UUID: Double]
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -306,8 +536,7 @@ private struct WasteView: View {
             }
             return false
         }()
-        let visibleWasteCount = min(viewModel.state.wasteDrawCount, 3)
-        let visibleWaste = viewModel.state.waste.suffix(visibleWasteCount)
+        let visibleWaste = viewModel.visibleWasteCards()
         let isSelected = visibleWaste.contains(where: { viewModel.isSelected(card: $0) })
         let fanSpacing = cardSize.width * 0.25
         let fanWidth = fanSpacing * CGFloat(max(0, visibleWaste.count - 1))
@@ -317,18 +546,20 @@ private struct WasteView: View {
             ForEach(Array(visibleWaste.enumerated()), id: \.element.id) { index, card in
                 let isTopCard = index == visibleWaste.count - 1
                 let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
-                let dragOffset = isDragged ? dragTranslation : .zero
                 let depth = CGFloat(visibleWaste.count - 1 - index)
                 let xOffset = -depth * fanSpacing
                 let cardView = CardView(
                     card: card,
                     isSelected: viewModel.isSelected(card: card),
                     cardSize: cardSize,
-                    isCardTiltEnabled: isCardTiltEnabled
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts
                 )
-                .offset(x: xOffset + dragOffset.width, y: dragOffset.height)
+                .opacity(isDragged ? 0 : 1)
+                .offset(x: xOffset, y: 0)
                 .zIndex(isTopCard ? 2 : Double(index))
                 .allowsHitTesting(isTopCard)
+                .cardFramePreference(card.id, xOffset: xOffset)
 
                 if isTopCard {
                     cardView.gesture(dragGesture(.waste))
@@ -350,9 +581,9 @@ private struct FoundationView: View {
     @Bindable var viewModel: SolitaireViewModel
     let index: Int
     let cardSize: CGSize
-    let dragTranslation: CGSize
     let isTargeted: Bool
     let isCardTiltEnabled: Bool
+    @Binding var cardTilts: [UUID: Double]
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -370,16 +601,17 @@ private struct FoundationView: View {
                 .zIndex(highlightZ)
             if let card = viewModel.state.foundations[index].last {
                 let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
-                let dragOffset = isDragged ? dragTranslation : .zero
                 CardView(
                     card: card,
                     isSelected: viewModel.isSelected(card: card),
                     cardSize: cardSize,
-                    isCardTiltEnabled: isCardTiltEnabled
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts
                 )
-                .offset(x: dragOffset.width, y: dragOffset.height)
+                .opacity(isDragged ? 0 : 1)
                 .zIndex(isDragged ? 20 : 0)
                 .gesture(dragGesture(.foundation(index)))
+                .cardFramePreference(card.id)
             }
         }
         .onTapGesture {
@@ -404,9 +636,9 @@ private struct TableauPileView: View {
     let pileIndex: Int
     let cardSize: CGSize
     let offset: CGFloat
-    let dragTranslation: CGSize
     let isTargeted: Bool
     let isCardTiltEnabled: Bool
+    @Binding var cardTilts: [UUID: Double]
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -446,18 +678,20 @@ private struct TableauPileView: View {
 
             ForEach(Array(pile.enumerated()), id: \.element.id) { index, card in
                 let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
-                let dragOffset = isDragged ? dragTranslation : .zero
                 let cardView = CardView(
                     card: card,
                     isSelected: viewModel.isSelected(card: card),
                     cardSize: cardSize,
-                    isCardTiltEnabled: isCardTiltEnabled
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts
                 )
-                .offset(x: dragOffset.width, y: offset * CGFloat(index) + dragOffset.height)
+                .opacity(isDragged ? 0 : 1)
+                .offset(x: 0, y: offset * CGFloat(index))
                 .zIndex(isDragged ? 20 + Double(index) : Double(index))
                 .onTapGesture {
                     viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
                 }
+                .cardFramePreference(card.id, yOffset: offset * CGFloat(index))
 
                 cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
             }
@@ -489,14 +723,27 @@ private struct CardView: View {
     let isSelected: Bool
     let cardSize: CGSize
     let isCardTiltEnabled: Bool
+    @Binding var cardTilts: [UUID: Double]
     @State private var flipRotation: Double
+    @State private var tiltAngle: Double = 0
 
-    init(card: Card, isSelected: Bool, cardSize: CGSize, isCardTiltEnabled: Bool) {
+    init(card: Card, isSelected: Bool, cardSize: CGSize, isCardTiltEnabled: Bool, cardTilts: Binding<[UUID: Double]>) {
         self.card = card
         self.isSelected = isSelected
         self.cardSize = cardSize
         self.isCardTiltEnabled = isCardTiltEnabled
+        self._cardTilts = cardTilts
         _flipRotation = State(initialValue: card.isFaceUp ? 0 : 180)
+    }
+
+    private var targetTiltAngle: Double {
+        if !isCardTiltEnabled { return 0 }
+        if let existing = cardTilts[card.id] { return existing }
+        let newTilt = Double.random(in: CardTilt.angleRange)
+        DispatchQueue.main.async {
+            cardTilts[card.id] = newTilt
+        }
+        return newTilt
     }
 
     var body: some View {
@@ -510,7 +757,6 @@ private struct CardView: View {
         let backAngle = flipRotation - 180
         let frontOpacity = flipRotation < 90 ? 1.0 : 0.0
         let backOpacity = flipRotation < 90 ? 0.0 : 1.0
-        let tiltAngle = isCardTiltEnabled ? Double.random(in: CardTilt.angleRange) : 0
 
         ZStack {
             cardFront(
@@ -541,6 +787,11 @@ private struct CardView: View {
         .onChange(of: card.isFaceUp) { _, newValue in
             withAnimation(.easeInOut(duration: 0.32)) {
                 flipRotation = newValue ? 0 : 180
+            }
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.2)) {
+                tiltAngle = targetTiltAngle
             }
         }
     }
