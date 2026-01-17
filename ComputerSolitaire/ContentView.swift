@@ -306,7 +306,8 @@ private struct WasteView: View {
             }
             return false
         }()
-        let visibleWaste = viewModel.state.waste.suffix(3)
+        let visibleWasteCount = min(viewModel.state.wasteDrawCount, 3)
+        let visibleWaste = viewModel.state.waste.suffix(visibleWasteCount)
         let isSelected = visibleWaste.contains(where: { viewModel.isSelected(card: $0) })
         let fanSpacing = cardSize.width * 0.25
         let fanWidth = fanSpacing * CGFloat(max(0, visibleWaste.count - 1))

@@ -82,6 +82,7 @@ struct Card: Identifiable, Equatable {
 struct GameState: Equatable {
     var stock: [Card]
     var waste: [Card]
+    var wasteDrawCount: Int
     var foundations: [[Card]]
     var tableau: [[Card]]
 
@@ -100,6 +101,7 @@ struct GameState: Equatable {
         return GameState(
             stock: deck,
             waste: [],
+            wasteDrawCount: 0,
             foundations: Array(repeating: [], count: 4),
             tableau: tableau
         )
@@ -187,7 +189,7 @@ final class SolitaireViewModel {
     }
 
     func handleWasteTap() {
-        guard let top = state.waste.last else { return }
+        guard let top = state.waste.last, state.wasteDrawCount > 0 else { return }
         if selection?.source == .waste {
             selection = nil
             return
@@ -247,7 +249,7 @@ final class SolitaireViewModel {
 
     @discardableResult
     func startDragFromWaste() -> Bool {
-        guard let top = state.waste.last else { return false }
+        guard let top = state.waste.last, state.wasteDrawCount > 0 else { return false }
         selection = Selection(source: .waste, cards: [top])
         isDragging = true
         return true
@@ -297,6 +299,7 @@ final class SolitaireViewModel {
             card.isFaceUp = true
             state.waste.append(card)
         }
+        state.wasteDrawCount = drawCount
         movesCount += 1
     }
 
@@ -311,6 +314,7 @@ final class SolitaireViewModel {
         }
         state.stock = newStock
         state.waste.removeAll()
+        state.wasteDrawCount = 0
         movesCount += 1
     }
 
@@ -374,6 +378,7 @@ final class SolitaireViewModel {
         switch selection.source {
         case .waste:
             _ = state.waste.popLast()
+            state.wasteDrawCount = max(0, state.wasteDrawCount - 1)
         case .foundation(let pile):
             _ = state.foundations[pile].popLast()
         case .tableau(let pile, let index):
