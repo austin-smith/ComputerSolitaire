@@ -142,6 +142,14 @@ struct ContentView: View {
                     }
                     .transition(.opacity)
                 }
+
+                Button("Cancel Drag") {
+                    handleEscape()
+                }
+                .keyboardShortcut(.cancelAction)
+                .opacity(0.01)
+                .frame(width: 1, height: 1)
+                .accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .coordinateSpace(name: "board")
@@ -240,6 +248,12 @@ struct ContentView: View {
             previousWasteCount = viewModel.state.waste.count
             previousStockCount = viewModel.state.stock.count
         }
+    }
+
+    private func handleEscape() {
+        guard viewModel.isDragging, !isReturningDrag, !isDroppingCards else { return }
+        activeTarget = nil
+        beginReturnAnimation()
     }
 
     private func dragGesture(for origin: DragOrigin) -> AnyGesture<DragGesture.Value> {
