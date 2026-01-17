@@ -19,6 +19,22 @@ private struct DropTargetFrameKey: PreferenceKey {
     }
 }
 
+private struct StockFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
+
+private struct WasteFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
+
 private struct CardFrameKey: PreferenceKey {
     static var defaultValue: [UUID: CGRect] = [:]
 
@@ -71,6 +87,14 @@ struct ContentView: View {
     @State private var cardTilts: [UUID: Double] = [:]
     @State private var overlayTilt: Double = 0
     @State private var isShowingSettings = false
+    @State private var stockFrame: CGRect = .zero
+    @State private var wasteFrame: CGRect = .zero
+    @State private var drawAnimationCards: [DrawAnimationCard] = []
+    @State private var drawingCardIDs: Set<UUID> = []
+    @State private var drawAnimationToken = UUID()
+    @State private var wasteFanProgress: [UUID: Double] = [:]
+    @State private var previousWasteCount: Int = 0
+    @State private var previousStockCount: Int = 0
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
@@ -95,6 +119,8 @@ struct ContentView: View {
                         activeTarget: activeTarget,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
+                        drawingCardIDs: drawingCardIDs,
+                        fanProgress: wasteFanProgress,
                         dragGesture: dragGesture(for:)
                     )
                     TableauRowView(
@@ -122,26 +148,61 @@ struct ContentView: View {
             .onPreferenceChange(DropTargetFrameKey.self) { frames in
                 dropFrames = frames
             }
+            .onPreferenceChange(StockFrameKey.self) { frame in
+                stockFrame = frame
+            }
+            .onPreferenceChange(WasteFrameKey.self) { frame in
+                wasteFrame = frame
+            }
             .onPreferenceChange(CardFrameKey.self) { frames in
                 cardFrames = frames
+            }
+            .onChange(of: viewModel.state.waste.count) { _, newValue in
+                let stockCount = viewModel.state.stock.count
+                if newValue == 0 {
+                    drawAnimationCards = []
+                    drawingCardIDs = []
+                    wasteFanProgress = [:]
+                    previousWasteCount = 0
+                    previousStockCount = stockCount
+                    return
+                }
+                let addedCount = max(0, newValue - previousWasteCount)
+                let newCards = addedCount > 0 ? Array(viewModel.state.waste.suffix(addedCount)) : []
+                syncFanProgress(with: viewModel.state.waste, excluding: Set(newCards.map(\.id)))
+                if addedCount > 0, stockCount < previousStockCount {
+                    prepareFan(for: newCards)
+                    let travelDelay = startDrawAnimation(for: newCards, cardSize: cardSize)
+                    animateFan(for: newCards, delay: travelDelay)
+                }
+                previousWasteCount = newValue
+                previousStockCount = stockCount
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.86), value: viewModel.state)
             .animation(.easeInOut(duration: 0.12), value: activeTarget)
             .overlay {
                 GeometryReader { _ in
-                    DragOverlayView(
-                        viewModel: viewModel,
-                        cardFrames: cardFrames,
-                        cardTilts: cardTilts,
-                        dragTranslation: dragTranslation,
-                        dragReturnOffset: dragReturnOffset,
-                        isReturningDrag: isReturningDrag,
-                        returningCards: returningCards,
-                        isDroppingCards: isDroppingCards,
-                        droppingCards: droppingSelection?.cards ?? [],
-                        dropAnimationOffset: dropAnimationOffset,
-                        overlayTilt: overlayTilt
-                    )
+                    ZStack {
+                        DrawOverlayView(
+                            cards: drawAnimationCards,
+                            cardSize: cardSize
+                        )
+                        .zIndex(50)
+                        DragOverlayView(
+                            viewModel: viewModel,
+                            cardFrames: cardFrames,
+                            cardTilts: cardTilts,
+                            dragTranslation: dragTranslation,
+                            dragReturnOffset: dragReturnOffset,
+                            isReturningDrag: isReturningDrag,
+                            returningCards: returningCards,
+                            isDroppingCards: isDroppingCards,
+                            droppingCards: droppingSelection?.cards ?? [],
+                            dropAnimationOffset: dropAnimationOffset,
+                            overlayTilt: overlayTilt
+                        )
+                        .zIndex(100)
+                    }
                 }
                 .accessibilityHidden(true)
             }
@@ -176,6 +237,8 @@ struct ContentView: View {
         }
         .onAppear {
             viewModel.newGame(drawMode: drawMode)
+            previousWasteCount = viewModel.state.waste.count
+            previousStockCount = viewModel.state.stock.count
         }
     }
 
@@ -322,6 +385,62 @@ struct ContentView: View {
         isReturningDrag = false
     }
 
+    private func syncFanProgress(with waste: [Card], excluding excluded: Set<UUID>) {
+        let ids = Set(waste.map(\.id))
+        wasteFanProgress = wasteFanProgress.filter { ids.contains($0.key) }
+        for card in waste where wasteFanProgress[card.id] == nil && !excluded.contains(card.id) {
+            wasteFanProgress[card.id] = 1
+        }
+    }
+
+    private func prepareFan(for newCards: [Card]) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            for card in newCards {
+                wasteFanProgress[card.id] = 0
+            }
+        }
+    }
+
+    private func animateFan(for newCards: [Card], delay: Double) {
+        for (index, card) in newCards.enumerated() {
+            let stagger = 0.04 * Double(index)
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.82).delay(delay + stagger)) {
+                wasteFanProgress[card.id] = 1
+            }
+        }
+    }
+
+    private func startDrawAnimation(for newCards: [Card], cardSize: CGSize) -> Double {
+        guard !newCards.isEmpty else { return 0 }
+        guard stockFrame != .zero, wasteFrame != .zero else { return 0 }
+        let startPoint = CGPoint(x: stockFrame.midX, y: stockFrame.midY)
+        let baseX = wasteFrame.minX + cardSize.width * 0.5
+        let baseY = wasteFrame.minY + cardSize.height * 0.5
+        let items = newCards.enumerated().map { index, card in
+            DrawAnimationCard(
+                id: card.id,
+                card: card,
+                start: startPoint,
+                end: CGPoint(x: baseX, y: baseY),
+                delay: 0.05 * Double(index)
+            )
+        }
+        drawAnimationCards = items
+        drawingCardIDs = Set(items.map(\.id))
+        let token = UUID()
+        drawAnimationToken = token
+        let travelDuration = 0.32
+        let totalDelay = 0.05 * Double(max(0, newCards.count - 1))
+        DispatchQueue.main.asyncAfter(deadline: .now() + travelDuration + totalDelay) {
+            guard drawAnimationToken == token else { return }
+            drawAnimationCards = []
+            drawingCardIDs = []
+        }
+        return travelDuration + totalDelay
+    }
+
 
     private func destination(for target: DropTarget) -> Destination {
         switch target {
@@ -360,6 +479,62 @@ private enum Layout {
 
 private enum CardTilt {
     static let angleRange: ClosedRange<Double> = -2.0...2.0
+}
+
+private struct DrawAnimationCard: Identifiable {
+    let id: UUID
+    let card: Card
+    let start: CGPoint
+    let end: CGPoint
+    let delay: Double
+}
+
+private struct DrawOverlayView: View {
+    let cards: [DrawAnimationCard]
+    let cardSize: CGSize
+
+    var body: some View {
+        ForEach(cards) { item in
+            DrawOverlayCardView(
+                card: item.card,
+                cardSize: cardSize,
+                start: item.start,
+                end: item.end,
+                delay: item.delay
+            )
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct DrawOverlayCardView: View {
+    let card: Card
+    let cardSize: CGSize
+    let start: CGPoint
+    let end: CGPoint
+    let delay: Double
+    @State private var progress: CGFloat = 0
+
+    var body: some View {
+        let currentX = start.x + (end.x - start.x) * progress
+        let currentY = start.y + (end.y - start.y) * progress
+        CardView(
+            card: card,
+            isSelected: false,
+            cardSize: cardSize,
+            isCardTiltEnabled: false,
+            cardTilts: .constant([:]),
+            flipOnAppear: true,
+            flipDelay: delay + 0.05
+        )
+        .position(x: currentX, y: currentY)
+        .onAppear {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86).delay(delay)) {
+                progress = 1
+            }
+        }
+    }
 }
 
 
@@ -437,6 +612,8 @@ private struct TopRowView: View {
     let activeTarget: DropTarget?
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
+    let drawingCardIDs: Set<UUID>
+    let fanProgress: [UUID: Double]
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -447,6 +624,8 @@ private struct TopRowView: View {
                 cardSize: cardSize,
                 isCardTiltEnabled: isCardTiltEnabled,
                 cardTilts: $cardTilts,
+                drawingCardIDs: drawingCardIDs,
+                fanProgress: fanProgress,
                 dragGesture: dragGesture
             )
             Spacer()
@@ -514,6 +693,12 @@ private struct StockView: View {
                 .foregroundStyle(.white.opacity(0.8))
                 .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
         }
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: StockFrameKey.self, value: proxy.frame(in: .named("board")))
+            }
+        )
         .onTapGesture {
             viewModel.handleStockTap()
         }
@@ -526,6 +711,8 @@ private struct WasteView: View {
     let cardSize: CGSize
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
+    let drawingCardIDs: Set<UUID>
+    let fanProgress: [UUID: Double]
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -541,13 +728,14 @@ private struct WasteView: View {
         let fanSpacing = cardSize.width * 0.25
         let fanWidth = fanSpacing * CGFloat(max(0, visibleWaste.count - 1))
 
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .topLeading) {
             PilePlaceholderView(cardSize: cardSize)
             ForEach(Array(visibleWaste.enumerated()), id: \.element.id) { index, card in
                 let isTopCard = index == visibleWaste.count - 1
                 let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
-                let depth = CGFloat(visibleWaste.count - 1 - index)
-                let xOffset = -depth * fanSpacing
+                let isDrawing = drawingCardIDs.contains(card.id)
+                let progress = fanProgress[card.id] ?? 1
+                let xOffset = CGFloat(index) * fanSpacing * progress
                 let cardView = CardView(
                     card: card,
                     isSelected: viewModel.isSelected(card: card),
@@ -555,10 +743,10 @@ private struct WasteView: View {
                     isCardTiltEnabled: isCardTiltEnabled,
                     cardTilts: $cardTilts
                 )
-                .opacity(isDragged ? 0 : 1)
+                .opacity(isDragged || isDrawing ? 0 : 1)
                 .offset(x: xOffset, y: 0)
                 .zIndex(isTopCard ? 2 : Double(index))
-                .allowsHitTesting(isTopCard)
+                .allowsHitTesting(isTopCard && !isDrawing)
                 .cardFramePreference(card.id, xOffset: xOffset)
 
                 if isTopCard {
@@ -568,7 +756,13 @@ private struct WasteView: View {
                 }
             }
         }
-        .frame(width: cardSize.width + fanWidth, height: cardSize.height, alignment: .trailing)
+        .frame(width: cardSize.width + fanWidth, height: cardSize.height, alignment: .leading)
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: WasteFrameKey.self, value: proxy.frame(in: .named("board")))
+            }
+        )
         .onTapGesture {
             viewModel.handleWasteTap()
         }
@@ -724,16 +918,29 @@ private struct CardView: View {
     let cardSize: CGSize
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
+    let flipOnAppear: Bool
+    let flipDelay: Double
     @State private var flipRotation: Double
     @State private var tiltAngle: Double = 0
 
-    init(card: Card, isSelected: Bool, cardSize: CGSize, isCardTiltEnabled: Bool, cardTilts: Binding<[UUID: Double]>) {
+    init(
+        card: Card,
+        isSelected: Bool,
+        cardSize: CGSize,
+        isCardTiltEnabled: Bool,
+        cardTilts: Binding<[UUID: Double]>,
+        flipOnAppear: Bool = false,
+        flipDelay: Double = 0
+    ) {
         self.card = card
         self.isSelected = isSelected
         self.cardSize = cardSize
         self.isCardTiltEnabled = isCardTiltEnabled
         self._cardTilts = cardTilts
-        _flipRotation = State(initialValue: card.isFaceUp ? 0 : 180)
+        self.flipOnAppear = flipOnAppear
+        self.flipDelay = flipDelay
+        let startFaceDown = flipOnAppear && card.isFaceUp
+        _flipRotation = State(initialValue: startFaceDown ? 180 : (card.isFaceUp ? 0 : 180))
     }
 
     private var targetTiltAngle: Double {
@@ -790,6 +997,11 @@ private struct CardView: View {
             }
         }
         .onAppear {
+            if flipOnAppear, card.isFaceUp, flipRotation != 0 {
+                withAnimation(.easeInOut(duration: 0.22).delay(flipDelay)) {
+                    flipRotation = 0
+                }
+            }
             withAnimation(.easeOut(duration: 0.2)) {
                 tiltAngle = targetTiltAngle
             }
