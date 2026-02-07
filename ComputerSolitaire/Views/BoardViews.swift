@@ -11,7 +11,11 @@ enum Layout {
         return CGSize(width: cardWidth, height: cardWidth * 1.45)
     }
 
-    static func tableauOffset(for cardHeight: CGFloat) -> CGFloat {
+    static func tableauFaceDownOffset(for cardHeight: CGFloat) -> CGFloat {
+        max(16, cardHeight * 0.18)
+    }
+
+    static func tableauFaceUpOffset(for cardHeight: CGFloat) -> CGFloat {
         max(22, cardHeight * 0.28)
     }
 }
@@ -79,7 +83,8 @@ struct TopRowView: View {
 struct TableauRowView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
-    let tableauOffset: CGFloat
+    let faceDownOffset: CGFloat
+    let faceUpOffset: CGFloat
     let activeTarget: DropTarget?
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
@@ -93,7 +98,8 @@ struct TableauRowView: View {
                     viewModel: viewModel,
                     pileIndex: index,
                     cardSize: cardSize,
-                    offset: tableauOffset,
+                    faceDownOffset: faceDownOffset,
+                    faceUpOffset: faceUpOffset,
                     isTargeted: activeTarget == .tableau(index),
                     isCardTiltEnabled: isCardTiltEnabled,
                     cardTilts: $cardTilts,
@@ -289,7 +295,8 @@ struct TableauPileView: View {
     @Bindable var viewModel: SolitaireViewModel
     let pileIndex: Int
     let cardSize: CGSize
-    let offset: CGFloat
+    let faceDownOffset: CGFloat
+    let faceUpOffset: CGFloat
     let isTargeted: Bool
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
@@ -306,15 +313,20 @@ struct TableauPileView: View {
         }()
 
         let pile = viewModel.state.tableau[pileIndex]
-        let height = max(cardSize.height, cardSize.height + offset * CGFloat(max(0, pile.count - 1)))
+        let yOffsets = tableauYOffsets(for: pile)
+        let topCardYOffset = yOffsets.last ?? 0
+        let stackDropYOffset = dropYOffset(for: pile, yOffsets: yOffsets)
+        let height = max(cardSize.height, cardSize.height + topCardYOffset)
         let highlightYOffset: CGFloat = {
             guard viewModel.isDragging, let selection = viewModel.selection else {
-                return offset * CGFloat(pile.count)
+                return stackDropYOffset
             }
-            if case .tableau(let sourcePile, let sourceIndex) = selection.source, sourcePile == pileIndex {
-                return offset * CGFloat(sourceIndex)
+            if case .tableau(let sourcePile, let sourceIndex) = selection.source,
+               sourcePile == pileIndex,
+               sourceIndex < yOffsets.count {
+                return yOffsets[sourceIndex]
             }
-            return offset * CGFloat(pile.count)
+            return stackDropYOffset
         }()
         let highlightZ: Double = Double(pile.count) + 0.5
 
@@ -334,6 +346,7 @@ struct TableauPileView: View {
             ForEach(Array(pile.enumerated()), id: \.element.id) { index, card in
                 let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
                 let isHidden = hiddenCardIDs.contains(card.id)
+                let yOffset = yOffsets[index]
                 let cardView = CardView(
                     card: card,
                     isSelected: viewModel.isSelected(card: card),
@@ -342,13 +355,13 @@ struct TableauPileView: View {
                     cardTilts: $cardTilts
                 )
                 .opacity(isDragged || isHidden ? 0 : 1)
-                .offset(x: 0, y: offset * CGFloat(index))
+                .offset(x: 0, y: yOffset)
                 .zIndex(isDragged ? 20 + Double(index) : Double(index))
                 .allowsHitTesting(!isHidden)
                 .onTapGesture {
                     viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
                 }
-                .cardFramePreference(card.id, yOffset: offset * CGFloat(index))
+                .cardFramePreference(card.id, yOffset: yOffset)
 
                 cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
             }
@@ -357,7 +370,6 @@ struct TableauPileView: View {
         .background(
             GeometryReader { proxy in
                 let boardFrame = proxy.frame(in: .named("board"))
-                let topCardYOffset = offset * CGFloat(max(0, pile.count - 1))
                 let snapFrame = CGRect(
                     x: boardFrame.minX,
                     y: boardFrame.minY + highlightYOffset,
@@ -391,6 +403,27 @@ struct TableauPileView: View {
         )
         .zIndex(isDragSource ? 10 : 0)
         .accessibilityLabel("Tableau \(pileIndex + 1)")
+    }
+
+    private func tableauYOffsets(for pile: [Card]) -> [CGFloat] {
+        guard !pile.isEmpty else { return [] }
+        var yOffsets: [CGFloat] = []
+        yOffsets.reserveCapacity(pile.count)
+        var runningYOffset: CGFloat = 0
+
+        for (index, card) in pile.enumerated() {
+            yOffsets.append(runningYOffset)
+            if index < pile.count - 1 {
+                runningYOffset += card.isFaceUp ? faceUpOffset : faceDownOffset
+            }
+        }
+
+        return yOffsets
+    }
+
+    private func dropYOffset(for pile: [Card], yOffsets: [CGFloat]) -> CGFloat {
+        guard let lastCard = pile.last, let lastYOffset = yOffsets.last else { return 0 }
+        return lastYOffset + (lastCard.isFaceUp ? faceUpOffset : faceDownOffset)
     }
 }
 

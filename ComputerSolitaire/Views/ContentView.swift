@@ -110,7 +110,8 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geometry in
             let cardSize = Layout.cardSize(for: geometry.size.width)
-            let tableauOffset = Layout.tableauOffset(for: cardSize.height)
+            let tableauFaceDownOffset = Layout.tableauFaceDownOffset(for: cardSize.height)
+            let tableauFaceUpOffset = Layout.tableauFaceUpOffset(for: cardSize.height)
 
             ZStack {
                 TableBackground()
@@ -131,7 +132,8 @@ struct ContentView: View {
                     TableauRowView(
                         viewModel: viewModel,
                         cardSize: cardSize,
-                        tableauOffset: tableauOffset,
+                        faceDownOffset: tableauFaceDownOffset,
+                        faceUpOffset: tableauFaceUpOffset,
                         activeTarget: activeTarget,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
