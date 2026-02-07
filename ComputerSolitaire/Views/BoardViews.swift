@@ -217,6 +217,9 @@ struct FoundationView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
+        let foundation = viewModel.state.foundations[index]
+        let visibleDepth = min(foundation.count, 4)
+        let startIndex = foundation.count - visibleDepth
         let isDragSource: Bool = {
             guard viewModel.isDragging, let selection = viewModel.selection else { return false }
             if case .foundation(let pile) = selection.source {
@@ -229,21 +232,29 @@ struct FoundationView: View {
             PilePlaceholderView(cardSize: cardSize)
             DropHighlightView(cardSize: cardSize, isTargeted: isTargeted)
                 .zIndex(highlightZ)
-            if let card = viewModel.state.foundations[index].last {
-                let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+            ForEach(Array(foundation.enumerated().dropFirst(startIndex)), id: \.element.id) { cardIndex, card in
+                let isTopCard = cardIndex == foundation.count - 1
+                let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
                 let isHidden = hiddenCardIDs.contains(card.id)
-                CardView(
+                let cardView = CardView(
                     card: card,
-                    isSelected: viewModel.isSelected(card: card),
+                    isSelected: isTopCard && viewModel.isSelected(card: card),
                     cardSize: cardSize,
                     isCardTiltEnabled: isCardTiltEnabled,
                     cardTilts: $cardTilts
                 )
                 .opacity(isDragged || isHidden ? 0 : 1)
-                .zIndex(isDragged ? 20 : 0)
-                .allowsHitTesting(!isHidden)
-                .gesture(dragGesture(.foundation(index)))
-                .cardFramePreference(card.id)
+                .zIndex(isTopCard && isDragged ? 20 : 0)
+                .allowsHitTesting(isTopCard && !isHidden)
+
+                if isTopCard {
+                    cardView
+                        .gesture(dragGesture(.foundation(index)))
+                        .cardFramePreference(card.id)
+                } else {
+                    cardView
+                        .allowsHitTesting(false)
+                }
             }
         }
         .onTapGesture {
