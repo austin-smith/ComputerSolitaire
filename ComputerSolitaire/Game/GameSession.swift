@@ -1,160 +1,6 @@
 import Foundation
 import Observation
 
-enum DrawMode: Int, CaseIterable, Codable {
-    case one = 1
-    case three = 3
-
-    var title: String {
-        switch self {
-        case .one:
-            return "1-card"
-        case .three:
-            return "3-card"
-        }
-    }
-}
-
-enum Suit: CaseIterable, Codable {
-    case spades
-    case hearts
-    case diamonds
-    case clubs
-
-    var isRed: Bool {
-        switch self {
-        case .hearts, .diamonds:
-            return true
-        case .spades, .clubs:
-            return false
-        }
-    }
-
-    var symbolName: String {
-        switch self {
-        case .spades:
-            return "suit.spade.fill"
-        case .hearts:
-            return "suit.heart.fill"
-        case .diamonds:
-            return "suit.diamond.fill"
-        case .clubs:
-            return "suit.club.fill"
-        }
-    }
-}
-
-enum Rank: Int, CaseIterable, Comparable, Codable {
-    case ace = 1
-    case two = 2
-    case three = 3
-    case four = 4
-    case five = 5
-    case six = 6
-    case seven = 7
-    case eight = 8
-    case nine = 9
-    case ten = 10
-    case jack = 11
-    case queen = 12
-    case king = 13
-
-    static func < (lhs: Rank, rhs: Rank) -> Bool {
-        lhs.rawValue < rhs.rawValue
-    }
-
-    var label: String {
-        switch self {
-        case .ace:
-            return "A"
-        case .jack:
-            return "J"
-        case .queen:
-            return "Q"
-        case .king:
-            return "K"
-        default:
-            return String(rawValue)
-        }
-    }
-}
-
-struct Card: Identifiable, Equatable, Codable {
-    let id: UUID
-    let suit: Suit
-    let rank: Rank
-    var isFaceUp: Bool
-
-    init(id: UUID = UUID(), suit: Suit, rank: Rank, isFaceUp: Bool = false) {
-        self.id = id
-        self.suit = suit
-        self.rank = rank
-        self.isFaceUp = isFaceUp
-    }
-}
-
-struct GameState: Equatable, Codable {
-    var stock: [Card]
-    var waste: [Card]
-    var wasteDrawCount: Int
-    var foundations: [[Card]]
-    var tableau: [[Card]]
-
-    static func newGame() -> GameState {
-        var deck = Card.fullDeck().shuffled()
-        var tableau = Array(repeating: [Card](), count: 7)
-
-        for pileIndex in 0..<7 {
-            for cardIndex in 0...pileIndex {
-                var card = deck.removeLast()
-                card.isFaceUp = cardIndex == pileIndex
-                tableau[pileIndex].append(card)
-            }
-        }
-
-        return GameState(
-            stock: deck,
-            waste: [],
-            wasteDrawCount: 0,
-            foundations: Array(repeating: [], count: 4),
-            tableau: tableau
-        )
-    }
-}
-
-extension Card {
-    static func fullDeck() -> [Card] {
-        var deck: [Card] = []
-        for suit in Suit.allCases {
-            for rank in Rank.allCases {
-                deck.append(Card(suit: suit, rank: rank))
-            }
-        }
-        return deck
-    }
-}
-
-struct Selection: Equatable {
-    enum Source: Equatable {
-        case waste
-        case foundation(pile: Int)
-        case tableau(pile: Int, index: Int)
-    }
-
-    let source: Source
-    let cards: [Card]
-}
-
-enum Destination: Equatable {
-    case foundation(Int)
-    case tableau(Int)
-}
-
-struct GameSnapshot: Codable {
-    let state: GameState
-    let movesCount: Int
-}
-
 @Observable
 final class SolitaireViewModel {
     static let maxUndoHistoryCount = 200
@@ -211,6 +57,10 @@ final class SolitaireViewModel {
         movesCount = snapshot.movesCount
         selection = nil
         isDragging = false
+    }
+
+    func peekUndoSnapshot() -> GameSnapshot? {
+        history.last
     }
 
     func persistencePayload() -> SavedGamePayload {
@@ -272,7 +122,12 @@ final class SolitaireViewModel {
 
             if !card.isFaceUp {
                 if cardIndex == pile.count - 1 {
-                    pushHistory()
+                    pushHistory(
+                        undoContext: UndoAnimationContext(
+                            action: .flipTableauTop,
+                            cardIDs: [card.id]
+                        )
+                    )
                     state.tableau[pileIndex][cardIndex].isFaceUp = true
                     movesCount += 1
                 }
@@ -337,9 +192,15 @@ final class SolitaireViewModel {
         switch destination {
         case .foundation(let index):
             guard selection.cards.count == 1 else { return false }
-            return canMoveToFoundation(card: movingCard, foundationIndex: index)
+            return GameRules.canMoveToFoundation(
+                card: movingCard,
+                foundation: state.foundations[index]
+            )
         case .tableau(let index):
-            return canMoveToTableau(card: movingCard, destinationPile: state.tableau[index])
+            return GameRules.canMoveToTableau(
+                card: movingCard,
+                destinationPile: state.tableau[index]
+            )
         }
     }
 
@@ -357,11 +218,21 @@ final class SolitaireViewModel {
         selection = nil
         isDragging = false
     }
+}
 
-    private func drawFromStock() {
+private extension SolitaireViewModel {
+    func drawFromStock() {
         guard !state.stock.isEmpty else { return }
-        pushHistory()
         let drawCount = min(stockDrawCount, state.stock.count)
+        let drawnCardIDs = (0..<drawCount).map { offset in
+            state.stock[state.stock.count - 1 - offset].id
+        }
+        pushHistory(
+            undoContext: UndoAnimationContext(
+                action: .drawFromStock,
+                cardIDs: drawnCardIDs
+            )
+        )
         for _ in 0..<drawCount {
             var card = state.stock.removeLast()
             card.isFaceUp = true
@@ -371,9 +242,18 @@ final class SolitaireViewModel {
         movesCount += 1
     }
 
-    private func recycleWaste() {
+    func recycleWaste() {
         guard state.stock.isEmpty, !state.waste.isEmpty else { return }
-        pushHistory()
+        let visibleWasteIDs = visibleWasteCards().map(\.id)
+        let animatedWasteIDs = visibleWasteIDs.isEmpty
+            ? [state.waste.last?.id].compactMap { $0 }
+            : visibleWasteIDs
+        pushHistory(
+            undoContext: UndoAnimationContext(
+                action: .recycleWaste,
+                cardIDs: animatedWasteIDs
+            )
+        )
         var newStock: [Card] = []
         for card in state.waste.reversed() {
             var newCard = card
@@ -386,7 +266,7 @@ final class SolitaireViewModel {
         movesCount += 1
     }
 
-    private func selectFromTableau(pileIndex: Int, cardIndex: Int) {
+    func selectFromTableau(pileIndex: Int, cardIndex: Int) {
         let pile = state.tableau[pileIndex]
         guard cardIndex < pile.count else { return }
         let card = pile[cardIndex]
@@ -395,19 +275,24 @@ final class SolitaireViewModel {
         selection = Selection(source: .tableau(pile: pileIndex, index: cardIndex), cards: cards)
     }
 
-    private func selectFromFoundation(index: Int) {
+    func selectFromFoundation(index: Int) {
         guard let top = state.foundations[index].last else { return }
         selection = Selection(source: .foundation(pile: index), cards: [top])
     }
 
-    private func tryMoveSelection(to destination: Destination) -> Bool {
+    func tryMoveSelection(to destination: Destination) -> Bool {
         guard let selection, let movingCard = selection.cards.first else { return false }
 
         switch destination {
         case .foundation(let index):
             guard selection.cards.count == 1 else { return false }
-            guard canMoveToFoundation(card: movingCard, foundationIndex: index) else { return false }
-            pushHistory()
+            guard GameRules.canMoveToFoundation(card: movingCard, foundation: state.foundations[index]) else { return false }
+            pushHistory(
+                undoContext: UndoAnimationContext(
+                    action: .moveSelection,
+                    cardIDs: selection.cards.map(\.id)
+                )
+            )
             removeSelection(selection)
             state.foundations[index].append(movingCard)
             movesCount += 1
@@ -415,8 +300,13 @@ final class SolitaireViewModel {
             return true
 
         case .tableau(let index):
-            guard canMoveToTableau(card: movingCard, destinationPile: state.tableau[index]) else { return false }
-            pushHistory()
+            guard GameRules.canMoveToTableau(card: movingCard, destinationPile: state.tableau[index]) else { return false }
+            pushHistory(
+                undoContext: UndoAnimationContext(
+                    action: .moveSelection,
+                    cardIDs: selection.cards.map(\.id)
+                )
+            )
             removeSelection(selection)
             state.tableau[index].append(contentsOf: selection.cards)
             movesCount += 1
@@ -425,24 +315,7 @@ final class SolitaireViewModel {
         }
     }
 
-    private func canMoveToFoundation(card: Card, foundationIndex: Int) -> Bool {
-        let foundation = state.foundations[foundationIndex]
-        if foundation.isEmpty {
-            return card.rank == .ace
-        }
-        guard let top = foundation.last else { return false }
-        return top.suit == card.suit && card.rank.rawValue == top.rank.rawValue + 1
-    }
-
-    private func canMoveToTableau(card: Card, destinationPile: [Card]) -> Bool {
-        if destinationPile.isEmpty {
-            return card.rank == .king
-        }
-        guard let top = destinationPile.last else { return false }
-        return top.isFaceUp && top.suit.isRed != card.suit.isRed && card.rank.rawValue == top.rank.rawValue - 1
-    }
-
-    private func removeSelection(_ selection: Selection) {
+    func removeSelection(_ selection: Selection) {
         switch selection.source {
         case .waste:
             _ = state.waste.popLast()
@@ -461,15 +334,21 @@ final class SolitaireViewModel {
         }
     }
 
-    private func flipTopCardIfNeeded(in pileIndex: Int) {
+    func flipTopCardIfNeeded(in pileIndex: Int) {
         guard let lastIndex = state.tableau[pileIndex].indices.last else { return }
         if !state.tableau[pileIndex][lastIndex].isFaceUp {
             state.tableau[pileIndex][lastIndex].isFaceUp = true
         }
     }
 
-    private func pushHistory() {
-        history.append(GameSnapshot(state: state, movesCount: movesCount))
+    func pushHistory(undoContext: UndoAnimationContext? = nil) {
+        history.append(
+            GameSnapshot(
+                state: state,
+                movesCount: movesCount,
+                undoContext: undoContext
+            )
+        )
         if history.count > Self.maxUndoHistoryCount {
             history.removeFirst()
         }
