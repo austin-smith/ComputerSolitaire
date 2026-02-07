@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 private enum DropTarget: Hashable {
     case foundation(Int)
@@ -72,6 +73,9 @@ private extension View {
 }
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var viewModel = SolitaireViewModel()
     @State private var dropFrames: [DropTarget: CGRect] = [:]
     @State private var activeTarget: DropTarget?
@@ -95,6 +99,9 @@ struct ContentView: View {
     @State private var wasteFanProgress: [UUID: Double] = [:]
     @State private var previousWasteCount: Int = 0
     @State private var previousStockCount: Int = 0
+    @State private var hasLoadedGame = false
+    @State private var isHydratingGame = false
+    @State private var autosaveTask: Task<Void, Never>?
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
@@ -139,6 +146,7 @@ struct ContentView: View {
                 if viewModel.isWin {
                     WinOverlay {
                         viewModel.newGame(drawMode: drawMode)
+                        persistGameNow()
                     }
                     .transition(.opacity)
                 }
@@ -219,6 +227,7 @@ struct ContentView: View {
             ToolbarItemGroup {
                 Button("New Game") {
                     viewModel.newGame(drawMode: drawMode)
+                    persistGameNow()
                 }
                 Button("Undo") {
                     viewModel.undo()
@@ -242,11 +251,25 @@ struct ContentView: View {
         .onChange(of: drawModeRawValue) { (_, newValue: Int) in
             let mode = DrawMode(rawValue: newValue) ?? .three
             viewModel.updateDrawMode(mode)
+            scheduleAutosave()
+        }
+        .onChange(of: viewModel.state) { _, _ in
+            scheduleAutosave()
+        }
+        .onChange(of: viewModel.movesCount) { _, _ in
+            scheduleAutosave()
+        }
+        .onChange(of: viewModel.stockDrawCount) { _, _ in
+            scheduleAutosave()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            handleScenePhaseChange(newPhase)
         }
         .onAppear {
-            viewModel.newGame(drawMode: drawMode)
-            previousWasteCount = viewModel.state.waste.count
-            previousStockCount = viewModel.state.stock.count
+            initializeGameIfNeeded()
+        }
+        .onDisappear {
+            persistGameNow()
         }
     }
 
@@ -473,6 +496,56 @@ struct ContentView: View {
             return .tableau(index)
         }
         return nil
+    }
+
+    private func initializeGameIfNeeded() {
+        guard !hasLoadedGame else { return }
+        hasLoadedGame = true
+        isHydratingGame = true
+        defer {
+            isHydratingGame = false
+            previousWasteCount = viewModel.state.waste.count
+            previousStockCount = viewModel.state.stock.count
+        }
+
+        if let payload = GamePersistence.load(from: modelContext), viewModel.restore(from: payload) {
+            if drawModeRawValue != viewModel.stockDrawCount {
+                drawModeRawValue = viewModel.stockDrawCount
+            }
+        } else {
+            viewModel.newGame(drawMode: drawMode)
+            persistGameNow()
+        }
+    }
+
+    private func scheduleAutosave() {
+        guard hasLoadedGame, !isHydratingGame else { return }
+        autosaveTask?.cancel()
+        autosaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            persistGameNow()
+        }
+    }
+
+    private func handleScenePhaseChange(_ newPhase: ScenePhase) {
+        guard hasLoadedGame else { return }
+        if newPhase == .inactive || newPhase == .background {
+            persistGameNow()
+        }
+    }
+
+    private func persistGameNow() {
+        guard hasLoadedGame else { return }
+        autosaveTask?.cancel()
+        autosaveTask = nil
+        do {
+            try GamePersistence.save(viewModel.persistencePayload(), in: modelContext)
+        } catch {
+#if DEBUG
+            print("Failed to persist game state: \(error)")
+#endif
+        }
     }
 }
 

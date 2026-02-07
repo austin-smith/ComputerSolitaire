@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct ComputerSolitaireApp: App {
@@ -6,6 +7,7 @@ struct ComputerSolitaireApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: SavedGameRecord.self, isAutosaveEnabled: true, isUndoEnabled: false)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {

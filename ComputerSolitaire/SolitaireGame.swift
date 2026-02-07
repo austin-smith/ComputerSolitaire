@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-enum DrawMode: Int, CaseIterable {
+enum DrawMode: Int, CaseIterable, Codable {
     case one = 1
     case three = 3
 
@@ -15,7 +15,7 @@ enum DrawMode: Int, CaseIterable {
     }
 }
 
-enum Suit: CaseIterable {
+enum Suit: CaseIterable, Codable {
     case spades
     case hearts
     case diamonds
@@ -44,7 +44,7 @@ enum Suit: CaseIterable {
     }
 }
 
-enum Rank: Int, CaseIterable, Comparable {
+enum Rank: Int, CaseIterable, Comparable, Codable {
     case ace = 1
     case two = 2
     case three = 3
@@ -79,7 +79,7 @@ enum Rank: Int, CaseIterable, Comparable {
     }
 }
 
-struct Card: Identifiable, Equatable {
+struct Card: Identifiable, Equatable, Codable {
     let id: UUID
     let suit: Suit
     let rank: Rank
@@ -93,7 +93,7 @@ struct Card: Identifiable, Equatable {
     }
 }
 
-struct GameState: Equatable {
+struct GameState: Equatable, Codable {
     var stock: [Card]
     var waste: [Card]
     var wasteDrawCount: Int
@@ -150,13 +150,15 @@ enum Destination: Equatable {
     case tableau(Int)
 }
 
-struct GameSnapshot {
+struct GameSnapshot: Codable {
     let state: GameState
     let movesCount: Int
 }
 
 @Observable
 final class SolitaireViewModel {
+    static let maxUndoHistoryCount = 200
+
     private(set) var state: GameState
     var selection: Selection?
     var isDragging: Bool = false
@@ -209,6 +211,27 @@ final class SolitaireViewModel {
         movesCount = snapshot.movesCount
         selection = nil
         isDragging = false
+    }
+
+    func persistencePayload() -> SavedGamePayload {
+        SavedGamePayload(
+            state: state,
+            movesCount: movesCount,
+            stockDrawCount: stockDrawCount,
+            history: history
+        )
+    }
+
+    @discardableResult
+    func restore(from payload: SavedGamePayload) -> Bool {
+        guard let sanitizedPayload = payload.sanitizedForRestore() else { return false }
+        state = sanitizedPayload.state
+        movesCount = sanitizedPayload.movesCount
+        stockDrawCount = sanitizedPayload.stockDrawCount
+        history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
+        selection = nil
+        isDragging = false
+        return true
     }
 
     func handleStockTap() {
@@ -447,7 +470,7 @@ final class SolitaireViewModel {
 
     private func pushHistory() {
         history.append(GameSnapshot(state: state, movesCount: movesCount))
-        if history.count > 200 {
+        if history.count > Self.maxUndoHistoryCount {
             history.removeFirst()
         }
     }
