@@ -10,6 +10,7 @@ enum AutoMoveAdvisor {
         guard !destinations.isEmpty else { return nil }
 
         let baselineMobility = mobilityScore(in: state, stockDrawCount: stockDrawCount)
+        let baselineFoundationCount = totalFoundationCards(in: state)
         var bestCandidate: CandidateEvaluation?
 
         for destination in destinations {
@@ -23,10 +24,12 @@ enum AutoMoveAdvisor {
             }
 
             let nextMobility = mobilityScore(in: nextState, stockDrawCount: stockDrawCount)
+            let nextFoundationCount = totalFoundationCards(in: nextState)
             let candidate = CandidateEvaluation(
                 destination: destination,
                 revealsFaceDownCard: revealsFaceDownCard(selection: selection, in: state),
                 clearsSourcePile: clearsSourcePile(selection: selection, in: state),
+                foundationProgressDelta: nextFoundationCount - baselineFoundationCount,
                 mobilityDelta: nextMobility - baselineMobility,
                 resultingMobility: nextMobility,
                 destinationPriority: destinationPriority(for: destination, in: state)
@@ -78,17 +81,22 @@ private extension AutoMoveAdvisor {
         let destination: Destination
         let revealsFaceDownCard: Bool
         let clearsSourcePile: Bool
+        let foundationProgressDelta: Int
         let mobilityDelta: Int
         let resultingMobility: Int
         let destinationPriority: Int
     }
 
     // Priority order:
-    // 1) reveal hidden cards, 2) improve mobility, 3) open tableau columns,
-    // 4) destination preference, 5) resulting mobility, 6) deterministic tiebreak.
+    // 1) reveal hidden cards, 2) increase foundation progress,
+    // 3) improve mobility, 4) open tableau columns, 5) destination preference,
+    // 6) resulting mobility, 7) deterministic tiebreak.
     static func isBetter(_ lhs: CandidateEvaluation, than rhs: CandidateEvaluation) -> Bool {
         if lhs.revealsFaceDownCard != rhs.revealsFaceDownCard {
             return lhs.revealsFaceDownCard && !rhs.revealsFaceDownCard
+        }
+        if lhs.foundationProgressDelta != rhs.foundationProgressDelta {
+            return lhs.foundationProgressDelta > rhs.foundationProgressDelta
         }
         if lhs.mobilityDelta != rhs.mobilityDelta {
             return lhs.mobilityDelta > rhs.mobilityDelta
@@ -103,6 +111,12 @@ private extension AutoMoveAdvisor {
             return lhs.resultingMobility > rhs.resultingMobility
         }
         return destinationSortKey(lhs.destination) < destinationSortKey(rhs.destination)
+    }
+
+    static func totalFoundationCards(in state: GameState) -> Int {
+        state.foundations.reduce(0) { partialResult, foundation in
+            partialResult + foundation.count
+        }
     }
 
     static func destinationPriority(for destination: Destination, in state: GameState) -> Int {
