@@ -268,6 +268,18 @@ struct ContentView: View {
         .onChange(of: viewModel.stockDrawCount) { _, _ in
             scheduleAutosave()
         }
+        .onChange(of: viewModel.pendingAutoMove?.id) { _, _ in
+            processPendingAutoMoveIfPossible()
+        }
+        .onChange(of: isDroppingCards) { _, _ in
+            processPendingAutoMoveIfPossible()
+        }
+        .onChange(of: isReturningDrag) { _, _ in
+            processPendingAutoMoveIfPossible()
+        }
+        .onChange(of: isUndoAnimating) { _, _ in
+            processPendingAutoMoveIfPossible()
+        }
         .onChange(of: scenePhase) { _, newPhase in
             handleScenePhaseChange(newPhase)
         }
@@ -283,6 +295,31 @@ struct ContentView: View {
         guard viewModel.isDragging, !isReturningDrag, !isDroppingCards else { return }
         activeTarget = nil
         beginReturnAnimation()
+    }
+
+    private func processPendingAutoMoveIfPossible() {
+        guard let request = viewModel.pendingAutoMove else { return }
+        guard !isDroppingCards, !isReturningDrag, !isUndoAnimating else { return }
+        guard !viewModel.isDragging else { return }
+
+        viewModel.clearPendingAutoMove()
+        dragTranslation = .zero
+        dragReturnOffset = .zero
+        activeTarget = nil
+        viewModel.selection = request.selection
+        viewModel.isDragging = true
+
+        if let firstCard = request.selection.cards.first {
+            overlayTilt = cardTilts[firstCard.id] ?? 0
+            withAnimation(.easeOut(duration: 0.15)) {
+                overlayTilt = 0
+            }
+        }
+
+        beginDropAnimation(
+            to: dropTarget(for: request.destination),
+            destination: request.destination
+        )
     }
 
     private func dragGesture(for origin: DragOrigin) -> AnyGesture<DragGesture.Value> {
@@ -398,6 +435,7 @@ struct ContentView: View {
                 droppingSelection = nil
                 pendingDropDestination = nil
             }
+            processPendingAutoMoveIfPossible()
         }
     }
 
@@ -420,6 +458,7 @@ struct ContentView: View {
             dragReturnOffset = .zero
             isReturningDrag = false
             returningCards = []
+            processPendingAutoMoveIfPossible()
         }
     }
 
@@ -475,6 +514,15 @@ struct ContentView: View {
 
     private func destination(for target: DropTarget) -> Destination {
         switch target {
+        case .foundation(let index):
+            return .foundation(index)
+        case .tableau(let index):
+            return .tableau(index)
+        }
+    }
+
+    private func dropTarget(for destination: Destination) -> DropTarget {
+        switch destination {
         case .foundation(let index):
             return .foundation(index)
         case .tableau(let index):
@@ -619,6 +667,7 @@ struct ContentView: View {
         undoAnimationProgress = 0
         hiddenCardIDs = []
         isUndoAnimating = false
+        processPendingAutoMoveIfPossible()
     }
 
     private func cardLookup(in state: GameState) -> [UUID: Card] {

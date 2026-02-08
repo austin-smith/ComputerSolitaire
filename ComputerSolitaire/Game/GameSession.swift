@@ -8,10 +8,17 @@ final class SolitaireViewModel {
     private(set) var state: GameState
     var selection: Selection?
     var isDragging: Bool = false
+    var pendingAutoMove: PendingAutoMove?
     private(set) var movesCount: Int = 0
     private(set) var stockDrawCount: Int = 3
 
     private var history: [GameSnapshot] = []
+
+    struct PendingAutoMove: Equatable {
+        let id: UUID
+        let selection: Selection
+        let destination: Destination
+    }
 
     init() {
         state = GameState.newGame()
@@ -29,6 +36,7 @@ final class SolitaireViewModel {
         state = GameState.newGame()
         selection = nil
         isDragging = false
+        pendingAutoMove = nil
         movesCount = 0
         stockDrawCount = drawMode.rawValue
         state.wasteDrawCount = 0
@@ -44,6 +52,7 @@ final class SolitaireViewModel {
         }
         selection = nil
         isDragging = false
+        pendingAutoMove = nil
     }
 
     func visibleWasteCards() -> [Card] {
@@ -57,6 +66,7 @@ final class SolitaireViewModel {
         movesCount = snapshot.movesCount
         selection = nil
         isDragging = false
+        pendingAutoMove = nil
     }
 
     func peekUndoSnapshot() -> GameSnapshot? {
@@ -81,12 +91,14 @@ final class SolitaireViewModel {
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
         selection = nil
         isDragging = false
+        pendingAutoMove = nil
         return true
     }
 
     func handleStockTap() {
         selection = nil
         isDragging = false
+        pendingAutoMove = nil
         if state.stock.isEmpty {
             recycleWaste()
         } else {
@@ -96,12 +108,16 @@ final class SolitaireViewModel {
 
     func handleWasteTap() {
         guard let top = state.waste.last, state.wasteDrawCount > 0 else { return }
+        let wasteSelection = Selection(source: .waste, cards: [top])
+        if queueBestAutoMove(for: wasteSelection) {
+            return
+        }
         if selection?.source == .waste {
             selection = nil
             return
         }
         isDragging = false
-        selection = Selection(source: .waste, cards: [top])
+        selection = wasteSelection
     }
 
     func handleFoundationTap(index: Int) {
@@ -135,18 +151,25 @@ final class SolitaireViewModel {
                 return
             }
 
-            if let selection {
-                if selection.source == .tableau(pile: pileIndex, index: cardIndex) {
-                    self.selection = nil
-                    return
-                }
-                if tryMoveSelection(to: .tableau(pileIndex)) {
-                    return
-                }
+            let tappedSelection = Selection(
+                source: .tableau(pile: pileIndex, index: cardIndex),
+                cards: Array(pile[cardIndex...])
+            )
+            if selection?.source == tappedSelection.source {
+                self.selection = nil
+                return
+            }
+
+            if queueBestAutoMove(for: tappedSelection) {
+                return
+            }
+
+            if selection != nil, tryMoveSelection(to: .tableau(pileIndex)) {
+                return
             }
 
             isDragging = false
-            selectFromTableau(pileIndex: pileIndex, cardIndex: cardIndex)
+            selection = tappedSelection
         } else {
             if selection != nil {
                 _ = tryMoveSelection(to: .tableau(pileIndex))
@@ -217,6 +240,10 @@ final class SolitaireViewModel {
     func cancelDrag() {
         selection = nil
         isDragging = false
+    }
+
+    func clearPendingAutoMove() {
+        pendingAutoMove = nil
     }
 }
 
@@ -352,5 +379,24 @@ private extension SolitaireViewModel {
         if history.count > Self.maxUndoHistoryCount {
             history.removeFirst()
         }
+    }
+
+    @discardableResult
+    func queueBestAutoMove(for sourceSelection: Selection) -> Bool {
+        isDragging = false
+        guard let destination = AutoMoveAdvisor.bestDestination(
+            for: sourceSelection,
+            in: state,
+            stockDrawCount: stockDrawCount
+        ) else {
+            return false
+        }
+
+        pendingAutoMove = PendingAutoMove(
+            id: UUID(),
+            selection: sourceSelection,
+            destination: destination
+        )
+        return true
     }
 }
