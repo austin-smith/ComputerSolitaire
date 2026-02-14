@@ -2,21 +2,74 @@ import SwiftUI
 import Observation
 
 enum Layout {
-    static let tableauSpacing: CGFloat = 18
-
-    static func cardSize(for width: CGFloat) -> CGSize {
-        let availableWidth = width - 48
-        let totalSpacing = tableauSpacing * 6
-        let cardWidth = min(96, max(64, (availableWidth - totalSpacing) / 7))
-        return CGSize(width: cardWidth, height: cardWidth * 1.45)
+    struct Metrics {
+        let horizontalPadding: CGFloat
+        let verticalPadding: CGFloat
+        let rowSpacing: CGFloat
+        let columnSpacing: CGFloat
+        let cardSize: CGSize
+        let tableauFaceDownOffset: CGFloat
+        let tableauFaceUpOffset: CGFloat
+        let wasteFanSpacing: CGFloat
     }
 
-    static func tableauFaceDownOffset(for cardHeight: CGFloat) -> CGFloat {
-        max(16, cardHeight * 0.18)
-    }
+    static func metrics(for boardWidth: CGFloat) -> Metrics {
+#if os(iOS)
+        let isCompactBoard = boardWidth <= 430
+        let isMediumBoard = boardWidth > 430 && boardWidth < 760
 
-    static func tableauFaceUpOffset(for cardHeight: CGFloat) -> CGFloat {
-        max(22, cardHeight * 0.28)
+        let horizontalPadding: CGFloat = isCompactBoard ? 12 : (isMediumBoard ? 14 : 24)
+        let verticalPadding: CGFloat = isCompactBoard ? 16 : 24
+        let rowSpacing: CGFloat = isCompactBoard ? 16 : 24
+        let columnSpacing: CGFloat = isCompactBoard ? 8 : (isMediumBoard ? 10 : 18)
+
+        let usableWidth = max(0, boardWidth - (horizontalPadding * 2))
+        let fittedCardWidth = floor((usableWidth - (columnSpacing * 6)) / 7)
+        let maxCardWidth: CGFloat = boardWidth < 760 ? 96 : 120
+        let cardWidth = max(32, min(maxCardWidth, fittedCardWidth))
+        let cardSize = CGSize(width: cardWidth, height: cardWidth * 1.45)
+
+        let faceDownOffset = max(isCompactBoard ? 10 : 16, cardSize.height * (isCompactBoard ? 0.16 : 0.18))
+        let faceUpOffset = max(isCompactBoard ? 14 : 22, cardSize.height * (isCompactBoard ? 0.24 : 0.28))
+        let wasteFanSpacing = cardSize.width * (isCompactBoard ? 0.18 : 0.25)
+
+        return Metrics(
+            horizontalPadding: horizontalPadding,
+            verticalPadding: verticalPadding,
+            rowSpacing: rowSpacing,
+            columnSpacing: columnSpacing,
+            cardSize: cardSize,
+            tableauFaceDownOffset: faceDownOffset,
+            tableauFaceUpOffset: faceUpOffset,
+            wasteFanSpacing: wasteFanSpacing
+        )
+#else
+        let horizontalPadding = min(24, max(14, boardWidth * 0.018))
+        let verticalPadding = min(22, max(14, boardWidth * 0.015))
+        let columnSpacing = min(18, max(10, boardWidth * 0.013))
+        let rowSpacing = min(22, max(14, columnSpacing + 4))
+
+        let usableWidth = max(0, boardWidth - (horizontalPadding * 2))
+        let fittedCardWidth = floor((usableWidth - (columnSpacing * 6)) / 7)
+        let maxCardWidth = min(124, max(88, boardWidth * 0.095))
+        let cardWidth = max(52, min(maxCardWidth, fittedCardWidth))
+        let cardSize = CGSize(width: cardWidth, height: cardWidth * 1.45)
+
+        let faceDownOffset = max(13, cardSize.height * 0.18)
+        let faceUpOffset = max(18, cardSize.height * 0.26)
+        let wasteFanSpacing = cardSize.width * (boardWidth < 760 ? 0.2 : 0.25)
+
+        return Metrics(
+            horizontalPadding: horizontalPadding,
+            verticalPadding: verticalPadding,
+            rowSpacing: rowSpacing,
+            columnSpacing: columnSpacing,
+            cardSize: cardSize,
+            tableauFaceDownOffset: faceDownOffset,
+            tableauFaceUpOffset: faceUpOffset,
+            wasteFanSpacing: wasteFanSpacing
+        )
+#endif
     }
 }
 
@@ -40,6 +93,8 @@ struct HeaderView: View {
 struct TopRowView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
+    let columnSpacing: CGFloat
+    let wasteFanSpacing: CGFloat
     let activeTarget: DropTarget?
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
@@ -49,11 +104,13 @@ struct TopRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(alignment: .top, spacing: columnSpacing) {
             StockView(viewModel: viewModel, cardSize: cardSize)
+                .frame(width: cardSize.width, alignment: .leading)
             WasteView(
                 viewModel: viewModel,
                 cardSize: cardSize,
+                fanSpacing: wasteFanSpacing,
                 isCardTiltEnabled: isCardTiltEnabled,
                 cardTilts: $cardTilts,
                 hiddenCardIDs: hiddenCardIDs,
@@ -61,28 +118,38 @@ struct TopRowView: View {
                 fanProgress: fanProgress,
                 dragGesture: dragGesture
             )
-            Spacer()
-            HStack(spacing: 16) {
-                ForEach(0..<4, id: \.self) { index in
-                    FoundationView(
-                        viewModel: viewModel,
-                        index: index,
-                        cardSize: cardSize,
-                        isTargeted: activeTarget == .foundation(index),
-                        isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts,
-                        hiddenCardIDs: hiddenCardIDs,
-                        dragGesture: dragGesture
-                    )
-                }
+            // Keep top-row columns aligned with tableau; waste fan can overflow visually
+            // without changing foundation positions.
+            .frame(width: cardSize.width, alignment: .leading)
+
+            Color.clear
+                .frame(width: cardSize.width, height: cardSize.height)
+                .accessibilityHidden(true)
+
+            ForEach(0..<4, id: \.self) { index in
+                FoundationView(
+                    viewModel: viewModel,
+                    index: index,
+                    cardSize: cardSize,
+                    isTargeted: activeTarget == .foundation(index),
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
+                    hiddenCardIDs: hiddenCardIDs,
+                    dragGesture: dragGesture
+                )
+                .frame(width: cardSize.width, alignment: .leading)
             }
         }
+#if os(iOS)
+        .frame(maxWidth: .infinity, alignment: .leading)
+#endif
     }
 }
 
 struct TableauRowView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
+    let columnSpacing: CGFloat
     let faceDownOffset: CGFloat
     let faceUpOffset: CGFloat
     let activeTarget: DropTarget?
@@ -92,7 +159,7 @@ struct TableauRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(alignment: .top, spacing: Layout.tableauSpacing) {
+        HStack(alignment: .top, spacing: columnSpacing) {
             ForEach(0..<7, id: \.self) { index in
                 TableauPileView(
                     viewModel: viewModel,
@@ -108,6 +175,9 @@ struct TableauRowView: View {
                 )
             }
         }
+#if os(iOS)
+        .frame(maxWidth: .infinity, alignment: .leading)
+#endif
     }
 }
 
@@ -148,6 +218,7 @@ struct StockView: View {
 struct WasteView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
+    let fanSpacing: CGFloat
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
     let hiddenCardIDs: Set<UUID>
@@ -165,7 +236,6 @@ struct WasteView: View {
         }()
         let visibleWaste = viewModel.visibleWasteCards()
         let isSelected = visibleWaste.contains(where: { viewModel.isSelected(card: $0) })
-        let fanSpacing = cardSize.width * 0.25
         let fanWidth = fanSpacing * CGFloat(max(0, visibleWaste.count - 1))
 
         ZStack(alignment: .topLeading) {

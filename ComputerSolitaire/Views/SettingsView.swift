@@ -59,8 +59,6 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                header
-
                 SettingsCard(title: "Table") {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Background color")
@@ -106,19 +104,18 @@ struct SettingsView: View {
             .padding(24)
         }
         .frame(minWidth: 420, idealWidth: 480, maxWidth: 520, minHeight: 260)
-    }
-
-    private var header: some View {
-        HStack {
-            Text("Settings")
-                .font(.title2.weight(.semibold))
-            Spacer()
-            Button("Done") {
-                dismiss()
+        .navigationTitle("Settings")
+#if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+#endif
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
             }
-            .keyboardShortcut(.cancelAction)
         }
-        .padding(.bottom, 4)
     }
 
     private func backgroundColorRow(_ option: TableBackgroundColor) -> some View {

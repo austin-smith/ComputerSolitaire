@@ -109,18 +109,21 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let cardSize = Layout.cardSize(for: geometry.size.width)
-            let tableauFaceDownOffset = Layout.tableauFaceDownOffset(for: cardSize.height)
-            let tableauFaceUpOffset = Layout.tableauFaceUpOffset(for: cardSize.height)
+            let metrics = Layout.metrics(for: geometry.size.width)
+            let cardSize = metrics.cardSize
+            let boardContentWidth = (cardSize.width * 7) + (metrics.columnSpacing * 6)
 
             ZStack {
                 TableBackground()
 
-                VStack(spacing: 24) {
+                VStack(alignment: .leading, spacing: metrics.rowSpacing) {
                     HeaderView(movesCount: viewModel.movesCount)
+                        .frame(width: boardContentWidth, alignment: .leading)
                     TopRowView(
                         viewModel: viewModel,
                         cardSize: cardSize,
+                        columnSpacing: metrics.columnSpacing,
+                        wasteFanSpacing: metrics.wasteFanSpacing,
                         activeTarget: activeTarget,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
@@ -129,20 +132,29 @@ struct ContentView: View {
                         fanProgress: wasteFanProgress,
                         dragGesture: dragGesture(for:)
                     )
+                    .frame(width: boardContentWidth, alignment: .leading)
                     TableauRowView(
                         viewModel: viewModel,
                         cardSize: cardSize,
-                        faceDownOffset: tableauFaceDownOffset,
-                        faceUpOffset: tableauFaceUpOffset,
+                        columnSpacing: metrics.columnSpacing,
+                        faceDownOffset: metrics.tableauFaceDownOffset,
+                        faceUpOffset: metrics.tableauFaceUpOffset,
                         activeTarget: activeTarget,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
                         hiddenCardIDs: hiddenCardIDs,
                         dragGesture: dragGesture(for:)
                     )
+                    .frame(width: boardContentWidth, alignment: .leading)
                     Spacer(minLength: 0)
                 }
-                .padding(24)
+#if os(iOS)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+#else
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+#endif
+                .padding(.horizontal, metrics.horizontalPadding)
+                .padding(.vertical, metrics.verticalPadding)
 
                 if viewModel.isWin {
                     WinOverlay {
@@ -230,7 +242,8 @@ struct ContentView: View {
             }
         }
         .toolbar {
-            ToolbarItemGroup {
+#if os(iOS)
+            ToolbarItemGroup(placement: .bottomBar) {
                 Button("New Game") {
                     viewModel.newGame(drawMode: drawMode)
                     persistGameNow()
@@ -238,18 +251,43 @@ struct ContentView: View {
                 Button("Undo") {
                     beginUndoAnimationIfNeeded()
                 }
-                .disabled(!viewModel.canUndo || isUndoAnimating || isDroppingCards || isReturningDrag || viewModel.isDragging)
-            }
-            ToolbarItem {
+                .disabled(isUndoDisabled)
+                Spacer(minLength: 0)
                 Button {
                     isShowingSettings = true
                 } label: {
                     Label("Settings", systemImage: "gearshape")
                 }
             }
+#endif
+#if os(macOS)
+            ToolbarItemGroup(placement: .automatic) {
+                Button("New Game") {
+                    viewModel.newGame(drawMode: drawMode)
+                    persistGameNow()
+                }
+                Button("Undo") {
+                    beginUndoAnimationIfNeeded()
+                }
+                .disabled(isUndoDisabled)
+            }
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    isShowingSettings = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+            }
+#endif
         }
         .sheet(isPresented: $isShowingSettings) {
+#if os(iOS)
+            NavigationStack {
+                SettingsView()
+            }
+#else
             SettingsView()
+#endif
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
             isShowingSettings = true
@@ -289,6 +327,10 @@ struct ContentView: View {
         .onDisappear {
             persistGameNow()
         }
+    }
+
+    private var isUndoDisabled: Bool {
+        !viewModel.canUndo || isUndoAnimating || isDroppingCards || isReturningDrag || viewModel.isDragging
     }
 
     private func handleEscape() {
