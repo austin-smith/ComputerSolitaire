@@ -44,6 +44,7 @@ enum SettingsKey {
     static let cardTiltEnabled = "settings.cardTiltEnabled"
     static let drawMode = "settings.drawMode"
     static let tableBackgroundColor = "settings.tableBackgroundColor"
+    static let feltEffectEnabled = "settings.feltEffectEnabled"
 }
 
 extension Notification.Name {
@@ -55,6 +56,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
     @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
+    @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
 
     var body: some View {
         ScrollView {
@@ -68,6 +70,16 @@ struct SettingsView: View {
                                 backgroundColorRow(option)
                             }
                         }
+                        Toggle(isOn: $isFeltEffectEnabled) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Felt texture")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("Adds a fabric texture and vignette to the table.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.switch)
                     }
                 }
 

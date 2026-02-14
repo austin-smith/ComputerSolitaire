@@ -810,10 +810,80 @@ struct DropHighlightView: View {
 
 struct TableBackground: View {
     @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
+    @AppStorage(SettingsKey.feltEffectEnabled) private var feltEffectEnabled = true
 
     var body: some View {
-        (TableBackgroundColor(rawValue: tableBackgroundColorRawValue) ?? TableBackgroundColor.defaultValue).color
-            .ignoresSafeArea()
+        let baseColor = (TableBackgroundColor(rawValue: tableBackgroundColorRawValue) ?? TableBackgroundColor.defaultValue).color
+        ZStack {
+            baseColor
+
+            if feltEffectEnabled {
+                // Felt fiber texture
+                FeltTextureOverlay()
+
+                // Vignette: darken edges for a real table look
+                RadialGradient(
+                    gradient: Gradient(colors: [
+                        Color.clear,
+                        Color.black.opacity(0.35)
+                    ]),
+                    center: .center,
+                    startRadius: 100,
+                    endRadius: 900
+                )
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+/// Procedural felt fiber noise drawn via Canvas.
+private struct FeltTextureOverlay: View {
+    var body: some View {
+        Canvas { context, size in
+            // Deterministic seed-based RNG for consistent pattern
+            var rng = FeltRNG(seed: 42)
+            let count = Int(size.width * size.height * 0.06)
+            for _ in 0..<count {
+                let x = CGFloat(rng.next()) * size.width
+                let y = CGFloat(rng.next()) * size.height
+                let brightness = rng.next()
+                let opacity = 0.03 + Double(brightness) * 0.06
+                let length = 1.5 + CGFloat(rng.next()) * 3.0
+                let angle = Angle.degrees(Double(rng.next()) * 360)
+
+                var path = Path()
+                let dx = cos(angle.radians) * length
+                let dy = sin(angle.radians) * length
+                path.move(to: CGPoint(x: x - dx, y: y - dy))
+                path.addLine(to: CGPoint(x: x + dx, y: y + dy))
+
+                let isLight = brightness > 0.5
+                let color = isLight
+                    ? Color.white.opacity(opacity)
+                    : Color.black.opacity(opacity)
+                context.stroke(path, with: .color(color), lineWidth: 0.5)
+            }
+        }
+    }
+}
+
+/// Simple splitmix-style RNG for deterministic felt pattern.
+private struct FeltRNG {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    /// Returns a value in 0..<1
+    mutating func next() -> Double {
+        state &+= 0x9e3779b97f4a7c15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xbf58476d1ce4e5b9
+        z = (z ^ (z >> 27)) &* 0x94d049bb133111eb
+        z = z ^ (z >> 31)
+        return Double(z &>> 11) / Double(1 << 53)
     }
 }
 
