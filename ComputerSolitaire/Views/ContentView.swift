@@ -483,6 +483,7 @@ struct ContentView: View {
 
     private func beginReturnAnimation() {
         guard !isReturningDrag else { return }
+        SoundManager.shared.play(.invalidDrop)
         let currentTranslation = dragTranslation
         returningCards = viewModel.selection?.cards ?? []
         let originalTilt = returningCards.first.flatMap { cardTilts[$0.id] } ?? 0

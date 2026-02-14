@@ -67,6 +67,7 @@ final class SolitaireViewModel {
         selection = nil
         isDragging = false
         pendingAutoMove = nil
+        SoundManager.shared.play(.undoMove)
     }
 
     func peekUndoSnapshot() -> GameSnapshot? {
@@ -146,6 +147,7 @@ final class SolitaireViewModel {
                     )
                     state.tableau[pileIndex][cardIndex].isFaceUp = true
                     movesCount += 1
+                    SoundManager.shared.play(.cardFlipFaceUp)
                 }
                 selection = nil
                 return
@@ -267,6 +269,7 @@ private extension SolitaireViewModel {
         }
         state.wasteDrawCount = drawCount
         movesCount += 1
+        SoundManager.shared.play(.cardDrawFromStock)
     }
 
     func recycleWaste() {
@@ -291,6 +294,7 @@ private extension SolitaireViewModel {
         state.waste.removeAll()
         state.wasteDrawCount = 0
         movesCount += 1
+        SoundManager.shared.play(.wasteRecycleToStock)
     }
 
     func selectFromTableau(pileIndex: Int, cardIndex: Int) {
@@ -324,6 +328,7 @@ private extension SolitaireViewModel {
             state.foundations[index].append(movingCard)
             movesCount += 1
             self.selection = nil
+            SoundManager.shared.play(.cardPlaced)
             return true
 
         case .tableau(let index):
@@ -338,6 +343,7 @@ private extension SolitaireViewModel {
             state.tableau[index].append(contentsOf: selection.cards)
             movesCount += 1
             self.selection = nil
+            SoundManager.shared.play(.cardPlaced)
             return true
         }
     }
@@ -365,6 +371,7 @@ private extension SolitaireViewModel {
         guard let lastIndex = state.tableau[pileIndex].indices.last else { return }
         if !state.tableau[pileIndex][lastIndex].isFaceUp {
             state.tableau[pileIndex][lastIndex].isFaceUp = true
+            SoundManager.shared.play(.cardFlipFaceUp)
         }
     }
 
