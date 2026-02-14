@@ -21,6 +21,7 @@ final class SoundManager {
     private init() {}
 
     func play(_ sound: GameSound) {
+        guard isSoundEffectsEnabled else { return }
         let player = player(for: sound)
         player?.currentTime = 0
         player?.play()
@@ -28,6 +29,14 @@ final class SoundManager {
 }
 
 private extension SoundManager {
+    var isSoundEffectsEnabled: Bool {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: SettingsKey.soundEffectsEnabled) != nil else {
+            return true
+        }
+        return defaults.bool(forKey: SettingsKey.soundEffectsEnabled)
+    }
+
     func player(for sound: GameSound) -> AVAudioPlayer? {
         if let existing = players[sound] {
             return existing

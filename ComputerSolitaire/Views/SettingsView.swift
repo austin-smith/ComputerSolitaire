@@ -45,6 +45,7 @@ enum SettingsKey {
     static let drawMode = "settings.drawMode"
     static let tableBackgroundColor = "settings.tableBackgroundColor"
     static let feltEffectEnabled = "settings.feltEffectEnabled"
+    static let soundEffectsEnabled = "settings.soundEffectsEnabled"
 }
 
 extension Notification.Name {
@@ -57,6 +58,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
     @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
+    @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
 
     var body: some View {
         ScrollView {
@@ -89,6 +91,19 @@ struct SettingsView: View {
                             Text("Natural card tilt")
                                 .font(.subheadline.weight(.semibold))
                             Text("Adds a subtle organic angle to each card.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                }
+
+                SettingsCard(title: "Audio") {
+                    Toggle(isOn: $isSoundEffectsEnabled) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Sound effects")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Play card and game action sounds.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
