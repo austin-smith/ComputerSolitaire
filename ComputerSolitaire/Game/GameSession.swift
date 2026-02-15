@@ -35,6 +35,10 @@ final class SolitaireViewModel {
         !history.isEmpty
     }
 
+    var canAutoFinish: Bool {
+        AutoMoveAdvisor.canAutoFinish(in: state)
+    }
+
     func newGame(drawMode: DrawMode = .three) {
         let initialState = GameState.newGame()
         state = initialState
@@ -269,6 +273,21 @@ final class SolitaireViewModel {
     func clearPendingAutoMove() {
         pendingAutoMove = nil
     }
+
+    @discardableResult
+    func queueNextAutoFinishMove() -> Bool {
+        isDragging = false
+        guard let move = AutoMoveAdvisor.nextAutoFinishMove(in: state) else {
+            return false
+        }
+
+        pendingAutoMove = PendingAutoMove(
+            id: UUID(),
+            selection: move.selection,
+            destination: move.destination
+        )
+        return true
+    }
 }
 
 private extension SolitaireViewModel {
@@ -428,4 +447,5 @@ private extension SolitaireViewModel {
         )
         return true
     }
+
 }

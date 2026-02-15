@@ -99,6 +99,7 @@ struct ContentView: View {
     @State private var hasLoadedGame = false
     @State private var isHydratingGame = false
     @State private var autosaveTask: Task<Void, Never>?
+    @State private var isAutoFinishing = false
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
@@ -158,6 +159,7 @@ struct ContentView: View {
 
                 if viewModel.isWin {
                     WinOverlay {
+                        stopAutoFinish()
                         viewModel.newGame(drawMode: drawMode)
                         persistGameNow()
                     }
@@ -246,10 +248,12 @@ struct ContentView: View {
             ToolbarItemGroup(placement: .bottomBar) {
                 Menu {
                     Button("New Game", systemImage: "plus") {
+                        stopAutoFinish()
                         viewModel.newGame(drawMode: drawMode)
                         persistGameNow()
                     }
                     Button("Redeal", systemImage: "arrow.clockwise") {
+                        stopAutoFinish()
                         viewModel.redeal()
                         persistGameNow()
                     }
@@ -257,11 +261,18 @@ struct ContentView: View {
                     Label("Game", systemImage: "cards")
                 }
                 Button {
+                    stopAutoFinish()
                     beginUndoAnimationIfNeeded()
                 } label: {
                     Label("Undo", systemImage: "arrow.uturn.backward")
                 }
                 .disabled(isUndoDisabled)
+                Button {
+                    startAutoFinish()
+                } label: {
+                    Label("Auto Finish", systemImage: "bolt")
+                }
+                .disabled(isAutoFinishDisabled)
                 Spacer(minLength: 0)
                 Button {
                     isShowingSettings = true
@@ -273,16 +284,19 @@ struct ContentView: View {
 #if os(macOS)
             ToolbarItemGroup(placement: .automatic) {
                 Button("New Game") {
+                    stopAutoFinish()
                     viewModel.newGame(drawMode: drawMode)
                     persistGameNow()
                 }
                 Button("Redeal") {
+                    stopAutoFinish()
                     viewModel.redeal()
                     persistGameNow()
                 }
             }
             ToolbarItem(placement: .automatic) {
                 Button {
+                    stopAutoFinish()
                     beginUndoAnimationIfNeeded()
                 } label: {
                     Label("Undo", systemImage: "arrow.uturn.backward")
@@ -290,6 +304,15 @@ struct ContentView: View {
                 .labelStyle(.iconOnly)
                 .help("Undo")
                 .disabled(isUndoDisabled)
+            }
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    startAutoFinish()
+                } label: {
+                    Label("Auto Finish", systemImage: "bolt")
+                }
+                .help("Auto Finish")
+                .disabled(isAutoFinishDisabled)
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -320,6 +343,7 @@ struct ContentView: View {
         }
         .onChange(of: viewModel.state) { _, _ in
             scheduleAutosave()
+            queueAutoFinishStepIfPossible()
         }
         .onChange(of: viewModel.movesCount) { _, _ in
             scheduleAutosave()
@@ -329,15 +353,19 @@ struct ContentView: View {
         }
         .onChange(of: viewModel.pendingAutoMove?.id) { _, _ in
             processPendingAutoMoveIfPossible()
+            queueAutoFinishStepIfPossible()
         }
         .onChange(of: isDroppingCards) { _, _ in
             processPendingAutoMoveIfPossible()
+            queueAutoFinishStepIfPossible()
         }
         .onChange(of: isReturningDrag) { _, _ in
             processPendingAutoMoveIfPossible()
+            queueAutoFinishStepIfPossible()
         }
         .onChange(of: isUndoAnimating) { _, _ in
             processPendingAutoMoveIfPossible()
+            queueAutoFinishStepIfPossible()
         }
         .onChange(of: scenePhase) { _, newPhase in
             handleScenePhaseChange(newPhase)
@@ -352,6 +380,41 @@ struct ContentView: View {
 
     private var isUndoDisabled: Bool {
         !viewModel.canUndo || isUndoAnimating || isDroppingCards || isReturningDrag || viewModel.isDragging
+    }
+
+    private var isAutoFinishDisabled: Bool {
+        !viewModel.canAutoFinish
+            || isUndoAnimating
+            || isDroppingCards
+            || isReturningDrag
+            || viewModel.isDragging
+            || viewModel.pendingAutoMove != nil
+    }
+
+    private func startAutoFinish() {
+        guard !isAutoFinishDisabled else { return }
+        isAutoFinishing = true
+        queueAutoFinishStepIfPossible()
+    }
+
+    private func stopAutoFinish() {
+        isAutoFinishing = false
+    }
+
+    private func queueAutoFinishStepIfPossible() {
+        guard isAutoFinishing else { return }
+
+        if viewModel.isWin || !viewModel.canAutoFinish {
+            stopAutoFinish()
+            return
+        }
+        guard !isDroppingCards, !isReturningDrag, !isUndoAnimating else { return }
+        guard !viewModel.isDragging else { return }
+        guard viewModel.pendingAutoMove == nil else { return }
+
+        if !viewModel.queueNextAutoFinishMove() {
+            stopAutoFinish()
+        }
     }
 
     private func handleEscape() {
@@ -374,7 +437,8 @@ struct ContentView: View {
 
         if let firstCard = request.selection.cards.first {
             overlayTilt = cardTilts[firstCard.id] ?? 0
-            withAnimation(.easeOut(duration: 0.15)) {
+            let tiltSettleDuration = isAutoFinishing ? 0.1 : 0.15
+            withAnimation(.easeOut(duration: tiltSettleDuration)) {
                 overlayTilt = 0
             }
         }
@@ -402,6 +466,7 @@ struct ContentView: View {
     }
 
     private func startDrag(from origin: DragOrigin) -> Bool {
+        stopAutoFinish()
         dragTranslation = .zero
         dragReturnOffset = .zero
         isReturningDrag = false
@@ -473,11 +538,12 @@ struct ContentView: View {
             height: targetY - currentY
         )
 
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+        let dropDuration = isAutoFinishing ? 0.18 : 0.25
+        withAnimation(.spring(response: dropDuration, dampingFraction: 0.85)) {
             dropAnimationOffset = offsetToTarget
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + dropDuration) {
             // Clear old tilts so cards get fresh tilts at new position
             if let cards = droppingSelection?.cards {
                 for card in cards {
