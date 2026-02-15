@@ -11,6 +11,7 @@ xcuserdata/
 
 ## Build folder
 build/
+.derivedData/
 
 ## macOS custom folder icon
 Icon[^a-zA-Z]
