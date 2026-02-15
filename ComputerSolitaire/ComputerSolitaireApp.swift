@@ -23,8 +23,10 @@ struct ComputerSolitaireApp: App {
             }
 #endif
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") {
+                Button {
                     NotificationCenter.default.post(name: .openSettings, object: nil)
+                } label: {
+                    Label("Settings…", systemImage: "gearshape")
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
