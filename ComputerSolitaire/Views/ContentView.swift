@@ -244,12 +244,22 @@ struct ContentView: View {
         .toolbar {
 #if os(iOS)
             ToolbarItemGroup(placement: .bottomBar) {
-                Button("New Game") {
-                    viewModel.newGame(drawMode: drawMode)
-                    persistGameNow()
+                Menu {
+                    Button("New Game", systemImage: "plus") {
+                        viewModel.newGame(drawMode: drawMode)
+                        persistGameNow()
+                    }
+                    Button("Redeal", systemImage: "arrow.clockwise") {
+                        viewModel.redeal()
+                        persistGameNow()
+                    }
+                } label: {
+                    Label("Game", systemImage: "cards")
                 }
-                Button("Undo") {
+                Button {
                     beginUndoAnimationIfNeeded()
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
                 }
                 .disabled(isUndoDisabled)
                 Spacer(minLength: 0)
@@ -266,17 +276,28 @@ struct ContentView: View {
                     viewModel.newGame(drawMode: drawMode)
                     persistGameNow()
                 }
-                Button("Undo") {
-                    beginUndoAnimationIfNeeded()
+                Button("Redeal") {
+                    viewModel.redeal()
+                    persistGameNow()
                 }
-                .disabled(isUndoDisabled)
             }
             ToolbarItem(placement: .automatic) {
+                Button {
+                    beginUndoAnimationIfNeeded()
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                }
+                .labelStyle(.iconOnly)
+                .help("Undo")
+                .disabled(isUndoDisabled)
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     isShowingSettings = true
                 } label: {
                     Label("Settings", systemImage: "gearshape")
                 }
+                .help("Settings")
             }
 #endif
         }

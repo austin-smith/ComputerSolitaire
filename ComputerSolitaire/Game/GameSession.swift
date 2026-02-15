@@ -6,6 +6,7 @@ final class SolitaireViewModel {
     static let maxUndoHistoryCount = 200
 
     private(set) var state: GameState
+    private var redealState: GameState
     var selection: Selection?
     var isDragging: Bool = false
     var pendingAutoMove: PendingAutoMove?
@@ -21,7 +22,9 @@ final class SolitaireViewModel {
     }
 
     init() {
-        state = GameState.newGame()
+        let initialState = GameState.newGame()
+        state = initialState
+        redealState = initialState
     }
 
     var isWin: Bool {
@@ -33,13 +36,25 @@ final class SolitaireViewModel {
     }
 
     func newGame(drawMode: DrawMode = .three) {
-        state = GameState.newGame()
+        let initialState = GameState.newGame()
+        state = initialState
+        redealState = initialState
         selection = nil
         isDragging = false
         pendingAutoMove = nil
         movesCount = 0
         stockDrawCount = drawMode.rawValue
         state.wasteDrawCount = 0
+        history.removeAll()
+    }
+
+    func redeal() {
+        state = redealState
+        selection = nil
+        isDragging = false
+        pendingAutoMove = nil
+        movesCount = 0
+        state.wasteDrawCount = min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         history.removeAll()
     }
 
@@ -79,7 +94,8 @@ final class SolitaireViewModel {
             state: state,
             movesCount: movesCount,
             stockDrawCount: stockDrawCount,
-            history: history
+            history: history,
+            redealState: redealState
         )
     }
 
@@ -90,6 +106,12 @@ final class SolitaireViewModel {
         movesCount = sanitizedPayload.movesCount
         stockDrawCount = sanitizedPayload.stockDrawCount
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
+        var restoredRedealState = sanitizedPayload.redealState ?? history.first?.state ?? state
+        restoredRedealState.wasteDrawCount = min(
+            max(0, restoredRedealState.wasteDrawCount),
+            min(stockDrawCount, restoredRedealState.waste.count)
+        )
+        redealState = restoredRedealState
         selection = nil
         isDragging = false
         pendingAutoMove = nil

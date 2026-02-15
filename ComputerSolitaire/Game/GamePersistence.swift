@@ -28,19 +28,22 @@ struct SavedGamePayload: Codable {
     let movesCount: Int
     let stockDrawCount: Int
     let history: [GameSnapshot]
+    let redealState: GameState?
 
     init(
         schemaVersion: Int = SavedGamePayload.currentSchemaVersion,
         state: GameState,
         movesCount: Int,
         stockDrawCount: Int,
-        history: [GameSnapshot]
+        history: [GameSnapshot],
+        redealState: GameState? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.state = state
         self.movesCount = movesCount
         self.stockDrawCount = stockDrawCount
         self.history = history
+        self.redealState = redealState
     }
 
     func sanitizedForRestore() -> SavedGamePayload? {
@@ -59,12 +62,22 @@ struct SavedGamePayload: Codable {
             min(sanitizedStockDrawCount, sanitizedState.waste.count)
         )
 
+        let sanitizedRedealState: GameState? = {
+            guard var baseState = redealState, baseState.isValidForPersistence else { return nil }
+            baseState.wasteDrawCount = min(
+                max(0, baseState.wasteDrawCount),
+                min(sanitizedStockDrawCount, baseState.waste.count)
+            )
+            return baseState
+        }()
+
         return SavedGamePayload(
             schemaVersion: schemaVersion,
             state: sanitizedState,
             movesCount: sanitizedMovesCount,
             stockDrawCount: sanitizedStockDrawCount,
-            history: Array(sanitizedHistory)
+            history: Array(sanitizedHistory),
+            redealState: sanitizedRedealState
         )
     }
 }
