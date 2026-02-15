@@ -6,6 +6,7 @@ final class SolitaireViewModel {
     static let maxUndoHistoryCount = 200
 
     private(set) var state: GameState
+    private(set) var isAutoFinishAvailable: Bool
     private var redealState: GameState
     var selection: Selection?
     var isDragging: Bool = false
@@ -24,6 +25,7 @@ final class SolitaireViewModel {
     init() {
         let initialState = GameState.newGame()
         state = initialState
+        isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: initialState)
         redealState = initialState
     }
 
@@ -33,10 +35,6 @@ final class SolitaireViewModel {
 
     var canUndo: Bool {
         !history.isEmpty
-    }
-
-    var canAutoFinish: Bool {
-        AutoMoveAdvisor.canAutoFinish(in: state)
     }
 
     func newGame(drawMode: DrawMode = .three) {
@@ -50,6 +48,7 @@ final class SolitaireViewModel {
         stockDrawCount = drawMode.rawValue
         state.wasteDrawCount = 0
         history.removeAll()
+        refreshAutoFinishAvailability()
     }
 
     func redeal() {
@@ -60,6 +59,7 @@ final class SolitaireViewModel {
         movesCount = 0
         state.wasteDrawCount = min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         history.removeAll()
+        refreshAutoFinishAvailability()
     }
 
     func updateDrawMode(_ drawMode: DrawMode) {
@@ -72,6 +72,7 @@ final class SolitaireViewModel {
         selection = nil
         isDragging = false
         pendingAutoMove = nil
+        refreshAutoFinishAvailability()
     }
 
     func visibleWasteCards() -> [Card] {
@@ -87,6 +88,7 @@ final class SolitaireViewModel {
         isDragging = false
         pendingAutoMove = nil
         SoundManager.shared.play(.undoMove)
+        refreshAutoFinishAvailability()
     }
 
     func peekUndoSnapshot() -> GameSnapshot? {
@@ -119,6 +121,7 @@ final class SolitaireViewModel {
         selection = nil
         isDragging = false
         pendingAutoMove = nil
+        refreshAutoFinishAvailability()
         return true
     }
 
@@ -174,6 +177,7 @@ final class SolitaireViewModel {
                     state.tableau[pileIndex][cardIndex].isFaceUp = true
                     movesCount += 1
                     SoundManager.shared.play(.cardFlipFaceUp)
+                    refreshAutoFinishAvailability()
                 }
                 selection = nil
                 return
@@ -277,7 +281,7 @@ final class SolitaireViewModel {
     @discardableResult
     func queueNextAutoFinishMove() -> Bool {
         isDragging = false
-        guard let move = AutoMoveAdvisor.nextAutoFinishMove(in: state) else {
+        guard let move = AutoFinishPlanner.nextAutoFinishMove(in: state) else {
             return false
         }
 
@@ -287,6 +291,10 @@ final class SolitaireViewModel {
             destination: move.destination
         )
         return true
+    }
+
+    func refreshAutoFinishAvailability() {
+        isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: state)
     }
 }
 
@@ -447,5 +455,4 @@ private extension SolitaireViewModel {
         )
         return true
     }
-
 }

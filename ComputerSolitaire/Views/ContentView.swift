@@ -383,7 +383,7 @@ struct ContentView: View {
     }
 
     private var isAutoFinishDisabled: Bool {
-        !viewModel.canAutoFinish
+        !viewModel.isAutoFinishAvailable
             || isUndoAnimating
             || isDroppingCards
             || isReturningDrag
@@ -398,13 +398,17 @@ struct ContentView: View {
     }
 
     private func stopAutoFinish() {
+        guard isAutoFinishing else { return }
         isAutoFinishing = false
+        DispatchQueue.main.async {
+            viewModel.refreshAutoFinishAvailability()
+        }
     }
 
     private func queueAutoFinishStepIfPossible() {
         guard isAutoFinishing else { return }
 
-        if viewModel.isWin || !viewModel.canAutoFinish {
+        if viewModel.isWin || !viewModel.isAutoFinishAvailable {
             stopAutoFinish()
             return
         }
@@ -563,6 +567,11 @@ struct ContentView: View {
                 isDroppingCards = false
                 droppingSelection = nil
                 pendingDropDestination = nil
+            }
+            if !isAutoFinishing {
+                DispatchQueue.main.async {
+                    viewModel.refreshAutoFinishAvailability()
+                }
             }
             processPendingAutoMoveIfPossible()
         }
