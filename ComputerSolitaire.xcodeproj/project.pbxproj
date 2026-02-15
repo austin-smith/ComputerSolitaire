@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		4B75C1D12F1A233400761A12 /* ComputerSolitaire.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ComputerSolitaire.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4B75C1D12F1A233400761A12 /* Computer Solitaire.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Computer Solitaire.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -53,7 +53,7 @@
 		4B75C1D22F1A233400761A12 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4B75C1D12F1A233400761A12 /* ComputerSolitaire.app */,
+				4B75C1D12F1A233400761A12 /* Computer Solitaire.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -80,7 +80,7 @@
 			packageProductDependencies = (
 			);
 			productName = ComputerSolitaire;
-			productReference = 4B75C1D12F1A233400761A12 /* ComputerSolitaire.app */;
+			productReference = 4B75C1D12F1A233400761A12 /* Computer Solitaire.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -170,7 +170,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = crapshack.ComputerSolitaire;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Computer Solitaire";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -218,7 +218,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = crapshack.ComputerSolitaire;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Computer Solitaire";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
