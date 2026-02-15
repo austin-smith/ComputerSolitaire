@@ -35,7 +35,7 @@ struct ComputerSolitaireApp: App {
         WindowGroup(id: "about") {
             AboutView()
                 .navigationTitle("About Computer Solitaire")
-                .frame(width: 360, height: 420)
+                .frame(width: 320, height: 380)
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)

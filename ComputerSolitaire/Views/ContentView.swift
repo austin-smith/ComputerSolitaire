@@ -257,6 +257,10 @@ struct ContentView: View {
                         viewModel.redeal()
                         persistGameNow()
                     }
+                    Button("Auto Finish", systemImage: "bolt") {
+                        startAutoFinish()
+                    }
+                    .disabled(isAutoFinishDisabled)
                 } label: {
                     Label("Game", systemImage: "cards")
                 }
@@ -267,12 +271,6 @@ struct ContentView: View {
                     Label("Undo", systemImage: "arrow.uturn.backward")
                 }
                 .disabled(isUndoDisabled)
-                Button {
-                    startAutoFinish()
-                } label: {
-                    Label("Auto Finish", systemImage: "bolt")
-                }
-                .disabled(isAutoFinishDisabled)
                 Spacer(minLength: 0)
                 Button {
                     isShowingSettings = true
