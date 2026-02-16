@@ -5,6 +5,17 @@
 
 Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 
+<table align="center">
+  <tr>
+    <td valign="top">
+      <img src="./docs/screenshots/screen-grab-ios.png" alt="iOS gameplay screenshot" style="height: 420px; width: auto; max-width: none; display: block;" />
+    </td>
+    <td valign="top">
+      <img src="./docs/screenshots/screen-grab-macos.png" alt="macOS gameplay screenshot" style="height: 420px; width: auto; max-width: none; display: block;" />
+    </td>
+  </tr>
+</table>
+
 ## Features
 
 - Fully native apps for iOS, iPadOS, and macOS
