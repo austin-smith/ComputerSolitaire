@@ -153,6 +153,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ComputerSolitaire/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Computer Solitaire";
+				"INFOPLIST_KEY_CFBundleDisplayName[sdk=iphoneos*]" = Solitaire;
+				"INFOPLIST_KEY_CFBundleDisplayName[sdk=iphonesimulator*]" = Solitaire;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.card-games";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -201,6 +203,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ComputerSolitaire/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Computer Solitaire";
+				"INFOPLIST_KEY_CFBundleDisplayName[sdk=iphoneos*]" = Solitaire;
+				"INFOPLIST_KEY_CFBundleDisplayName[sdk=iphonesimulator*]" = Solitaire;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.card-games";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
