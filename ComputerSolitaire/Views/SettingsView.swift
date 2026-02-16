@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 enum TableBackgroundColor: String, CaseIterable, Identifiable {
@@ -50,10 +51,13 @@ enum SettingsKey {
 
 extension Notification.Name {
     static let openSettings = Notification.Name("openSettings")
+    static let openRulesAndScoring = Notification.Name("openRulesAndScoring")
+    static let openStatistics = Notification.Name("openStatistics")
 }
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var isShowingRulesAndScoring = false
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
     @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
@@ -112,7 +116,7 @@ struct SettingsView: View {
                 }
 
                 SettingsCard(title: "Draw Mode") {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Stock draw")
                             .font(.subheadline.weight(.semibold))
                         Picker("Stock draw", selection: $drawModeRawValue) {
@@ -126,6 +130,23 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                }
+
+                SettingsCard(title: "Help") {
+                    Button {
+                        isShowingRulesAndScoring = true
+                    } label: {
+                        HStack {
+                            Text("Rules & Scoring")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(24)
@@ -141,6 +162,11 @@ struct SettingsView: View {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
+            }
+        }
+        .sheet(isPresented: $isShowingRulesAndScoring) {
+            NavigationStack {
+                RulesAndScoringView()
             }
         }
     }
@@ -191,6 +217,89 @@ private struct SettingsCard<Content: View>: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+struct StatsView: View {
+    let viewModel: SolitaireViewModel?
+    @Environment(\.dismiss) private var dismiss
+    @State private var stats = GameStatistics()
+    private let durationFormatter: DateComponentsFormatter = {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.day, .hour, .minute, .second]
+        formatter.unitsStyle = .abbreviated
+        formatter.zeroFormattingBehavior = .dropLeading
+        return formatter
+    }()
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Form {
+                Section("Games") {
+                    keyValueRow("Games Played", "\(stats.gamesPlayed)")
+                    keyValueRow("Games Won", "\(stats.gamesWon)")
+                    keyValueRow("Win Rate", winRateLabel)
+                }
+
+                Section("Performance") {
+                    keyValueRow("Total Time", durationLabel(displayTotalTimeSeconds(at: context.date)))
+                    keyValueRow("Avg Time", durationLabel(stats.averageTimeSeconds))
+                    keyValueRow("Best Time", bestTimeLabel)
+                    keyValueRow("High Score (3-card)", "\(stats.highScoreDrawThree)")
+                    keyValueRow("High Score (1-card)", "\(stats.highScoreDrawOne)")
+                }
+            }
+        }
+        .navigationTitle("Statistics")
+#if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+#else
+        .formStyle(.grouped)
+        .padding(16)
+        .frame(minWidth: 420, minHeight: 320)
+#endif
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+        }
+        .onAppear {
+            stats = GameStatisticsStore.load()
+        }
+    }
+
+    private var winRateLabel: String {
+        String(format: "%.1f%%", stats.winRate * 100)
+    }
+
+    private var bestTimeLabel: String {
+        guard let bestTimeSeconds = stats.bestTimeSeconds else { return "-" }
+        return durationLabel(bestTimeSeconds)
+    }
+
+    private func displayTotalTimeSeconds(at date: Date) -> Int {
+        let liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
+        let (sum, overflow) = stats.totalTimeSeconds.addingReportingOverflow(liveElapsed)
+        return overflow ? Int.max : max(0, sum)
+    }
+
+    @ViewBuilder
+    private func keyValueRow(_ key: String, _ value: String) -> some View {
+        HStack {
+            Text(key)
+            Spacer(minLength: 16)
+            Text(value)
+                .font(.system(.body, design: .monospaced))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func durationLabel(_ seconds: Int) -> String {
+        let total = max(0, seconds)
+        return durationFormatter.string(from: TimeInterval(total)) ?? "0s"
     }
 }
 

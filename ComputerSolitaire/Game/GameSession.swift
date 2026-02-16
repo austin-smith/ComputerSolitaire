@@ -12,7 +12,14 @@ final class SolitaireViewModel {
     var isDragging: Bool = false
     var pendingAutoMove: PendingAutoMove?
     private(set) var movesCount: Int = 0
+    private(set) var score: Int = 0
+    private(set) var gameStartedAt: Date = .now
+    private var hasAppliedTimeBonus = false
+    private var pauseStartedAt: Date?
     private(set) var stockDrawCount: Int = 3
+    private var scoringDrawCount: Int = DrawMode.three.rawValue
+    private var hasStartedTrackedGame = false
+    private var isCurrentGameFinalized = false
 
     private var history: [GameSnapshot] = []
 
@@ -34,10 +41,51 @@ final class SolitaireViewModel {
     }
 
     var canUndo: Bool {
-        !history.isEmpty
+        !history.isEmpty && !isWin
+    }
+
+    func unfinalizedElapsedSecondsForStats(at date: Date = .now) -> Int {
+        guard hasStartedTrackedGame, !isCurrentGameFinalized else { return 0 }
+        return elapsedActiveSeconds(at: date)
+    }
+
+    func displayScore(at date: Date = .now) -> Int {
+        guard !hasAppliedTimeBonus else { return score }
+        let elapsedSeconds = elapsedActiveSeconds(at: date)
+        let maxBonus = Scoring.timedMaxBonus(for: scoringDrawCount)
+        let bonus = Scoring.timeBonus(
+            elapsedSeconds: elapsedSeconds,
+            maxBonus: maxBonus,
+            pointsLostPerSecond: Scoring.timedPointsLostPerSecond
+        )
+        return Scoring.clamped(score + bonus)
+    }
+
+    func elapsedActiveSeconds(at date: Date = .now) -> Int {
+        let effectiveNow = min(pauseStartedAt ?? date, date)
+        return max(0, Int(effectiveNow.timeIntervalSince(gameStartedAt)))
+    }
+
+    @discardableResult
+    func pauseTimeScoring(at date: Date = .now) -> Bool {
+        guard !hasAppliedTimeBonus else { return false }
+        guard pauseStartedAt == nil else { return false }
+        pauseStartedAt = date
+        return true
+    }
+
+    @discardableResult
+    func resumeTimeScoring(at date: Date = .now) -> Bool {
+        guard !hasAppliedTimeBonus else { return false }
+        guard let pausedAt = pauseStartedAt else { return false }
+        let pausedDuration = max(0, date.timeIntervalSince(pausedAt))
+        gameStartedAt = gameStartedAt.addingTimeInterval(pausedDuration)
+        pauseStartedAt = nil
+        return true
     }
 
     func newGame(drawMode: DrawMode = .three) {
+        finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: .now)
         let initialState = GameState.newGame()
         state = initialState
         redealState = initialState
@@ -45,18 +93,33 @@ final class SolitaireViewModel {
         isDragging = false
         pendingAutoMove = nil
         movesCount = 0
+        score = 0
+        gameStartedAt = .now
+        hasAppliedTimeBonus = false
+        pauseStartedAt = nil
         stockDrawCount = drawMode.rawValue
+        scoringDrawCount = drawMode.rawValue
+        hasStartedTrackedGame = true
+        isCurrentGameFinalized = false
         state.wasteDrawCount = 0
         history.removeAll()
         refreshAutoFinishAvailability()
     }
 
     func redeal() {
+        finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: .now)
         state = redealState
         selection = nil
         isDragging = false
         pendingAutoMove = nil
         movesCount = 0
+        score = 0
+        gameStartedAt = .now
+        hasAppliedTimeBonus = false
+        pauseStartedAt = nil
+        scoringDrawCount = stockDrawCount
+        hasStartedTrackedGame = true
+        isCurrentGameFinalized = false
         state.wasteDrawCount = min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         history.removeAll()
         refreshAutoFinishAvailability()
@@ -81,9 +144,12 @@ final class SolitaireViewModel {
     }
 
     func undo() {
+        guard !isWin else { return }
         guard let snapshot = history.popLast() else { return }
         state = snapshot.state
         movesCount = snapshot.movesCount
+        score = snapshot.score
+        hasAppliedTimeBonus = snapshot.hasAppliedTimeBonus
         selection = nil
         isDragging = false
         pendingAutoMove = nil
@@ -99,18 +165,36 @@ final class SolitaireViewModel {
         SavedGamePayload(
             state: state,
             movesCount: movesCount,
+            score: score,
+            gameStartedAt: gameStartedAt,
+            pauseStartedAt: pauseStartedAt,
+            hasAppliedTimeBonus: hasAppliedTimeBonus,
             stockDrawCount: stockDrawCount,
+            scoringDrawCount: scoringDrawCount,
             history: history,
-            redealState: redealState
+            redealState: redealState,
+            hasStartedTrackedGame: hasStartedTrackedGame,
+            isCurrentGameFinalized: isCurrentGameFinalized
         )
     }
 
     @discardableResult
     func restore(from payload: SavedGamePayload) -> Bool {
         guard let sanitizedPayload = payload.sanitizedForRestore() else { return false }
+        let offlineDurationSinceSave = max(0, Date().timeIntervalSince(sanitizedPayload.savedAt))
         state = sanitizedPayload.state
         movesCount = sanitizedPayload.movesCount
+        score = sanitizedPayload.score
+        gameStartedAt = sanitizedPayload.gameStartedAt
+        pauseStartedAt = sanitizedPayload.pauseStartedAt
+        hasAppliedTimeBonus = sanitizedPayload.hasAppliedTimeBonus
+        if pauseStartedAt == nil, !hasAppliedTimeBonus {
+            gameStartedAt = gameStartedAt.addingTimeInterval(offlineDurationSinceSave)
+        }
         stockDrawCount = sanitizedPayload.stockDrawCount
+        scoringDrawCount = sanitizedPayload.scoringDrawCount
+        hasStartedTrackedGame = sanitizedPayload.hasStartedTrackedGame
+        isCurrentGameFinalized = sanitizedPayload.isCurrentGameFinalized
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
         var restoredRedealState = sanitizedPayload.redealState ?? history.first?.state ?? state
         restoredRedealState.wasteDrawCount = min(
@@ -176,6 +260,7 @@ final class SolitaireViewModel {
                     )
                     state.tableau[pileIndex][cardIndex].isFaceUp = true
                     movesCount += 1
+                    applyScore(.turnOverTableauCard)
                     SoundManager.shared.play(.cardFlipFaceUp)
                     refreshAutoFinishAvailability()
                 }
@@ -343,6 +428,9 @@ private extension SolitaireViewModel {
         state.waste.removeAll()
         state.wasteDrawCount = 0
         movesCount += 1
+        if stockDrawCount == DrawMode.one.rawValue {
+            applyScore(.recycleWasteInDrawOne)
+        }
         SoundManager.shared.play(.wasteRecycleToStock)
     }
 
@@ -376,6 +464,8 @@ private extension SolitaireViewModel {
             removeSelection(selection)
             state.foundations[index].append(movingCard)
             movesCount += 1
+            applyScore(for: selection.source, destination: .foundation(index))
+            applyTimeBonusIfWon()
             self.selection = nil
             SoundManager.shared.play(.cardPlaced)
             return true
@@ -391,6 +481,8 @@ private extension SolitaireViewModel {
             removeSelection(selection)
             state.tableau[index].append(contentsOf: selection.cards)
             movesCount += 1
+            applyScore(for: selection.source, destination: .tableau(index))
+            applyTimeBonusIfWon()
             self.selection = nil
             SoundManager.shared.play(.cardPlaced)
             return true
@@ -420,6 +512,7 @@ private extension SolitaireViewModel {
         guard let lastIndex = state.tableau[pileIndex].indices.last else { return }
         if !state.tableau[pileIndex][lastIndex].isFaceUp {
             state.tableau[pileIndex][lastIndex].isFaceUp = true
+            applyScore(.turnOverTableauCard)
             SoundManager.shared.play(.cardFlipFaceUp)
         }
     }
@@ -429,12 +522,63 @@ private extension SolitaireViewModel {
             GameSnapshot(
                 state: state,
                 movesCount: movesCount,
+                score: score,
+                hasAppliedTimeBonus: hasAppliedTimeBonus,
                 undoContext: undoContext
             )
         )
         if history.count > Self.maxUndoHistoryCount {
             history.removeFirst()
         }
+    }
+
+    func applyScore(for source: Selection.Source, destination: Destination) {
+        switch (source, destination) {
+        case (.waste, .tableau):
+            applyScore(.wasteToTableau)
+        case (.waste, .foundation):
+            applyScore(.wasteToFoundation)
+        case (.tableau, .foundation):
+            applyScore(.tableauToFoundation)
+        case (.foundation, .tableau):
+            applyScore(.foundationToTableau)
+        default:
+            break
+        }
+    }
+
+    func applyScore(_ action: ScoringAction) {
+        score = Scoring.applying(action, to: score)
+    }
+
+    func applyTimeBonusIfWon() {
+        guard isWin, !hasAppliedTimeBonus else { return }
+        let endedAt = Date()
+        let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
+        let maxBonus = Scoring.timedMaxBonus(for: scoringDrawCount)
+        let bonus = Scoring.timeBonus(
+            elapsedSeconds: elapsedSeconds,
+            maxBonus: maxBonus,
+            pointsLostPerSecond: Scoring.timedPointsLostPerSecond
+        )
+        score = Scoring.clamped(score + bonus)
+        hasAppliedTimeBonus = true
+        pauseStartedAt = nil
+        finalizeCurrentGameIfNeeded(didWin: true, endedAt: endedAt)
+    }
+
+    func finalizeCurrentGameIfNeeded(didWin: Bool, endedAt: Date) {
+        guard hasStartedTrackedGame, !isCurrentGameFinalized else { return }
+        let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
+        GameStatisticsStore.update { stats in
+            stats.recordCompletedGame(
+                didWin: didWin,
+                elapsedSeconds: elapsedSeconds,
+                finalScore: score,
+                drawCount: scoringDrawCount
+            )
+        }
+        isCurrentGameFinalized = true
     }
 
     @discardableResult
@@ -455,4 +599,5 @@ private extension SolitaireViewModel {
         )
         return true
     }
+
 }

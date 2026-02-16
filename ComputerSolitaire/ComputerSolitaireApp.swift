@@ -21,6 +21,13 @@ struct ComputerSolitaireApp: App {
                     Label("About Computer Solitaire", systemImage: "info.circle")
                 }
             }
+            CommandGroup(replacing: .help) {
+                Button {
+                    NotificationCenter.default.post(name: .openRulesAndScoring, object: nil)
+                } label: {
+                    Label("Rules & Scoring", systemImage: "book")
+                }
+            }
 #endif
             CommandGroup(replacing: .appSettings) {
                 Button {

@@ -1,9 +1,14 @@
 <h1 align="center">
-  <img src="ComputerSolitaire/ComputerSolitaireAppIcon.icon/Assets/computer-solitaire.png" width="128" alt="ComputerSolitaire Icon">
+  <img src="docs/images/computer-solitaire-app-icon.png" width="128" alt="Computer Solitaire Icon">
   <br><span style="font-family: monospace;">Computer Solitaire</span>
 </h1>
 
 Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
+
+<p align="center">
+  <img src="./docs/screenshots/screen-grab-ios.png" alt="iOS screenshot" height="420" />
+  <img src="./docs/screenshots/screen-grab-macos.png" alt="macOS screenshot" height="420" />
+</p>
 
 ## Features
 

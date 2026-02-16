@@ -93,14 +93,97 @@ enum CardTilt {
 
 struct HeaderView: View {
     let movesCount: Int
+    let elapsedSeconds: Int
+    let score: Int
+    let onScoreTapped: () -> Void
 
     var body: some View {
-        HStack {
-            Text("Moves \(movesCount)")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.8))
-            Spacer()
+        HStack(spacing: 10) {
+            StatTileView(
+                title: "Moves",
+                value: "\(movesCount)",
+                systemImage: "arrow.left.arrow.right"
+            )
+
+            StatTileView(
+                title: "Time",
+                value: formattedDuration(elapsedSeconds),
+                systemImage: "timer"
+            )
+
+            Button(action: onScoreTapped) {
+                StatTileView(
+                    title: "Score",
+                    value: "\(score)",
+                    systemImage: "star.fill",
+                    isEmphasized: true
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Score \(score). Open scoring details")
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.black.opacity(0.16))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(.white.opacity(0.1), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+    }
+
+    private func formattedDuration(_ totalSeconds: Int) -> String {
+        let seconds = max(0, totalSeconds)
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let remainingSeconds = seconds % 60
+
+        if hours > 0 {
+            return "\(hours):\(twoDigit(minutes)):\(twoDigit(remainingSeconds))"
+        }
+        return "\(twoDigit(minutes)):\(twoDigit(remainingSeconds))"
+    }
+
+    private func twoDigit(_ value: Int) -> String {
+        value < 10 ? "0\(value)" : "\(value)"
+    }
+}
+
+struct StatTileView: View {
+    let title: String
+    let value: String
+    let systemImage: String
+    var isEmphasized: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+
+            Text(value)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.98))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isEmphasized ? .white.opacity(0.16) : .white.opacity(0.07))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(.white.opacity(isEmphasized ? 0.16 : 0.09), lineWidth: 1)
+        )
     }
 }
 
@@ -902,6 +985,7 @@ private struct FeltRNG {
 }
 
 struct WinOverlay: View {
+    let score: Int
     let onNewGame: () -> Void
 
     var body: some View {
@@ -910,17 +994,17 @@ struct WinOverlay: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
-                Text("You Win")
+                Text("You Won!")
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                Text("Every card is home.")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.8))
+                Text("Score: \(score)")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
                 Button("Play Again") {
                     onNewGame()
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color(red: 0.95, green: 0.76, blue: 0.2))
+                .tint(Color(red: 0.0235, green: 0.4431, blue: 0.7176))
             }
             .padding(32)
             .background(
@@ -933,4 +1017,8 @@ struct WinOverlay: View {
             )
         }
     }
+}
+
+#Preview("Win Overlay") {
+    WinOverlay(score: 1240) {}
 }

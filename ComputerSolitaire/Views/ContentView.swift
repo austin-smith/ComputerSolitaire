@@ -1,5 +1,10 @@
 import SwiftUI
 import SwiftData
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 struct DropTargetFrameKey: PreferenceKey {
     static var defaultValue: [DropTarget: DropTargetGeometry] = [:]
@@ -100,6 +105,9 @@ struct ContentView: View {
     @State private var isHydratingGame = false
     @State private var autosaveTask: Task<Void, Never>?
     @State private var isAutoFinishing = false
+    @State private var isShowingRulesAndScoring = false
+    @State private var isShowingStats = false
+    @State private var isTimeScoringPausedForLifecycle = false
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
@@ -113,44 +121,53 @@ struct ContentView: View {
             let metrics = Layout.metrics(for: geometry.size)
             let cardSize = metrics.cardSize
             let boardContentWidth = (cardSize.width * 7) + (metrics.columnSpacing * 6)
+            let isBoardReady = hasLoadedGame && !isHydratingGame
 #if os(iOS)
             let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && geometry.size.width > geometry.size.height
 #endif
 
             ZStack {
                 TableBackground()
-                VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                    HeaderView(movesCount: viewModel.movesCount)
+                if isBoardReady {
+                    VStack(alignment: .leading, spacing: metrics.rowSpacing) {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            HeaderView(
+                                movesCount: viewModel.movesCount,
+                                elapsedSeconds: viewModel.elapsedActiveSeconds(at: context.date),
+                                score: viewModel.displayScore(at: context.date),
+                                onScoreTapped: { isShowingStats = true }
+                            )
+                            .frame(width: boardContentWidth, alignment: .leading)
+                        }
+                        TopRowView(
+                            viewModel: viewModel,
+                            cardSize: cardSize,
+                            columnSpacing: metrics.columnSpacing,
+                            wasteFanSpacing: metrics.wasteFanSpacing,
+                            activeTarget: activeTarget,
+                            isCardTiltEnabled: isCardTiltEnabled,
+                            cardTilts: $cardTilts,
+                            hiddenCardIDs: hiddenCardIDs,
+                            drawingCardIDs: drawingCardIDs,
+                            fanProgress: wasteFanProgress,
+                            dragGesture: dragGesture(for:)
+                        )
                         .frame(width: boardContentWidth, alignment: .leading)
-                    TopRowView(
-                        viewModel: viewModel,
-                        cardSize: cardSize,
-                        columnSpacing: metrics.columnSpacing,
-                        wasteFanSpacing: metrics.wasteFanSpacing,
-                        activeTarget: activeTarget,
-                        isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts,
-                        hiddenCardIDs: hiddenCardIDs,
-                        drawingCardIDs: drawingCardIDs,
-                        fanProgress: wasteFanProgress,
-                        dragGesture: dragGesture(for:)
-                    )
-                    .frame(width: boardContentWidth, alignment: .leading)
-                    TableauRowView(
-                        viewModel: viewModel,
-                        cardSize: cardSize,
-                        columnSpacing: metrics.columnSpacing,
-                        faceDownOffset: metrics.tableauFaceDownOffset,
-                        faceUpOffset: metrics.tableauFaceUpOffset,
-                        activeTarget: activeTarget,
-                        isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts,
-                        hiddenCardIDs: hiddenCardIDs,
-                        dragGesture: dragGesture(for:)
-                    )
-                    .frame(width: boardContentWidth, alignment: .leading)
-                    Spacer(minLength: 0)
-                }
+                        TableauRowView(
+                            viewModel: viewModel,
+                            cardSize: cardSize,
+                            columnSpacing: metrics.columnSpacing,
+                            faceDownOffset: metrics.tableauFaceDownOffset,
+                            faceUpOffset: metrics.tableauFaceUpOffset,
+                            activeTarget: activeTarget,
+                            isCardTiltEnabled: isCardTiltEnabled,
+                            cardTilts: $cardTilts,
+                            hiddenCardIDs: hiddenCardIDs,
+                            dragGesture: dragGesture(for:)
+                        )
+                        .frame(width: boardContentWidth, alignment: .leading)
+                        Spacer(minLength: 0)
+                    }
 #if os(iOS)
                     .frame(
                         maxWidth: .infinity,
@@ -163,22 +180,23 @@ struct ContentView: View {
                     .padding(.horizontal, metrics.horizontalPadding)
                     .padding(.vertical, metrics.verticalPadding)
 
-                if viewModel.isWin {
-                    WinOverlay {
-                        stopAutoFinish()
-                        viewModel.newGame(drawMode: drawMode)
-                        persistGameNow()
+                    if viewModel.isWin {
+                        WinOverlay(score: viewModel.score) {
+                            stopAutoFinish()
+                            viewModel.newGame(drawMode: drawMode)
+                            persistGameNow()
+                        }
+                        .transition(.opacity)
                     }
-                    .transition(.opacity)
-                }
 
-                Button("Cancel Drag") {
-                    handleEscape()
+                    Button("Cancel Drag") {
+                        handleEscape()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    .opacity(0.01)
+                    .frame(width: 1, height: 1)
+                    .accessibilityHidden(true)
                 }
-                .keyboardShortcut(.cancelAction)
-                .opacity(0.01)
-                .frame(width: 1, height: 1)
-                .accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .coordinateSpace(name: "board")
@@ -279,6 +297,11 @@ struct ContentView: View {
                 .disabled(isUndoDisabled)
                 Spacer(minLength: 0)
                 Button {
+                    isShowingStats = true
+                } label: {
+                    Label("Statistics", systemImage: "chart.bar")
+                }
+                Button {
                     isShowingSettings = true
                 } label: {
                     Label("Settings", systemImage: "gearshape")
@@ -320,6 +343,14 @@ struct ContentView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    isShowingStats = true
+                } label: {
+                    Label("Statistics", systemImage: "chart.bar")
+                }
+                .help("Statistics")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
                     isShowingSettings = true
                 } label: {
                     Label("Settings", systemImage: "gearshape")
@@ -337,8 +368,28 @@ struct ContentView: View {
             SettingsView()
 #endif
         }
+        .sheet(isPresented: $isShowingRulesAndScoring) {
+            NavigationStack {
+                RulesAndScoringView()
+            }
+        }
+        .sheet(isPresented: $isShowingStats) {
+#if os(iOS)
+            NavigationStack {
+                StatsView(viewModel: viewModel)
+            }
+#else
+            StatsView(viewModel: viewModel)
+#endif
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
             isShowingSettings = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
+            isShowingRulesAndScoring = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openStatistics)) { _ in
+            isShowingStats = true
         }
         .onChange(of: drawModeRawValue) { (_, newValue: Int) in
             let mode = DrawMode(rawValue: newValue) ?? .three
@@ -374,6 +425,21 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, newPhase in
             handleScenePhaseChange(newPhase)
         }
+#if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            pauseTimeScoringAndPersist()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            resumeTimeScoringAndPersist()
+        }
+#elseif os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in
+            pauseTimeScoringAndPersist()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            resumeTimeScoringAndPersist()
+        }
+#endif
         .onAppear {
             initializeGameIfNeeded()
         }
@@ -685,6 +751,7 @@ struct ContentView: View {
     private func beginUndoAnimationIfNeeded() {
         guard !isUndoAnimating else { return }
         guard !viewModel.isDragging, !isDroppingCards, !isReturningDrag else { return }
+        guard !viewModel.isWin else { return }
         guard let snapshot = viewModel.peekUndoSnapshot() else { return }
 
         let currentFrames = cardFrames
@@ -943,6 +1010,20 @@ struct ContentView: View {
             viewModel.newGame(drawMode: drawMode)
             persistGameNow()
         }
+
+        if scenePhase == .active {
+            isTimeScoringPausedForLifecycle = false
+            let didResume = viewModel.resumeTimeScoring()
+            if didResume {
+                persistGameNow()
+            }
+        } else {
+            isTimeScoringPausedForLifecycle = true
+            let didPause = viewModel.pauseTimeScoring()
+            if didPause {
+                persistGameNow()
+            }
+        }
     }
 
     private func scheduleAutosave() {
@@ -957,9 +1038,31 @@ struct ContentView: View {
 
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
         guard hasLoadedGame else { return }
-        if newPhase == .inactive || newPhase == .background {
-            persistGameNow()
+        if newPhase == .active {
+            applyLifecyclePauseState(false)
+            return
         }
+        if newPhase == .inactive || newPhase == .background {
+            applyLifecyclePauseState(true)
+        }
+    }
+
+    private func pauseTimeScoringAndPersist() {
+        applyLifecyclePauseState(true)
+    }
+
+    private func resumeTimeScoringAndPersist() {
+        applyLifecyclePauseState(false)
+    }
+
+    private func applyLifecyclePauseState(_ shouldPause: Bool) {
+        guard hasLoadedGame else { return }
+        guard isTimeScoringPausedForLifecycle != shouldPause else { return }
+        isTimeScoringPausedForLifecycle = shouldPause
+        _ = shouldPause
+            ? viewModel.pauseTimeScoring()
+            : viewModel.resumeTimeScoring()
+        persistGameNow()
     }
 
     private func persistGameNow() {
