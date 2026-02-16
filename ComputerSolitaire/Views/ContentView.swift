@@ -120,7 +120,7 @@ struct ContentView: View {
             ZStack {
                 TableBackground()
                 VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                    HeaderView(movesCount: viewModel.movesCount)
+                    HeaderView(movesCount: viewModel.movesCount, score: viewModel.score)
                         .frame(width: boardContentWidth, alignment: .leading)
                     TopRowView(
                         viewModel: viewModel,

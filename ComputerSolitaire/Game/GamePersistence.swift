@@ -26,14 +26,26 @@ struct SavedGamePayload: Codable {
     let schemaVersion: Int
     let state: GameState
     let movesCount: Int
+    let score: Int
     let stockDrawCount: Int
     let history: [GameSnapshot]
     let redealState: GameState?
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case state
+        case movesCount
+        case score
+        case stockDrawCount
+        case history
+        case redealState
+    }
 
     init(
         schemaVersion: Int = SavedGamePayload.currentSchemaVersion,
         state: GameState,
         movesCount: Int,
+        score: Int = 0,
         stockDrawCount: Int,
         history: [GameSnapshot],
         redealState: GameState? = nil
@@ -41,9 +53,21 @@ struct SavedGamePayload: Codable {
         self.schemaVersion = schemaVersion
         self.state = state
         self.movesCount = movesCount
+        self.score = score
         self.stockDrawCount = stockDrawCount
         self.history = history
         self.redealState = redealState
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        state = try container.decode(GameState.self, forKey: .state)
+        movesCount = try container.decode(Int.self, forKey: .movesCount)
+        score = try container.decodeIfPresent(Int.self, forKey: .score) ?? 0
+        stockDrawCount = try container.decode(Int.self, forKey: .stockDrawCount)
+        history = try container.decode([GameSnapshot].self, forKey: .history)
+        redealState = try container.decodeIfPresent(GameState.self, forKey: .redealState)
     }
 
     func sanitizedForRestore() -> SavedGamePayload? {
@@ -52,8 +76,17 @@ struct SavedGamePayload: Codable {
 
         let sanitizedStockDrawCount = DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
         let sanitizedMovesCount = max(0, movesCount)
+        let sanitizedScore = Scoring.clamped(score)
         let sanitizedHistory = history
             .filter { $0.movesCount >= 0 && $0.state.isValidForPersistence }
+            .map { snapshot in
+                GameSnapshot(
+                    state: snapshot.state,
+                    movesCount: snapshot.movesCount,
+                    score: Scoring.clamped(snapshot.score),
+                    undoContext: snapshot.undoContext
+                )
+            }
             .suffix(SolitaireViewModel.maxUndoHistoryCount)
 
         var sanitizedState = state
@@ -75,6 +108,7 @@ struct SavedGamePayload: Codable {
             schemaVersion: schemaVersion,
             state: sanitizedState,
             movesCount: sanitizedMovesCount,
+            score: sanitizedScore,
             stockDrawCount: sanitizedStockDrawCount,
             history: Array(sanitizedHistory),
             redealState: sanitizedRedealState

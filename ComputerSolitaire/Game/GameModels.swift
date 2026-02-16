@@ -152,7 +152,35 @@ enum Destination: Equatable {
 struct GameSnapshot: Codable {
     let state: GameState
     let movesCount: Int
+    let score: Int
     let undoContext: UndoAnimationContext?
+
+    enum CodingKeys: String, CodingKey {
+        case state
+        case movesCount
+        case score
+        case undoContext
+    }
+
+    init(
+        state: GameState,
+        movesCount: Int,
+        score: Int = 0,
+        undoContext: UndoAnimationContext?
+    ) {
+        self.state = state
+        self.movesCount = movesCount
+        self.score = score
+        self.undoContext = undoContext
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        state = try container.decode(GameState.self, forKey: .state)
+        movesCount = try container.decode(Int.self, forKey: .movesCount)
+        score = try container.decodeIfPresent(Int.self, forKey: .score) ?? 0
+        undoContext = try container.decodeIfPresent(UndoAnimationContext.self, forKey: .undoContext)
+    }
 }
 
 struct UndoAnimationContext: Codable {

@@ -12,6 +12,7 @@ final class SolitaireViewModel {
     var isDragging: Bool = false
     var pendingAutoMove: PendingAutoMove?
     private(set) var movesCount: Int = 0
+    private(set) var score: Int = 0
     private(set) var stockDrawCount: Int = 3
 
     private var history: [GameSnapshot] = []
@@ -45,6 +46,7 @@ final class SolitaireViewModel {
         isDragging = false
         pendingAutoMove = nil
         movesCount = 0
+        score = 0
         stockDrawCount = drawMode.rawValue
         state.wasteDrawCount = 0
         history.removeAll()
@@ -57,6 +59,7 @@ final class SolitaireViewModel {
         isDragging = false
         pendingAutoMove = nil
         movesCount = 0
+        score = 0
         state.wasteDrawCount = min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         history.removeAll()
         refreshAutoFinishAvailability()
@@ -84,6 +87,7 @@ final class SolitaireViewModel {
         guard let snapshot = history.popLast() else { return }
         state = snapshot.state
         movesCount = snapshot.movesCount
+        score = snapshot.score
         selection = nil
         isDragging = false
         pendingAutoMove = nil
@@ -99,6 +103,7 @@ final class SolitaireViewModel {
         SavedGamePayload(
             state: state,
             movesCount: movesCount,
+            score: score,
             stockDrawCount: stockDrawCount,
             history: history,
             redealState: redealState
@@ -110,6 +115,7 @@ final class SolitaireViewModel {
         guard let sanitizedPayload = payload.sanitizedForRestore() else { return false }
         state = sanitizedPayload.state
         movesCount = sanitizedPayload.movesCount
+        score = sanitizedPayload.score
         stockDrawCount = sanitizedPayload.stockDrawCount
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
         var restoredRedealState = sanitizedPayload.redealState ?? history.first?.state ?? state
@@ -176,6 +182,7 @@ final class SolitaireViewModel {
                     )
                     state.tableau[pileIndex][cardIndex].isFaceUp = true
                     movesCount += 1
+                    applyScore(.turnOverTableauCard)
                     SoundManager.shared.play(.cardFlipFaceUp)
                     refreshAutoFinishAvailability()
                 }
@@ -343,6 +350,9 @@ private extension SolitaireViewModel {
         state.waste.removeAll()
         state.wasteDrawCount = 0
         movesCount += 1
+        if stockDrawCount == DrawMode.one.rawValue {
+            applyScore(.recycleWasteInDrawOne)
+        }
         SoundManager.shared.play(.wasteRecycleToStock)
     }
 
@@ -376,6 +386,7 @@ private extension SolitaireViewModel {
             removeSelection(selection)
             state.foundations[index].append(movingCard)
             movesCount += 1
+            applyScore(for: selection.source, destination: .foundation(index))
             self.selection = nil
             SoundManager.shared.play(.cardPlaced)
             return true
@@ -391,6 +402,7 @@ private extension SolitaireViewModel {
             removeSelection(selection)
             state.tableau[index].append(contentsOf: selection.cards)
             movesCount += 1
+            applyScore(for: selection.source, destination: .tableau(index))
             self.selection = nil
             SoundManager.shared.play(.cardPlaced)
             return true
@@ -420,6 +432,7 @@ private extension SolitaireViewModel {
         guard let lastIndex = state.tableau[pileIndex].indices.last else { return }
         if !state.tableau[pileIndex][lastIndex].isFaceUp {
             state.tableau[pileIndex][lastIndex].isFaceUp = true
+            applyScore(.turnOverTableauCard)
             SoundManager.shared.play(.cardFlipFaceUp)
         }
     }
@@ -429,12 +442,32 @@ private extension SolitaireViewModel {
             GameSnapshot(
                 state: state,
                 movesCount: movesCount,
+                score: score,
                 undoContext: undoContext
             )
         )
         if history.count > Self.maxUndoHistoryCount {
             history.removeFirst()
         }
+    }
+
+    func applyScore(for source: Selection.Source, destination: Destination) {
+        switch (source, destination) {
+        case (.waste, .tableau):
+            applyScore(.wasteToTableau)
+        case (.waste, .foundation):
+            applyScore(.wasteToFoundation)
+        case (.tableau, .foundation):
+            applyScore(.tableauToFoundation)
+        case (.foundation, .tableau):
+            applyScore(.foundationToTableau)
+        default:
+            break
+        }
+    }
+
+    func applyScore(_ action: ScoringAction) {
+        score = Scoring.applying(action, to: score)
     }
 
     @discardableResult
