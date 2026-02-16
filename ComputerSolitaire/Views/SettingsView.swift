@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 enum TableBackgroundColor: String, CaseIterable, Identifiable {
@@ -51,6 +52,7 @@ enum SettingsKey {
 extension Notification.Name {
     static let openSettings = Notification.Name("openSettings")
     static let openRulesAndScoring = Notification.Name("openRulesAndScoring")
+    static let openStatistics = Notification.Name("openStatistics")
 }
 
 struct SettingsView: View {
@@ -196,6 +198,138 @@ struct SettingsView: View {
 }
 
 private struct SettingsCard<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+            content
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.thinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+struct StatsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var stats = GameStatistics()
+
+    var body: some View {
+        Group {
+#if os(iOS)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    gameStatsCard
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .navigationTitle("Statistics")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                }
+            }
+#else
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Statistics")
+                    .font(.title3.weight(.semibold))
+                gameStatsCard
+                Spacer(minLength: 0)
+                HStack {
+                    Spacer()
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                }
+            }
+            .padding(24)
+            .frame(minWidth: 460, idealWidth: 500, maxWidth: 560, minHeight: 380)
+            .navigationTitle("Statistics")
+#endif
+        }
+        .onAppear {
+            stats = GameStatisticsStore.load()
+        }
+    }
+
+    private var gameStatsCard: some View {
+        StatsCard(title: "Game Stats") {
+            VStack(spacing: 0) {
+                statRow("Games Played", value: "\(stats.gamesPlayed)")
+                rowDivider
+                statRow("Games Won", value: "\(stats.gamesWon)")
+                rowDivider
+                statRow("Win Rate", value: winRateLabel)
+                rowDivider
+                statRow("Total Time", value: durationLabel(stats.totalTimeSeconds))
+                rowDivider
+                statRow("Avg Time", value: durationLabel(stats.averageTimeSeconds))
+                rowDivider
+                statRow("Best Time", value: bestTimeLabel)
+                rowDivider
+                statRow("High Score (3-card)", value: "\(stats.highScoreDrawThree)")
+                rowDivider
+                statRow("High Score (1-card)", value: "\(stats.highScoreDrawOne)")
+            }
+        }
+    }
+
+    private var winRateLabel: String {
+        String(format: "%.1f%%", stats.winRate * 100)
+    }
+
+    private var bestTimeLabel: String {
+        guard let bestTimeSeconds = stats.bestTimeSeconds else { return "-" }
+        return durationLabel(bestTimeSeconds)
+    }
+
+    private var rowDivider: some View {
+        Divider()
+            .overlay(Color.primary.opacity(0.08))
+            .padding(.vertical, 2)
+    }
+
+    private func statRow(_ title: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .font(.subheadline)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .frame(minWidth: 88, alignment: .trailing)
+        }
+        .padding(.vertical, 5)
+    }
+
+    private func durationLabel(_ seconds: Int) -> String {
+        let total = max(0, seconds)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let remainingSeconds = total % 60
+        return String(format: "%02d:%02d:%02d", hours, minutes, remainingSeconds)
+    }
+}
+
+struct StatsCard<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
 

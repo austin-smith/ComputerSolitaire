@@ -17,6 +17,8 @@ final class SolitaireViewModel {
     private var hasAppliedTimeBonus = false
     private var pauseStartedAt: Date?
     private(set) var stockDrawCount: Int = 3
+    private var hasStartedTrackedGame = false
+    private var isCurrentGameFinalized = false
 
     private var history: [GameSnapshot] = []
 
@@ -77,6 +79,7 @@ final class SolitaireViewModel {
     }
 
     func newGame(drawMode: DrawMode = .three) {
+        finalizeCurrentGameIfNeeded(didWin: false, endedAt: .now)
         let initialState = GameState.newGame()
         state = initialState
         redealState = initialState
@@ -89,12 +92,15 @@ final class SolitaireViewModel {
         hasAppliedTimeBonus = false
         pauseStartedAt = nil
         stockDrawCount = drawMode.rawValue
+        hasStartedTrackedGame = true
+        isCurrentGameFinalized = false
         state.wasteDrawCount = 0
         history.removeAll()
         refreshAutoFinishAvailability()
     }
 
     func redeal() {
+        finalizeCurrentGameIfNeeded(didWin: false, endedAt: .now)
         state = redealState
         selection = nil
         isDragging = false
@@ -104,6 +110,8 @@ final class SolitaireViewModel {
         gameStartedAt = .now
         hasAppliedTimeBonus = false
         pauseStartedAt = nil
+        hasStartedTrackedGame = true
+        isCurrentGameFinalized = false
         state.wasteDrawCount = min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         history.removeAll()
         refreshAutoFinishAvailability()
@@ -154,7 +162,9 @@ final class SolitaireViewModel {
             hasAppliedTimeBonus: hasAppliedTimeBonus,
             stockDrawCount: stockDrawCount,
             history: history,
-            redealState: redealState
+            redealState: redealState,
+            hasStartedTrackedGame: hasStartedTrackedGame,
+            isCurrentGameFinalized: isCurrentGameFinalized
         )
     }
 
@@ -172,6 +182,8 @@ final class SolitaireViewModel {
             gameStartedAt = gameStartedAt.addingTimeInterval(offlineDurationSinceSave)
         }
         stockDrawCount = sanitizedPayload.stockDrawCount
+        hasStartedTrackedGame = sanitizedPayload.hasStartedTrackedGame
+        isCurrentGameFinalized = sanitizedPayload.isCurrentGameFinalized
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
         var restoredRedealState = sanitizedPayload.redealState ?? history.first?.state ?? state
         restoredRedealState.wasteDrawCount = min(
@@ -530,7 +542,8 @@ private extension SolitaireViewModel {
 
     func applyTimeBonusIfWon() {
         guard isWin, !hasAppliedTimeBonus else { return }
-        let elapsedSeconds = elapsedActiveSeconds(at: .now)
+        let endedAt = Date()
+        let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
         let maxBonus = Scoring.timedMaxBonus(for: stockDrawCount)
         let bonus = Scoring.timeBonus(
             elapsedSeconds: elapsedSeconds,
@@ -540,6 +553,21 @@ private extension SolitaireViewModel {
         score = Scoring.clamped(score + bonus)
         hasAppliedTimeBonus = true
         pauseStartedAt = nil
+        finalizeCurrentGameIfNeeded(didWin: true, endedAt: endedAt)
+    }
+
+    func finalizeCurrentGameIfNeeded(didWin: Bool, endedAt: Date) {
+        guard hasStartedTrackedGame, !isCurrentGameFinalized else { return }
+        let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
+        GameStatisticsStore.update { stats in
+            stats.recordCompletedGame(
+                didWin: didWin,
+                elapsedSeconds: elapsedSeconds,
+                finalScore: score,
+                drawCount: stockDrawCount
+            )
+        }
+        isCurrentGameFinalized = true
     }
 
     @discardableResult

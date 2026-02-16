@@ -106,6 +106,7 @@ struct ContentView: View {
     @State private var autosaveTask: Task<Void, Never>?
     @State private var isAutoFinishing = false
     @State private var isShowingRulesAndScoring = false
+    @State private var isShowingStats = false
     @State private var isTimeScoringPausedForLifecycle = false
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
@@ -134,7 +135,7 @@ struct ContentView: View {
                                 movesCount: viewModel.movesCount,
                                 elapsedSeconds: viewModel.elapsedActiveSeconds(at: context.date),
                                 score: viewModel.displayScore(at: context.date),
-                                onScoreTapped: { isShowingRulesAndScoring = true }
+                                onScoreTapped: { isShowingStats = true }
                             )
                             .frame(width: boardContentWidth, alignment: .leading)
                         }
@@ -296,6 +297,11 @@ struct ContentView: View {
                 .disabled(isUndoDisabled)
                 Spacer(minLength: 0)
                 Button {
+                    isShowingStats = true
+                } label: {
+                    Label("Statistics", systemImage: "chart.bar")
+                }
+                Button {
                     isShowingSettings = true
                 } label: {
                     Label("Settings", systemImage: "gearshape")
@@ -337,6 +343,14 @@ struct ContentView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    isShowingStats = true
+                } label: {
+                    Label("Statistics", systemImage: "chart.bar")
+                }
+                .help("Statistics")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
                     isShowingSettings = true
                 } label: {
                     Label("Settings", systemImage: "gearshape")
@@ -359,11 +373,23 @@ struct ContentView: View {
                 RulesAndScoringView()
             }
         }
+        .sheet(isPresented: $isShowingStats) {
+#if os(iOS)
+            NavigationStack {
+                StatsView()
+            }
+#else
+            StatsView()
+#endif
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
             isShowingSettings = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
             isShowingRulesAndScoring = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openStatistics)) { _ in
+            isShowingStats = true
         }
         .onChange(of: drawModeRawValue) { (_, newValue: Int) in
             let mode = DrawMode(rawValue: newValue) ?? .three

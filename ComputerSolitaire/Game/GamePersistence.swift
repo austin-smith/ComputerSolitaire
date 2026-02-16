@@ -34,6 +34,8 @@ struct SavedGamePayload: Codable {
     let stockDrawCount: Int
     let history: [GameSnapshot]
     let redealState: GameState?
+    let hasStartedTrackedGame: Bool
+    let isCurrentGameFinalized: Bool
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -47,6 +49,8 @@ struct SavedGamePayload: Codable {
         case stockDrawCount
         case history
         case redealState
+        case hasStartedTrackedGame
+        case isCurrentGameFinalized
     }
 
     init(
@@ -60,7 +64,9 @@ struct SavedGamePayload: Codable {
         hasAppliedTimeBonus: Bool = false,
         stockDrawCount: Int,
         history: [GameSnapshot],
-        redealState: GameState? = nil
+        redealState: GameState? = nil,
+        hasStartedTrackedGame: Bool = true,
+        isCurrentGameFinalized: Bool = false
     ) {
         self.schemaVersion = schemaVersion
         self.savedAt = savedAt
@@ -73,6 +79,8 @@ struct SavedGamePayload: Codable {
         self.stockDrawCount = stockDrawCount
         self.history = history
         self.redealState = redealState
+        self.hasStartedTrackedGame = hasStartedTrackedGame
+        self.isCurrentGameFinalized = isCurrentGameFinalized
     }
 
     init(from decoder: Decoder) throws {
@@ -88,6 +96,8 @@ struct SavedGamePayload: Codable {
         stockDrawCount = try container.decode(Int.self, forKey: .stockDrawCount)
         history = try container.decode([GameSnapshot].self, forKey: .history)
         redealState = try container.decodeIfPresent(GameState.self, forKey: .redealState)
+        hasStartedTrackedGame = try container.decodeIfPresent(Bool.self, forKey: .hasStartedTrackedGame) ?? true
+        isCurrentGameFinalized = try container.decodeIfPresent(Bool.self, forKey: .isCurrentGameFinalized) ?? false
     }
 
     func sanitizedForRestore() -> SavedGamePayload? {
@@ -102,6 +112,8 @@ struct SavedGamePayload: Codable {
         let sanitizedPauseStartedAt = pauseStartedAt
             .map { min($0, .now) }
             .flatMap { $0 >= sanitizedStartedAt ? $0 : nil }
+        let sanitizedHasStartedTrackedGame = hasStartedTrackedGame
+        let sanitizedIsCurrentGameFinalized = sanitizedHasStartedTrackedGame ? isCurrentGameFinalized : false
         let sanitizedHistory = history
             .filter { $0.movesCount >= 0 && $0.state.isValidForPersistence }
             .map { snapshot in
@@ -141,7 +153,9 @@ struct SavedGamePayload: Codable {
             hasAppliedTimeBonus: hasAppliedTimeBonus,
             stockDrawCount: sanitizedStockDrawCount,
             history: Array(sanitizedHistory),
-            redealState: sanitizedRedealState
+            redealState: sanitizedRedealState,
+            hasStartedTrackedGame: sanitizedHasStartedTrackedGame,
+            isCurrentGameFinalized: sanitizedIsCurrentGameFinalized
         )
     }
 }
@@ -186,6 +200,106 @@ enum GamePersistence {
         )
         descriptor.fetchLimit = 1
         return try modelContext.fetch(descriptor).first
+    }
+}
+
+struct GameStatistics: Codable, Equatable {
+    static let currentSchemaVersion = 1
+
+    let schemaVersion: Int
+    var gamesPlayed: Int
+    var gamesWon: Int
+    var totalTimeSeconds: Int
+    var bestTimeSeconds: Int?
+    var highScoreDrawThree: Int
+    var highScoreDrawOne: Int
+
+    init(
+        schemaVersion: Int = currentSchemaVersion,
+        gamesPlayed: Int = 0,
+        gamesWon: Int = 0,
+        totalTimeSeconds: Int = 0,
+        bestTimeSeconds: Int? = nil,
+        highScoreDrawThree: Int = 0,
+        highScoreDrawOne: Int = 0
+    ) {
+        self.schemaVersion = schemaVersion
+        self.gamesPlayed = max(0, gamesPlayed)
+        self.gamesWon = max(0, min(gamesWon, gamesPlayed))
+        self.totalTimeSeconds = max(0, totalTimeSeconds)
+        self.bestTimeSeconds = bestTimeSeconds.map { max(0, $0) }
+        self.highScoreDrawThree = max(0, highScoreDrawThree)
+        self.highScoreDrawOne = max(0, highScoreDrawOne)
+    }
+
+    var winRate: Double {
+        guard gamesPlayed > 0 else { return 0 }
+        return Double(gamesWon) / Double(gamesPlayed)
+    }
+
+    var averageTimeSeconds: Int {
+        guard gamesPlayed > 0 else { return 0 }
+        return totalTimeSeconds / gamesPlayed
+    }
+
+    mutating func recordCompletedGame(
+        didWin: Bool,
+        elapsedSeconds: Int,
+        finalScore: Int,
+        drawCount: Int
+    ) {
+        let sanitizedElapsed = max(0, elapsedSeconds)
+        let sanitizedScore = max(0, finalScore)
+
+        gamesPlayed = addingSafely(gamesPlayed, 1)
+        totalTimeSeconds = addingSafely(totalTimeSeconds, sanitizedElapsed)
+
+        guard didWin else { return }
+
+        gamesWon = min(gamesPlayed, addingSafely(gamesWon, 1))
+        if let bestTimeSeconds {
+            self.bestTimeSeconds = min(bestTimeSeconds, sanitizedElapsed)
+        } else {
+            bestTimeSeconds = sanitizedElapsed
+        }
+
+        if drawCount == DrawMode.one.rawValue {
+            highScoreDrawOne = max(highScoreDrawOne, sanitizedScore)
+        } else {
+            highScoreDrawThree = max(highScoreDrawThree, sanitizedScore)
+        }
+    }
+
+    private func addingSafely(_ lhs: Int, _ rhs: Int) -> Int {
+        let (sum, overflow) = lhs.addingReportingOverflow(rhs)
+        return overflow ? Int.max : sum
+    }
+}
+
+enum GameStatisticsStore {
+    static let defaultsKey = "stats.gameStatistics"
+
+    static func load(userDefaults: UserDefaults = .standard) -> GameStatistics {
+        guard let data = userDefaults.data(forKey: defaultsKey),
+              let stats = try? JSONDecoder().decode(GameStatistics.self, from: data),
+              stats.schemaVersion == GameStatistics.currentSchemaVersion else {
+            return GameStatistics()
+        }
+        return stats
+    }
+
+    static func save(_ stats: GameStatistics, userDefaults: UserDefaults = .standard) {
+        guard let data = try? JSONEncoder().encode(stats) else { return }
+        userDefaults.set(data, forKey: defaultsKey)
+    }
+
+    static func update(
+        userDefaults: UserDefaults = .standard,
+        _ mutate: (inout GameStatistics) -> Void
+    ) {
+        var stats = load(userDefaults: userDefaults)
+        mutate(&stats)
+        save(stats, userDefaults: userDefaults)
     }
 }
 
