@@ -114,7 +114,7 @@ struct SettingsView: View {
                 }
 
                 SettingsCard(title: "Draw Mode") {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Stock draw")
                             .font(.subheadline.weight(.semibold))
                         Picker("Stock draw", selection: $drawModeRawValue) {

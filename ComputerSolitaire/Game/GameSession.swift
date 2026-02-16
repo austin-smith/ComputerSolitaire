@@ -13,6 +13,8 @@ final class SolitaireViewModel {
     var pendingAutoMove: PendingAutoMove?
     private(set) var movesCount: Int = 0
     private(set) var score: Int = 0
+    private(set) var gameStartedAt: Date = .now
+    private var hasAppliedTimeBonus = false
     private(set) var stockDrawCount: Int = 3
 
     private var history: [GameSnapshot] = []
@@ -47,6 +49,8 @@ final class SolitaireViewModel {
         pendingAutoMove = nil
         movesCount = 0
         score = 0
+        gameStartedAt = .now
+        hasAppliedTimeBonus = false
         stockDrawCount = drawMode.rawValue
         state.wasteDrawCount = 0
         history.removeAll()
@@ -60,6 +64,8 @@ final class SolitaireViewModel {
         pendingAutoMove = nil
         movesCount = 0
         score = 0
+        gameStartedAt = .now
+        hasAppliedTimeBonus = false
         state.wasteDrawCount = min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         history.removeAll()
         refreshAutoFinishAvailability()
@@ -88,6 +94,7 @@ final class SolitaireViewModel {
         state = snapshot.state
         movesCount = snapshot.movesCount
         score = snapshot.score
+        hasAppliedTimeBonus = snapshot.hasAppliedTimeBonus
         selection = nil
         isDragging = false
         pendingAutoMove = nil
@@ -104,6 +111,8 @@ final class SolitaireViewModel {
             state: state,
             movesCount: movesCount,
             score: score,
+            gameStartedAt: gameStartedAt,
+            hasAppliedTimeBonus: hasAppliedTimeBonus,
             stockDrawCount: stockDrawCount,
             history: history,
             redealState: redealState
@@ -116,6 +125,8 @@ final class SolitaireViewModel {
         state = sanitizedPayload.state
         movesCount = sanitizedPayload.movesCount
         score = sanitizedPayload.score
+        gameStartedAt = sanitizedPayload.gameStartedAt
+        hasAppliedTimeBonus = sanitizedPayload.hasAppliedTimeBonus
         stockDrawCount = sanitizedPayload.stockDrawCount
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
         var restoredRedealState = sanitizedPayload.redealState ?? history.first?.state ?? state
@@ -387,6 +398,7 @@ private extension SolitaireViewModel {
             state.foundations[index].append(movingCard)
             movesCount += 1
             applyScore(for: selection.source, destination: .foundation(index))
+            applyTimeBonusIfWon()
             self.selection = nil
             SoundManager.shared.play(.cardPlaced)
             return true
@@ -403,6 +415,7 @@ private extension SolitaireViewModel {
             state.tableau[index].append(contentsOf: selection.cards)
             movesCount += 1
             applyScore(for: selection.source, destination: .tableau(index))
+            applyTimeBonusIfWon()
             self.selection = nil
             SoundManager.shared.play(.cardPlaced)
             return true
@@ -443,6 +456,7 @@ private extension SolitaireViewModel {
                 state: state,
                 movesCount: movesCount,
                 score: score,
+                hasAppliedTimeBonus: hasAppliedTimeBonus,
                 undoContext: undoContext
             )
         )
@@ -468,6 +482,19 @@ private extension SolitaireViewModel {
 
     func applyScore(_ action: ScoringAction) {
         score = Scoring.applying(action, to: score)
+    }
+
+    func applyTimeBonusIfWon() {
+        guard isWin, !hasAppliedTimeBonus else { return }
+        let elapsedSeconds = max(0, Int(Date().timeIntervalSince(gameStartedAt)))
+        let maxBonus = Scoring.timedMaxBonus(for: stockDrawCount)
+        let bonus = Scoring.timeBonus(
+            elapsedSeconds: elapsedSeconds,
+            maxBonus: maxBonus,
+            pointsLostPerSecond: Scoring.timedPointsLostPerSecond
+        )
+        score = Scoring.clamped(score + bonus)
+        hasAppliedTimeBonus = true
     }
 
     @discardableResult

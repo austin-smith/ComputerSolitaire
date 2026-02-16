@@ -910,6 +910,7 @@ private struct FeltRNG {
 }
 
 struct WinOverlay: View {
+    let score: Int
     let onNewGame: () -> Void
 
     var body: some View {
@@ -924,6 +925,9 @@ struct WinOverlay: View {
                 Text("Every card is home.")
                     .font(.system(size: 16, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.8))
+                Text("Score \(score)")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
                 Button("Play Again") {
                     onNewGame()
                 }

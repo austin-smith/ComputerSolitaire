@@ -27,6 +27,8 @@ struct SavedGamePayload: Codable {
     let state: GameState
     let movesCount: Int
     let score: Int
+    let gameStartedAt: Date
+    let hasAppliedTimeBonus: Bool
     let stockDrawCount: Int
     let history: [GameSnapshot]
     let redealState: GameState?
@@ -36,6 +38,8 @@ struct SavedGamePayload: Codable {
         case state
         case movesCount
         case score
+        case gameStartedAt
+        case hasAppliedTimeBonus
         case stockDrawCount
         case history
         case redealState
@@ -46,6 +50,8 @@ struct SavedGamePayload: Codable {
         state: GameState,
         movesCount: Int,
         score: Int = 0,
+        gameStartedAt: Date = .now,
+        hasAppliedTimeBonus: Bool = false,
         stockDrawCount: Int,
         history: [GameSnapshot],
         redealState: GameState? = nil
@@ -54,6 +60,8 @@ struct SavedGamePayload: Codable {
         self.state = state
         self.movesCount = movesCount
         self.score = score
+        self.gameStartedAt = gameStartedAt
+        self.hasAppliedTimeBonus = hasAppliedTimeBonus
         self.stockDrawCount = stockDrawCount
         self.history = history
         self.redealState = redealState
@@ -65,6 +73,8 @@ struct SavedGamePayload: Codable {
         state = try container.decode(GameState.self, forKey: .state)
         movesCount = try container.decode(Int.self, forKey: .movesCount)
         score = try container.decodeIfPresent(Int.self, forKey: .score) ?? 0
+        gameStartedAt = try container.decodeIfPresent(Date.self, forKey: .gameStartedAt) ?? .now
+        hasAppliedTimeBonus = try container.decodeIfPresent(Bool.self, forKey: .hasAppliedTimeBonus) ?? false
         stockDrawCount = try container.decode(Int.self, forKey: .stockDrawCount)
         history = try container.decode([GameSnapshot].self, forKey: .history)
         redealState = try container.decodeIfPresent(GameState.self, forKey: .redealState)
@@ -77,6 +87,7 @@ struct SavedGamePayload: Codable {
         let sanitizedStockDrawCount = DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
         let sanitizedMovesCount = max(0, movesCount)
         let sanitizedScore = Scoring.clamped(score)
+        let sanitizedStartedAt = min(gameStartedAt, .now)
         let sanitizedHistory = history
             .filter { $0.movesCount >= 0 && $0.state.isValidForPersistence }
             .map { snapshot in
@@ -84,6 +95,7 @@ struct SavedGamePayload: Codable {
                     state: snapshot.state,
                     movesCount: snapshot.movesCount,
                     score: Scoring.clamped(snapshot.score),
+                    hasAppliedTimeBonus: snapshot.hasAppliedTimeBonus,
                     undoContext: snapshot.undoContext
                 )
             }
@@ -109,6 +121,8 @@ struct SavedGamePayload: Codable {
             state: sanitizedState,
             movesCount: sanitizedMovesCount,
             score: sanitizedScore,
+            gameStartedAt: sanitizedStartedAt,
+            hasAppliedTimeBonus: hasAppliedTimeBonus,
             stockDrawCount: sanitizedStockDrawCount,
             history: Array(sanitizedHistory),
             redealState: sanitizedRedealState

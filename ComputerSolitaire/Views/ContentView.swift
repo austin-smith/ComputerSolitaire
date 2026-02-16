@@ -169,7 +169,7 @@ struct ContentView: View {
                     .padding(.vertical, metrics.verticalPadding)
 
                 if viewModel.isWin {
-                    WinOverlay {
+                    WinOverlay(score: viewModel.score) {
                         stopAutoFinish()
                         viewModel.newGame(drawMode: drawMode)
                         persistGameNow()
