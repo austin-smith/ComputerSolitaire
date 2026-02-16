@@ -376,10 +376,10 @@ struct ContentView: View {
         .sheet(isPresented: $isShowingStats) {
 #if os(iOS)
             NavigationStack {
-                StatsView()
+                StatsView(viewModel: viewModel)
             }
 #else
-            StatsView()
+            StatsView(viewModel: viewModel)
 #endif
         }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in

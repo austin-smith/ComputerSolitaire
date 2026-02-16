@@ -43,6 +43,11 @@ final class SolitaireViewModel {
         !history.isEmpty
     }
 
+    func unfinalizedElapsedSecondsForStats(at date: Date = .now) -> Int {
+        guard hasStartedTrackedGame, !isCurrentGameFinalized else { return 0 }
+        return elapsedActiveSeconds(at: date)
+    }
+
     func displayScore(at date: Date = .now) -> Int {
         guard !hasAppliedTimeBonus else { return score }
         let elapsedSeconds = elapsedActiveSeconds(at: date)

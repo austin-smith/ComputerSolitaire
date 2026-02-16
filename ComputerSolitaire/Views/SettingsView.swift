@@ -221,74 +221,53 @@ private struct SettingsCard<Content: View>: View {
 }
 
 struct StatsView: View {
+    let viewModel: SolitaireViewModel?
     @Environment(\.dismiss) private var dismiss
     @State private var stats = GameStatistics()
+    private let durationFormatter: DateComponentsFormatter = {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.day, .hour, .minute, .second]
+        formatter.unitsStyle = .abbreviated
+        formatter.zeroFormattingBehavior = .dropLeading
+        return formatter
+    }()
 
     var body: some View {
-        Group {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Form {
+                Section("Games") {
+                    keyValueRow("Games Played", "\(stats.gamesPlayed)")
+                    keyValueRow("Games Won", "\(stats.gamesWon)")
+                    keyValueRow("Win Rate", winRateLabel)
+                }
+
+                Section("Performance") {
+                    keyValueRow("Total Time", durationLabel(displayTotalTimeSeconds(at: context.date)))
+                    keyValueRow("Avg Time", durationLabel(stats.averageTimeSeconds))
+                    keyValueRow("Best Time", bestTimeLabel)
+                    keyValueRow("High Score (3-card)", "\(stats.highScoreDrawThree)")
+                    keyValueRow("High Score (1-card)", "\(stats.highScoreDrawOne)")
+                }
+            }
+        }
+        .navigationTitle("Statistics")
 #if os(iOS)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    gameStatsCard
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .navigationTitle("Statistics")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .keyboardShortcut(.cancelAction)
-                }
-            }
+        .navigationBarTitleDisplayMode(.inline)
 #else
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Statistics")
-                    .font(.title3.weight(.semibold))
-                gameStatsCard
-                Spacer(minLength: 0)
-                HStack {
-                    Spacer()
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .keyboardShortcut(.cancelAction)
-                }
-            }
-            .padding(24)
-            .frame(minWidth: 460, idealWidth: 500, maxWidth: 560, minHeight: 380)
-            .navigationTitle("Statistics")
+        .formStyle(.grouped)
+        .padding(16)
+        .frame(minWidth: 420, minHeight: 320)
 #endif
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
         }
         .onAppear {
             stats = GameStatisticsStore.load()
-        }
-    }
-
-    private var gameStatsCard: some View {
-        StatsCard(title: "Game Stats") {
-            VStack(spacing: 0) {
-                statRow("Games Played", value: "\(stats.gamesPlayed)")
-                rowDivider
-                statRow("Games Won", value: "\(stats.gamesWon)")
-                rowDivider
-                statRow("Win Rate", value: winRateLabel)
-                rowDivider
-                statRow("Total Time", value: durationLabel(stats.totalTimeSeconds))
-                rowDivider
-                statRow("Avg Time", value: durationLabel(stats.averageTimeSeconds))
-                rowDivider
-                statRow("Best Time", value: bestTimeLabel)
-                rowDivider
-                statRow("High Score (3-card)", value: "\(stats.highScoreDrawThree)")
-                rowDivider
-                statRow("High Score (1-card)", value: "\(stats.highScoreDrawOne)")
-            }
         }
     }
 
@@ -301,54 +280,26 @@ struct StatsView: View {
         return durationLabel(bestTimeSeconds)
     }
 
-    private var rowDivider: some View {
-        Divider()
-            .overlay(Color.primary.opacity(0.08))
-            .padding(.vertical, 2)
+    private func displayTotalTimeSeconds(at date: Date) -> Int {
+        let liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
+        let (sum, overflow) = stats.totalTimeSeconds.addingReportingOverflow(liveElapsed)
+        return overflow ? Int.max : max(0, sum)
     }
 
-    private func statRow(_ title: String, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(title)
-                .font(.subheadline)
-            Spacer(minLength: 8)
+    @ViewBuilder
+    private func keyValueRow(_ key: String, _ value: String) -> some View {
+        HStack {
+            Text(key)
+            Spacer(minLength: 16)
             Text(value)
-                .font(.subheadline.weight(.semibold))
-                .monospacedDigit()
-                .frame(minWidth: 88, alignment: .trailing)
+                .font(.system(.body, design: .monospaced))
+                .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 5)
     }
 
     private func durationLabel(_ seconds: Int) -> String {
         let total = max(0, seconds)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let remainingSeconds = total % 60
-        return String(format: "%02d:%02d:%02d", hours, minutes, remainingSeconds)
-    }
-}
-
-struct StatsCard<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-            content
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.thinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
+        return durationFormatter.string(from: TimeInterval(total)) ?? "0s"
     }
 }
 
