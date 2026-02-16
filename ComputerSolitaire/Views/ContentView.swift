@@ -1,5 +1,10 @@
 import SwiftUI
 import SwiftData
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 struct DropTargetFrameKey: PreferenceKey {
     static var defaultValue: [DropTarget: DropTargetGeometry] = [:]
@@ -101,6 +106,7 @@ struct ContentView: View {
     @State private var autosaveTask: Task<Void, Never>?
     @State private var isAutoFinishing = false
     @State private var isShowingRulesAndScoring = false
+    @State private var isTimeScoringPausedForLifecycle = false
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
@@ -121,12 +127,14 @@ struct ContentView: View {
             ZStack {
                 TableBackground()
                 VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                    HeaderView(
-                        movesCount: viewModel.movesCount,
-                        score: viewModel.score,
-                        onScoreTapped: { isShowingRulesAndScoring = true }
-                    )
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        HeaderView(
+                            movesCount: viewModel.movesCount,
+                            score: viewModel.displayScore(at: context.date),
+                            onScoreTapped: { isShowingRulesAndScoring = true }
+                        )
                         .frame(width: boardContentWidth, alignment: .leading)
+                    }
                     TopRowView(
                         viewModel: viewModel,
                         cardSize: cardSize,
@@ -387,6 +395,21 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, newPhase in
             handleScenePhaseChange(newPhase)
         }
+#if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            pauseTimeScoringAndPersist()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            resumeTimeScoringAndPersist()
+        }
+#elseif os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in
+            pauseTimeScoringAndPersist()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            resumeTimeScoringAndPersist()
+        }
+#endif
         .onAppear {
             initializeGameIfNeeded()
         }
@@ -956,6 +979,14 @@ struct ContentView: View {
             viewModel.newGame(drawMode: drawMode)
             persistGameNow()
         }
+
+        if scenePhase == .active {
+            isTimeScoringPausedForLifecycle = false
+            _ = viewModel.resumeTimeScoring()
+        } else {
+            isTimeScoringPausedForLifecycle = true
+            _ = viewModel.pauseTimeScoring()
+        }
     }
 
     private func scheduleAutosave() {
@@ -970,7 +1001,31 @@ struct ContentView: View {
 
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
         guard hasLoadedGame else { return }
+        if newPhase == .active {
+            applyLifecyclePauseState(false)
+            return
+        }
         if newPhase == .inactive || newPhase == .background {
+            applyLifecyclePauseState(true)
+        }
+    }
+
+    private func pauseTimeScoringAndPersist() {
+        applyLifecyclePauseState(true)
+    }
+
+    private func resumeTimeScoringAndPersist() {
+        applyLifecyclePauseState(false)
+    }
+
+    private func applyLifecyclePauseState(_ shouldPause: Bool) {
+        guard hasLoadedGame else { return }
+        guard isTimeScoringPausedForLifecycle != shouldPause else { return }
+        isTimeScoringPausedForLifecycle = shouldPause
+        let didChange = shouldPause
+            ? viewModel.pauseTimeScoring()
+            : viewModel.resumeTimeScoring()
+        if didChange {
             persistGameNow()
         }
     }

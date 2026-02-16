@@ -24,10 +24,12 @@ struct SavedGamePayload: Codable {
     static let currentSchemaVersion = 1
 
     let schemaVersion: Int
+    let savedAt: Date
     let state: GameState
     let movesCount: Int
     let score: Int
     let gameStartedAt: Date
+    let pauseStartedAt: Date?
     let hasAppliedTimeBonus: Bool
     let stockDrawCount: Int
     let history: [GameSnapshot]
@@ -35,10 +37,12 @@ struct SavedGamePayload: Codable {
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion
+        case savedAt
         case state
         case movesCount
         case score
         case gameStartedAt
+        case pauseStartedAt
         case hasAppliedTimeBonus
         case stockDrawCount
         case history
@@ -47,20 +51,24 @@ struct SavedGamePayload: Codable {
 
     init(
         schemaVersion: Int = SavedGamePayload.currentSchemaVersion,
+        savedAt: Date = .now,
         state: GameState,
         movesCount: Int,
         score: Int = 0,
         gameStartedAt: Date = .now,
+        pauseStartedAt: Date? = nil,
         hasAppliedTimeBonus: Bool = false,
         stockDrawCount: Int,
         history: [GameSnapshot],
         redealState: GameState? = nil
     ) {
         self.schemaVersion = schemaVersion
+        self.savedAt = savedAt
         self.state = state
         self.movesCount = movesCount
         self.score = score
         self.gameStartedAt = gameStartedAt
+        self.pauseStartedAt = pauseStartedAt
         self.hasAppliedTimeBonus = hasAppliedTimeBonus
         self.stockDrawCount = stockDrawCount
         self.history = history
@@ -70,10 +78,12 @@ struct SavedGamePayload: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        savedAt = try container.decodeIfPresent(Date.self, forKey: .savedAt) ?? .now
         state = try container.decode(GameState.self, forKey: .state)
         movesCount = try container.decode(Int.self, forKey: .movesCount)
         score = try container.decodeIfPresent(Int.self, forKey: .score) ?? 0
         gameStartedAt = try container.decodeIfPresent(Date.self, forKey: .gameStartedAt) ?? .now
+        pauseStartedAt = try container.decodeIfPresent(Date.self, forKey: .pauseStartedAt)
         hasAppliedTimeBonus = try container.decodeIfPresent(Bool.self, forKey: .hasAppliedTimeBonus) ?? false
         stockDrawCount = try container.decode(Int.self, forKey: .stockDrawCount)
         history = try container.decode([GameSnapshot].self, forKey: .history)
@@ -87,7 +97,11 @@ struct SavedGamePayload: Codable {
         let sanitizedStockDrawCount = DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
         let sanitizedMovesCount = max(0, movesCount)
         let sanitizedScore = Scoring.clamped(score)
+        let sanitizedSavedAt = min(savedAt, .now)
         let sanitizedStartedAt = min(gameStartedAt, .now)
+        let sanitizedPauseStartedAt = pauseStartedAt
+            .map { min($0, .now) }
+            .flatMap { $0 >= sanitizedStartedAt ? $0 : nil }
         let sanitizedHistory = history
             .filter { $0.movesCount >= 0 && $0.state.isValidForPersistence }
             .map { snapshot in
@@ -118,10 +132,12 @@ struct SavedGamePayload: Codable {
 
         return SavedGamePayload(
             schemaVersion: schemaVersion,
+            savedAt: sanitizedSavedAt,
             state: sanitizedState,
             movesCount: sanitizedMovesCount,
             score: sanitizedScore,
             gameStartedAt: sanitizedStartedAt,
+            pauseStartedAt: sanitizedPauseStartedAt,
             hasAppliedTimeBonus: hasAppliedTimeBonus,
             stockDrawCount: sanitizedStockDrawCount,
             history: Array(sanitizedHistory),

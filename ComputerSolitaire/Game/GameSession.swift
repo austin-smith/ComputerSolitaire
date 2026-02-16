@@ -15,6 +15,7 @@ final class SolitaireViewModel {
     private(set) var score: Int = 0
     private(set) var gameStartedAt: Date = .now
     private var hasAppliedTimeBonus = false
+    private var pauseStartedAt: Date?
     private(set) var stockDrawCount: Int = 3
 
     private var history: [GameSnapshot] = []
@@ -40,6 +41,36 @@ final class SolitaireViewModel {
         !history.isEmpty
     }
 
+    func displayScore(at date: Date = .now) -> Int {
+        guard !hasAppliedTimeBonus else { return score }
+        let elapsedSeconds = elapsedActiveSeconds(at: date)
+        let maxBonus = Scoring.timedMaxBonus(for: stockDrawCount)
+        let bonus = Scoring.timeBonus(
+            elapsedSeconds: elapsedSeconds,
+            maxBonus: maxBonus,
+            pointsLostPerSecond: Scoring.timedPointsLostPerSecond
+        )
+        return Scoring.clamped(score + bonus)
+    }
+
+    @discardableResult
+    func pauseTimeScoring(at date: Date = .now) -> Bool {
+        guard !hasAppliedTimeBonus else { return false }
+        guard pauseStartedAt == nil else { return false }
+        pauseStartedAt = date
+        return true
+    }
+
+    @discardableResult
+    func resumeTimeScoring(at date: Date = .now) -> Bool {
+        guard !hasAppliedTimeBonus else { return false }
+        guard let pausedAt = pauseStartedAt else { return false }
+        let pausedDuration = max(0, date.timeIntervalSince(pausedAt))
+        gameStartedAt = gameStartedAt.addingTimeInterval(pausedDuration)
+        pauseStartedAt = nil
+        return true
+    }
+
     func newGame(drawMode: DrawMode = .three) {
         let initialState = GameState.newGame()
         state = initialState
@@ -51,6 +82,7 @@ final class SolitaireViewModel {
         score = 0
         gameStartedAt = .now
         hasAppliedTimeBonus = false
+        pauseStartedAt = nil
         stockDrawCount = drawMode.rawValue
         state.wasteDrawCount = 0
         history.removeAll()
@@ -66,6 +98,7 @@ final class SolitaireViewModel {
         score = 0
         gameStartedAt = .now
         hasAppliedTimeBonus = false
+        pauseStartedAt = nil
         state.wasteDrawCount = min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         history.removeAll()
         refreshAutoFinishAvailability()
@@ -112,6 +145,7 @@ final class SolitaireViewModel {
             movesCount: movesCount,
             score: score,
             gameStartedAt: gameStartedAt,
+            pauseStartedAt: pauseStartedAt,
             hasAppliedTimeBonus: hasAppliedTimeBonus,
             stockDrawCount: stockDrawCount,
             history: history,
@@ -122,11 +156,16 @@ final class SolitaireViewModel {
     @discardableResult
     func restore(from payload: SavedGamePayload) -> Bool {
         guard let sanitizedPayload = payload.sanitizedForRestore() else { return false }
+        let offlineDurationSinceSave = max(0, Date().timeIntervalSince(sanitizedPayload.savedAt))
         state = sanitizedPayload.state
         movesCount = sanitizedPayload.movesCount
         score = sanitizedPayload.score
         gameStartedAt = sanitizedPayload.gameStartedAt
+        pauseStartedAt = sanitizedPayload.pauseStartedAt
         hasAppliedTimeBonus = sanitizedPayload.hasAppliedTimeBonus
+        if pauseStartedAt == nil, !hasAppliedTimeBonus {
+            gameStartedAt = gameStartedAt.addingTimeInterval(offlineDurationSinceSave)
+        }
         stockDrawCount = sanitizedPayload.stockDrawCount
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
         var restoredRedealState = sanitizedPayload.redealState ?? history.first?.state ?? state
@@ -486,7 +525,7 @@ private extension SolitaireViewModel {
 
     func applyTimeBonusIfWon() {
         guard isWin, !hasAppliedTimeBonus else { return }
-        let elapsedSeconds = max(0, Int(Date().timeIntervalSince(gameStartedAt)))
+        let elapsedSeconds = elapsedActiveSeconds(at: .now)
         let maxBonus = Scoring.timedMaxBonus(for: stockDrawCount)
         let bonus = Scoring.timeBonus(
             elapsedSeconds: elapsedSeconds,
@@ -495,6 +534,7 @@ private extension SolitaireViewModel {
         )
         score = Scoring.clamped(score + bonus)
         hasAppliedTimeBonus = true
+        pauseStartedAt = nil
     }
 
     @discardableResult
@@ -514,5 +554,10 @@ private extension SolitaireViewModel {
             destination: destination
         )
         return true
+    }
+
+    func elapsedActiveSeconds(at date: Date) -> Int {
+        let effectiveNow = min(pauseStartedAt ?? date, date)
+        return max(0, Int(effectiveNow.timeIntervalSince(gameStartedAt)))
     }
 }

@@ -919,20 +919,17 @@ struct WinOverlay: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
-                Text("You Win")
+                Text("You Won!")
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                Text("Every card is home.")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.8))
-                Text("Score \(score)")
+                Text("Score: \(score)")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                 Button("Play Again") {
                     onNewGame()
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color(red: 0.95, green: 0.76, blue: 0.2))
+                .tint(Color(red: 0.0235, green: 0.4431, blue: 0.7176))
             }
             .padding(32)
             .background(
@@ -945,4 +942,8 @@ struct WinOverlay: View {
             )
         }
     }
+}
+
+#Preview("Win Overlay") {
+    WinOverlay(score: 1240) {}
 }
