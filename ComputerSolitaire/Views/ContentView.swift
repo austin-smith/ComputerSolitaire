@@ -751,6 +751,7 @@ struct ContentView: View {
     private func beginUndoAnimationIfNeeded() {
         guard !isUndoAnimating else { return }
         guard !viewModel.isDragging, !isDroppingCards, !isReturningDrag else { return }
+        guard !viewModel.isWin else { return }
         guard let snapshot = viewModel.peekUndoSnapshot() else { return }
 
         let currentFrames = cardFrames

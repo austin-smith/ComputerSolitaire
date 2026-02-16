@@ -40,7 +40,7 @@ final class SolitaireViewModel {
     }
 
     var canUndo: Bool {
-        !history.isEmpty
+        !history.isEmpty && !isWin
     }
 
     func unfinalizedElapsedSecondsForStats(at date: Date = .now) -> Int {
@@ -141,6 +141,7 @@ final class SolitaireViewModel {
     }
 
     func undo() {
+        guard !isWin else { return }
         guard let snapshot = history.popLast() else { return }
         state = snapshot.state
         movesCount = snapshot.movesCount

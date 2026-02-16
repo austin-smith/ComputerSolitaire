@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="ComputerSolitaire/ComputerSolitaireAppIcon.icon/Assets/computer-solitaire.png" width="128" alt="ComputerSolitaire Icon">
+  <img src="docs/images/computer-solitaire-app-icon.png" width="128" alt="Computer Solitaire Icon">
   <br><span style="font-family: monospace;">Computer Solitaire</span>
 </h1>
 
