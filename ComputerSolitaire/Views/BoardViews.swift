@@ -13,25 +13,39 @@ enum Layout {
         let wasteFanSpacing: CGFloat
     }
 
-    static func metrics(for boardWidth: CGFloat) -> Metrics {
+    static func metrics(for boardSize: CGSize) -> Metrics {
+        let boardWidth = boardSize.width
 #if os(iOS)
         let isCompactBoard = boardWidth <= 430
         let isMediumBoard = boardWidth > 430 && boardWidth < 760
+        let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && boardSize.width > boardSize.height
 
         let horizontalPadding: CGFloat = isCompactBoard ? 12 : (isMediumBoard ? 14 : 24)
-        let verticalPadding: CGFloat = isCompactBoard ? 16 : 24
-        let rowSpacing: CGFloat = isCompactBoard ? 16 : 24
+        let verticalPadding: CGFloat = isPadLandscape ? 12 : (isCompactBoard ? 16 : 24)
+        let rowSpacing: CGFloat = isPadLandscape ? 16 : (isCompactBoard ? 16 : 24)
         let columnSpacing: CGFloat = isCompactBoard ? 8 : (isMediumBoard ? 10 : 18)
 
         let usableWidth = max(0, boardWidth - (horizontalPadding * 2))
         let fittedCardWidth = floor((usableWidth - (columnSpacing * 6)) / 7)
-        let maxCardWidth: CGFloat = boardWidth < 760 ? 96 : 120
+        let maxCardWidth: CGFloat = isPadLandscape ? 112 : (boardWidth < 760 ? 96 : 120)
         let cardWidth = max(32, min(maxCardWidth, fittedCardWidth))
         let cardSize = CGSize(width: cardWidth, height: cardWidth * 1.45)
 
-        let faceDownOffset = max(isCompactBoard ? 10 : 16, cardSize.height * (isCompactBoard ? 0.16 : 0.18))
-        let faceUpOffset = max(isCompactBoard ? 14 : 22, cardSize.height * (isCompactBoard ? 0.24 : 0.28))
-        let wasteFanSpacing = cardSize.width * (isCompactBoard ? 0.18 : 0.25)
+        let baseFaceDownOffset = max(isCompactBoard ? 10 : 16, cardSize.height * (isCompactBoard ? 0.16 : 0.18))
+        let baseFaceUpOffset = max(isCompactBoard ? 14 : 22, cardSize.height * (isCompactBoard ? 0.24 : 0.28))
+
+        let faceUpOffset: CGFloat
+        let faceDownOffset: CGFloat
+        if isPadLandscape {
+            let landscapeOffsetScale: CGFloat = 0.72
+            faceUpOffset = max(22, baseFaceUpOffset * landscapeOffsetScale)
+            faceDownOffset = max(14, baseFaceDownOffset * landscapeOffsetScale)
+        } else {
+            faceUpOffset = baseFaceUpOffset
+            faceDownOffset = baseFaceDownOffset
+        }
+
+        let wasteFanSpacing = cardSize.width * (isCompactBoard ? 0.18 : (isPadLandscape ? 0.2 : 0.25))
 
         return Metrics(
             horizontalPadding: horizontalPadding,

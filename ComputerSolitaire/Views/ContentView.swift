@@ -110,13 +110,15 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let metrics = Layout.metrics(for: geometry.size.width)
+            let metrics = Layout.metrics(for: geometry.size)
             let cardSize = metrics.cardSize
             let boardContentWidth = (cardSize.width * 7) + (metrics.columnSpacing * 6)
+#if os(iOS)
+            let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && geometry.size.width > geometry.size.height
+#endif
 
             ZStack {
                 TableBackground()
-
                 VStack(alignment: .leading, spacing: metrics.rowSpacing) {
                     HeaderView(movesCount: viewModel.movesCount)
                         .frame(width: boardContentWidth, alignment: .leading)
@@ -150,12 +152,16 @@ struct ContentView: View {
                     Spacer(minLength: 0)
                 }
 #if os(iOS)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .frame(
+                        maxWidth: .infinity,
+                        maxHeight: .infinity,
+                        alignment: isPadLandscape ? .top : .topLeading
+                    )
 #else
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 #endif
-                .padding(.horizontal, metrics.horizontalPadding)
-                .padding(.vertical, metrics.verticalPadding)
+                    .padding(.horizontal, metrics.horizontalPadding)
+                    .padding(.vertical, metrics.verticalPadding)
 
                 if viewModel.isWin {
                     WinOverlay {
