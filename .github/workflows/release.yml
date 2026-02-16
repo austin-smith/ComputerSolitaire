@@ -1,0 +1,55 @@
+name: Create GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build macOS app archive
+        run: |
+          xcodebuild archive \
+            -project ComputerSolitaire.xcodeproj \
+            -scheme ComputerSolitaire \
+            -destination "generic/platform=macOS" \
+            -archivePath build/ComputerSolitaire.xcarchive \
+            -configuration Release \
+            CODE_SIGN_IDENTITY=- \
+            ARCHS=arm64
+
+      - name: Create DMG
+        run: |
+          mkdir -p dmg-contents
+
+          APP_PATH="$(find build/ComputerSolitaire.xcarchive/Products/Applications -maxdepth 1 -name '*.app' -print -quit)"
+          if [[ -z "${APP_PATH}" ]]; then
+            echo "No .app bundle found in archive output."
+            exit 1
+          fi
+
+          cp -R "${APP_PATH}" dmg-contents/
+          hdiutil create \
+            -volname "Computer Solitaire" \
+            -srcfolder dmg-contents \
+            -ov \
+            -format UDZO \
+            "ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            "ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
