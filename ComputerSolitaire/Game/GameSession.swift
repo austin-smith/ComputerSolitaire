@@ -17,6 +17,7 @@ final class SolitaireViewModel {
     private var hasAppliedTimeBonus = false
     private var pauseStartedAt: Date?
     private(set) var stockDrawCount: Int = 3
+    private var scoringDrawCount: Int = DrawMode.three.rawValue
     private var hasStartedTrackedGame = false
     private var isCurrentGameFinalized = false
 
@@ -51,7 +52,7 @@ final class SolitaireViewModel {
     func displayScore(at date: Date = .now) -> Int {
         guard !hasAppliedTimeBonus else { return score }
         let elapsedSeconds = elapsedActiveSeconds(at: date)
-        let maxBonus = Scoring.timedMaxBonus(for: stockDrawCount)
+        let maxBonus = Scoring.timedMaxBonus(for: scoringDrawCount)
         let bonus = Scoring.timeBonus(
             elapsedSeconds: elapsedSeconds,
             maxBonus: maxBonus,
@@ -97,6 +98,7 @@ final class SolitaireViewModel {
         hasAppliedTimeBonus = false
         pauseStartedAt = nil
         stockDrawCount = drawMode.rawValue
+        scoringDrawCount = drawMode.rawValue
         hasStartedTrackedGame = true
         isCurrentGameFinalized = false
         state.wasteDrawCount = 0
@@ -115,6 +117,7 @@ final class SolitaireViewModel {
         gameStartedAt = .now
         hasAppliedTimeBonus = false
         pauseStartedAt = nil
+        scoringDrawCount = stockDrawCount
         hasStartedTrackedGame = true
         isCurrentGameFinalized = false
         state.wasteDrawCount = min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
@@ -167,6 +170,7 @@ final class SolitaireViewModel {
             pauseStartedAt: pauseStartedAt,
             hasAppliedTimeBonus: hasAppliedTimeBonus,
             stockDrawCount: stockDrawCount,
+            scoringDrawCount: scoringDrawCount,
             history: history,
             redealState: redealState,
             hasStartedTrackedGame: hasStartedTrackedGame,
@@ -188,6 +192,7 @@ final class SolitaireViewModel {
             gameStartedAt = gameStartedAt.addingTimeInterval(offlineDurationSinceSave)
         }
         stockDrawCount = sanitizedPayload.stockDrawCount
+        scoringDrawCount = sanitizedPayload.scoringDrawCount
         hasStartedTrackedGame = sanitizedPayload.hasStartedTrackedGame
         isCurrentGameFinalized = sanitizedPayload.isCurrentGameFinalized
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
@@ -550,7 +555,7 @@ private extension SolitaireViewModel {
         guard isWin, !hasAppliedTimeBonus else { return }
         let endedAt = Date()
         let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
-        let maxBonus = Scoring.timedMaxBonus(for: stockDrawCount)
+        let maxBonus = Scoring.timedMaxBonus(for: scoringDrawCount)
         let bonus = Scoring.timeBonus(
             elapsedSeconds: elapsedSeconds,
             maxBonus: maxBonus,
@@ -570,7 +575,7 @@ private extension SolitaireViewModel {
                 didWin: didWin,
                 elapsedSeconds: elapsedSeconds,
                 finalScore: score,
-                drawCount: stockDrawCount
+                drawCount: scoringDrawCount
             )
         }
         isCurrentGameFinalized = true

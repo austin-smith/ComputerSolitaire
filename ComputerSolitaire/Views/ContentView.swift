@@ -1013,10 +1013,16 @@ struct ContentView: View {
 
         if scenePhase == .active {
             isTimeScoringPausedForLifecycle = false
-            _ = viewModel.resumeTimeScoring()
+            let didResume = viewModel.resumeTimeScoring()
+            if didResume {
+                persistGameNow()
+            }
         } else {
             isTimeScoringPausedForLifecycle = true
-            _ = viewModel.pauseTimeScoring()
+            let didPause = viewModel.pauseTimeScoring()
+            if didPause {
+                persistGameNow()
+            }
         }
     }
 
