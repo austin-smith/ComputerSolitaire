@@ -53,6 +53,11 @@ final class SolitaireViewModel {
         return Scoring.clamped(score + bonus)
     }
 
+    func elapsedActiveSeconds(at date: Date = .now) -> Int {
+        let effectiveNow = min(pauseStartedAt ?? date, date)
+        return max(0, Int(effectiveNow.timeIntervalSince(gameStartedAt)))
+    }
+
     @discardableResult
     func pauseTimeScoring(at date: Date = .now) -> Bool {
         guard !hasAppliedTimeBonus else { return false }
@@ -556,8 +561,4 @@ private extension SolitaireViewModel {
         return true
     }
 
-    func elapsedActiveSeconds(at date: Date) -> Int {
-        let effectiveNow = min(pauseStartedAt ?? date, date)
-        return max(0, Int(effectiveNow.timeIntervalSince(gameStartedAt)))
-    }
 }

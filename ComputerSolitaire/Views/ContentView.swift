@@ -120,50 +120,53 @@ struct ContentView: View {
             let metrics = Layout.metrics(for: geometry.size)
             let cardSize = metrics.cardSize
             let boardContentWidth = (cardSize.width * 7) + (metrics.columnSpacing * 6)
+            let isBoardReady = hasLoadedGame && !isHydratingGame
 #if os(iOS)
             let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && geometry.size.width > geometry.size.height
 #endif
 
             ZStack {
                 TableBackground()
-                VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        HeaderView(
-                            movesCount: viewModel.movesCount,
-                            score: viewModel.displayScore(at: context.date),
-                            onScoreTapped: { isShowingRulesAndScoring = true }
+                if isBoardReady {
+                    VStack(alignment: .leading, spacing: metrics.rowSpacing) {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            HeaderView(
+                                movesCount: viewModel.movesCount,
+                                elapsedSeconds: viewModel.elapsedActiveSeconds(at: context.date),
+                                score: viewModel.displayScore(at: context.date),
+                                onScoreTapped: { isShowingRulesAndScoring = true }
+                            )
+                            .frame(width: boardContentWidth, alignment: .leading)
+                        }
+                        TopRowView(
+                            viewModel: viewModel,
+                            cardSize: cardSize,
+                            columnSpacing: metrics.columnSpacing,
+                            wasteFanSpacing: metrics.wasteFanSpacing,
+                            activeTarget: activeTarget,
+                            isCardTiltEnabled: isCardTiltEnabled,
+                            cardTilts: $cardTilts,
+                            hiddenCardIDs: hiddenCardIDs,
+                            drawingCardIDs: drawingCardIDs,
+                            fanProgress: wasteFanProgress,
+                            dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
+                        TableauRowView(
+                            viewModel: viewModel,
+                            cardSize: cardSize,
+                            columnSpacing: metrics.columnSpacing,
+                            faceDownOffset: metrics.tableauFaceDownOffset,
+                            faceUpOffset: metrics.tableauFaceUpOffset,
+                            activeTarget: activeTarget,
+                            isCardTiltEnabled: isCardTiltEnabled,
+                            cardTilts: $cardTilts,
+                            hiddenCardIDs: hiddenCardIDs,
+                            dragGesture: dragGesture(for:)
+                        )
+                        .frame(width: boardContentWidth, alignment: .leading)
+                        Spacer(minLength: 0)
                     }
-                    TopRowView(
-                        viewModel: viewModel,
-                        cardSize: cardSize,
-                        columnSpacing: metrics.columnSpacing,
-                        wasteFanSpacing: metrics.wasteFanSpacing,
-                        activeTarget: activeTarget,
-                        isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts,
-                        hiddenCardIDs: hiddenCardIDs,
-                        drawingCardIDs: drawingCardIDs,
-                        fanProgress: wasteFanProgress,
-                        dragGesture: dragGesture(for:)
-                    )
-                    .frame(width: boardContentWidth, alignment: .leading)
-                    TableauRowView(
-                        viewModel: viewModel,
-                        cardSize: cardSize,
-                        columnSpacing: metrics.columnSpacing,
-                        faceDownOffset: metrics.tableauFaceDownOffset,
-                        faceUpOffset: metrics.tableauFaceUpOffset,
-                        activeTarget: activeTarget,
-                        isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts,
-                        hiddenCardIDs: hiddenCardIDs,
-                        dragGesture: dragGesture(for:)
-                    )
-                    .frame(width: boardContentWidth, alignment: .leading)
-                    Spacer(minLength: 0)
-                }
 #if os(iOS)
                     .frame(
                         maxWidth: .infinity,
@@ -176,22 +179,23 @@ struct ContentView: View {
                     .padding(.horizontal, metrics.horizontalPadding)
                     .padding(.vertical, metrics.verticalPadding)
 
-                if viewModel.isWin {
-                    WinOverlay(score: viewModel.score) {
-                        stopAutoFinish()
-                        viewModel.newGame(drawMode: drawMode)
-                        persistGameNow()
+                    if viewModel.isWin {
+                        WinOverlay(score: viewModel.score) {
+                            stopAutoFinish()
+                            viewModel.newGame(drawMode: drawMode)
+                            persistGameNow()
+                        }
+                        .transition(.opacity)
                     }
-                    .transition(.opacity)
-                }
 
-                Button("Cancel Drag") {
-                    handleEscape()
+                    Button("Cancel Drag") {
+                        handleEscape()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    .opacity(0.01)
+                    .frame(width: 1, height: 1)
+                    .accessibilityHidden(true)
                 }
-                .keyboardShortcut(.cancelAction)
-                .opacity(0.01)
-                .frame(width: 1, height: 1)
-                .accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .coordinateSpace(name: "board")
