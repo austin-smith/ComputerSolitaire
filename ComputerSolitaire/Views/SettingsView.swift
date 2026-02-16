@@ -50,10 +50,12 @@ enum SettingsKey {
 
 extension Notification.Name {
     static let openSettings = Notification.Name("openSettings")
+    static let openRulesAndScoring = Notification.Name("openRulesAndScoring")
 }
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var isShowingRulesAndScoring = false
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
     @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
@@ -127,6 +129,23 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+
+                SettingsCard(title: "Help") {
+                    Button {
+                        isShowingRulesAndScoring = true
+                    } label: {
+                        HStack {
+                            Text("Rules & Scoring")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(24)
         }
@@ -141,6 +160,11 @@ struct SettingsView: View {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
+            }
+        }
+        .sheet(isPresented: $isShowingRulesAndScoring) {
+            NavigationStack {
+                RulesAndScoringView()
             }
         }
     }

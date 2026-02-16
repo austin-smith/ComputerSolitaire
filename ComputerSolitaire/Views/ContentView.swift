@@ -100,6 +100,7 @@ struct ContentView: View {
     @State private var isHydratingGame = false
     @State private var autosaveTask: Task<Void, Never>?
     @State private var isAutoFinishing = false
+    @State private var isShowingRulesAndScoring = false
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
@@ -120,7 +121,11 @@ struct ContentView: View {
             ZStack {
                 TableBackground()
                 VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                    HeaderView(movesCount: viewModel.movesCount, score: viewModel.score)
+                    HeaderView(
+                        movesCount: viewModel.movesCount,
+                        score: viewModel.score,
+                        onScoreTapped: { isShowingRulesAndScoring = true }
+                    )
                         .frame(width: boardContentWidth, alignment: .leading)
                     TopRowView(
                         viewModel: viewModel,
@@ -337,8 +342,16 @@ struct ContentView: View {
             SettingsView()
 #endif
         }
+        .sheet(isPresented: $isShowingRulesAndScoring) {
+            NavigationStack {
+                RulesAndScoringView()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
             isShowingSettings = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
+            isShowingRulesAndScoring = true
         }
         .onChange(of: drawModeRawValue) { (_, newValue: Int) in
             let mode = DrawMode(rawValue: newValue) ?? .three

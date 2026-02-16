@@ -94,15 +94,19 @@ enum CardTilt {
 struct HeaderView: View {
     let movesCount: Int
     let score: Int
+    let onScoreTapped: () -> Void
 
     var body: some View {
         HStack {
             Text("Moves \(movesCount)")
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.8))
-            Text("Score \(score)")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.8))
+            Button(action: onScoreTapped) {
+                Text("Score \(score)")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.92))
+            }
+            .buttonStyle(.plain)
             Spacer()
         }
     }
