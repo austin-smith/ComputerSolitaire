@@ -1053,12 +1053,10 @@ struct ContentView: View {
         guard hasLoadedGame else { return }
         guard isTimeScoringPausedForLifecycle != shouldPause else { return }
         isTimeScoringPausedForLifecycle = shouldPause
-        let didChange = shouldPause
+        _ = shouldPause
             ? viewModel.pauseTimeScoring()
             : viewModel.resumeTimeScoring()
-        if didChange {
-            persistGameNow()
-        }
+        persistGameNow()
     }
 
     private func persistGameNow() {

@@ -84,7 +84,7 @@ final class SolitaireViewModel {
     }
 
     func newGame(drawMode: DrawMode = .three) {
-        finalizeCurrentGameIfNeeded(didWin: false, endedAt: .now)
+        finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: .now)
         let initialState = GameState.newGame()
         state = initialState
         redealState = initialState
@@ -105,7 +105,7 @@ final class SolitaireViewModel {
     }
 
     func redeal() {
-        finalizeCurrentGameIfNeeded(didWin: false, endedAt: .now)
+        finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: .now)
         state = redealState
         selection = nil
         isDragging = false
