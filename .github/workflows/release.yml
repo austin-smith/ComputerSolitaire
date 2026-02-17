@@ -34,7 +34,7 @@ jobs:
           printf '%s' "$P12_BASE64" | base64 -D -o "$CERT_PATH"
 
           security create-keychain -p "" "$KEYCHAIN_PATH"
-          security set-keychain-settings "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "" "$KEYCHAIN_PATH"
           security import "$CERT_PATH" \
             -k "$KEYCHAIN_PATH" \
