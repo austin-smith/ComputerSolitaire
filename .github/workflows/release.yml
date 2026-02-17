@@ -25,6 +25,11 @@ jobs:
           CERT_PATH="$RUNNER_TEMP/computer-solitaire-signing.p12"
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
+          if [[ -z "${P12_BASE64:-}" || -z "${P12_PASSWORD:-}" ]]; then
+            echo "Missing required signing secrets: APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD"
+            exit 1
+          fi
+
           printf '%s' "$P12_BASE64" | base64 -D -o "$CERT_PATH"
 
           security create-keychain -p "" "$KEYCHAIN_PATH"
@@ -74,6 +79,15 @@ jobs:
             -format UDZO \
             "ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
 
+      - name: Sign DMG
+        run: |
+          DMG_PATH="ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
+          codesign --force \
+            --sign "Developer ID Application" \
+            --keychain "$KEYCHAIN_PATH" \
+            --timestamp \
+            "$DMG_PATH"
+
       - name: Prepare notary API key
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -119,6 +133,7 @@ jobs:
           DMG_PATH="ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           spctl --assess --type execute --verbose=4 "$APP_PATH"
+          codesign --verify --verbose=2 "$DMG_PATH"
           xcrun stapler validate "$DMG_PATH"
 
       - name: Create GitHub Release
