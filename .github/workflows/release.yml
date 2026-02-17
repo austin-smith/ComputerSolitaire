@@ -11,9 +11,6 @@ permissions:
 jobs:
   release:
     runs-on: macos-26
-    env:
-      KEYCHAIN_PATH: ${{ runner.temp }}/computer-solitaire-signing.keychain-db
-      CERT_PATH: ${{ runner.temp }}/computer-solitaire-signing.p12
 
     steps:
       - name: Checkout
@@ -24,6 +21,10 @@ jobs:
           P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
           P12_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
         run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/computer-solitaire-signing.keychain-db"
+          CERT_PATH="$RUNNER_TEMP/computer-solitaire-signing.p12"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
           printf '%s' "$P12_BASE64" | base64 -D -o "$CERT_PATH"
 
           security create-keychain -p "" "$KEYCHAIN_PATH"
@@ -85,4 +86,6 @@ jobs:
       - name: Cleanup signing keychain
         if: always()
         run: |
-          security delete-keychain "$KEYCHAIN_PATH" || true
+          if [[ -n "${KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
