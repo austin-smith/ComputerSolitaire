@@ -20,13 +20,14 @@ jobs:
         env:
           P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
           P12_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           KEYCHAIN_PATH="$RUNNER_TEMP/computer-solitaire-signing.keychain-db"
           CERT_PATH="$RUNNER_TEMP/computer-solitaire-signing.p12"
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
-          if [[ -z "${P12_BASE64:-}" || -z "${P12_PASSWORD:-}" ]]; then
-            echo "Missing required signing secrets: APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD"
+          if [[ -z "${P12_BASE64:-}" || -z "${P12_PASSWORD:-}" || -z "${APPLE_TEAM_ID:-}" ]]; then
+            echo "Missing required signing secrets: APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD, APPLE_TEAM_ID"
             exit 1
           fi
 
