@@ -11,10 +11,35 @@ permissions:
 jobs:
   release:
     runs-on: macos-26
+    env:
+      KEYCHAIN_PATH: ${{ runner.temp }}/computer-solitaire-signing.keychain-db
+      CERT_PATH: ${{ runner.temp }}/computer-solitaire-signing.p12
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Import Apple signing certificate
+        env:
+          P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          printf '%s' "$P12_BASE64" | base64 -D -o "$CERT_PATH"
+
+          security create-keychain -p "" "$KEYCHAIN_PATH"
+          security set-keychain-settings "$KEYCHAIN_PATH"
+          security unlock-keychain -p "" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$P12_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "" \
+            "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
 
       - name: Build macOS app archive
         run: |
@@ -24,7 +49,10 @@ jobs:
             -destination "generic/platform=macOS" \
             -archivePath build/ComputerSolitaire.xcarchive \
             -configuration Release \
-            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
             ARCHS=arm64
 
       - name: Create DMG
@@ -53,3 +81,8 @@ jobs:
             --title "${{ github.ref_name }}" \
             --generate-notes \
             "ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
+
+      - name: Cleanup signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" || true
