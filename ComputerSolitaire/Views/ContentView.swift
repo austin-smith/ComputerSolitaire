@@ -107,13 +107,22 @@ struct ContentView: View {
     @State private var isAutoFinishing = false
     @State private var isShowingRulesAndScoring = false
     @State private var isShowingStats = false
-    @State private var isTimeScoringPausedForLifecycle = false
+    @State private var timeScoringPauseReasons: Set<TimeScoringPauseReason> = []
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
 
     private var drawMode: DrawMode {
         DrawMode(rawValue: drawModeRawValue) ?? .three
+    }
+
+    private enum TimeScoringPauseReason: Hashable {
+        case lifecycle
+        case menuPresentation
+    }
+
+    private var isAnyMenuPresented: Bool {
+        isShowingSettings || isShowingRulesAndScoring || isShowingStats
     }
 
     var body: some View {
@@ -395,6 +404,9 @@ struct ContentView: View {
             let mode = DrawMode(rawValue: newValue) ?? .three
             viewModel.updateDrawMode(mode)
             scheduleAutosave()
+        }
+        .onChange(of: isAnyMenuPresented) { _, _ in
+            updateMenuPresentationPauseState()
         }
         .onChange(of: viewModel.state) { _, _ in
             scheduleAutosave()
@@ -1011,18 +1023,19 @@ struct ContentView: View {
             persistGameNow()
         }
 
-        if scenePhase == .active {
-            isTimeScoringPausedForLifecycle = false
-            let didResume = viewModel.resumeTimeScoring()
-            if didResume {
-                persistGameNow()
-            }
-        } else {
-            isTimeScoringPausedForLifecycle = true
-            let didPause = viewModel.pauseTimeScoring()
-            if didPause {
-                persistGameNow()
-            }
+        timeScoringPauseReasons = []
+        if scenePhase != .active {
+            timeScoringPauseReasons.insert(.lifecycle)
+        }
+        if isAnyMenuPresented {
+            timeScoringPauseReasons.insert(.menuPresentation)
+        }
+        let shouldPauseTimeScoring = !timeScoringPauseReasons.isEmpty
+        let didChange = shouldPauseTimeScoring
+            ? viewModel.pauseTimeScoring()
+            : viewModel.resumeTimeScoring()
+        if didChange {
+            persistGameNow()
         }
     }
 
@@ -1038,31 +1051,44 @@ struct ContentView: View {
 
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
         guard hasLoadedGame else { return }
-        if newPhase == .active {
-            applyLifecyclePauseState(false)
-            return
-        }
-        if newPhase == .inactive || newPhase == .background {
-            applyLifecyclePauseState(true)
+        switch newPhase {
+        case .active:
+            updatePauseReason(.lifecycle, shouldPause: false)
+        case .inactive, .background:
+            updatePauseReason(.lifecycle, shouldPause: true)
+        @unknown default:
+            break
         }
     }
 
     private func pauseTimeScoringAndPersist() {
-        applyLifecyclePauseState(true)
+        updatePauseReason(.lifecycle, shouldPause: true)
     }
 
     private func resumeTimeScoringAndPersist() {
-        applyLifecyclePauseState(false)
+        updatePauseReason(.lifecycle, shouldPause: false)
     }
 
-    private func applyLifecyclePauseState(_ shouldPause: Bool) {
+    private func updateMenuPresentationPauseState() {
+        updatePauseReason(.menuPresentation, shouldPause: isAnyMenuPresented)
+    }
+
+    private func updatePauseReason(_ reason: TimeScoringPauseReason, shouldPause: Bool) {
         guard hasLoadedGame else { return }
-        guard isTimeScoringPausedForLifecycle != shouldPause else { return }
-        isTimeScoringPausedForLifecycle = shouldPause
-        _ = shouldPause
+        let wasPaused = !timeScoringPauseReasons.isEmpty
+        if shouldPause {
+            timeScoringPauseReasons.insert(reason)
+        } else {
+            timeScoringPauseReasons.remove(reason)
+        }
+        let isPaused = !timeScoringPauseReasons.isEmpty
+        guard wasPaused != isPaused else { return }
+        let didChange = isPaused
             ? viewModel.pauseTimeScoring()
             : viewModel.resumeTimeScoring()
-        persistGameNow()
+        if didChange {
+            persistGameNow()
+        }
     }
 
     private func persistGameNow() {
