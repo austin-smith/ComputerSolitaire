@@ -108,14 +108,32 @@ jobs:
           xcrun stapler staple "$DMG_PATH"
           xcrun stapler validate "$DMG_PATH"
 
+      - name: Verify signed artifact
+        run: |
+          APP_PATH="$(find build/ComputerSolitaire.xcarchive/Products/Applications -maxdepth 1 -name '*.app' -print -quit)"
+          if [[ -z "${APP_PATH}" ]]; then
+            echo "No .app bundle found in archive output."
+            exit 1
+          fi
+
+          DMG_PATH="ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          spctl --assess --type execute --verbose=4 "$APP_PATH"
+          xcrun stapler validate "$DMG_PATH"
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ github.ref_name }}" \
-            --generate-notes \
-            "ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
+          DMG_PATH="ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" "$DMG_PATH" --clobber
+          else
+            gh release create "${{ github.ref_name }}" \
+              --title "${{ github.ref_name }}" \
+              --generate-notes \
+              "$DMG_PATH"
+          fi
 
       - name: Cleanup signing keychain
         if: always()
