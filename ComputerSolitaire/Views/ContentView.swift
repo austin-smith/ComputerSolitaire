@@ -74,6 +74,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var viewModel = SolitaireViewModel()
+    @State private var hapticFeedback = HapticManager.shared
     @State private var dropFrames: [DropTarget: DropTargetGeometry] = [:]
     @State private var activeTarget: DropTarget?
     @State private var dragTranslation: CGSize = .zero
@@ -209,6 +210,9 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .coordinateSpace(name: "board")
+            .sensoryFeedback(trigger: hapticFeedback.trigger) {
+                hapticFeedback.feedbackForTrigger
+            }
             .onPreferenceChange(DropTargetFrameKey.self) { frames in
                 dropFrames = frames
             }
@@ -567,6 +571,7 @@ struct ContentView: View {
         }
 
         if started, let firstCard = viewModel.selection?.cards.first {
+            HapticManager.shared.play(.cardPickUp)
             // Start with the card's current tilt, then animate to straight
             overlayTilt = cardTilts[firstCard.id] ?? 0
             withAnimation(.easeOut(duration: 0.15)) {
@@ -662,6 +667,7 @@ struct ContentView: View {
     private func beginReturnAnimation() {
         guard !isReturningDrag else { return }
         SoundManager.shared.play(.invalidDrop)
+        HapticManager.shared.play(.invalidDrop)
         let currentTranslation = dragTranslation
         returningCards = viewModel.selection?.cards ?? []
         let originalTilt = returningCards.first.flatMap { cardTilts[$0.id] } ?? 0
@@ -765,6 +771,7 @@ struct ContentView: View {
         guard !viewModel.isDragging, !isDroppingCards, !isReturningDrag else { return }
         guard !viewModel.isWin else { return }
         guard let snapshot = viewModel.peekUndoSnapshot() else { return }
+        HapticManager.shared.play(.undoMove)
 
         let currentFrames = cardFrames
         let beforeState = viewModel.state

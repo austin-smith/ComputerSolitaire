@@ -81,7 +81,7 @@ private extension SoundManager {
         Bundle.main.url(
             forResource: sound.rawValue,
             withExtension: sound.fileExtension,
-            subdirectory: "Audio/Sounds"
+            subdirectory: "Feedback/Sounds"
         ) ?? Bundle.main.url(
             forResource: sound.rawValue,
             withExtension: sound.fileExtension

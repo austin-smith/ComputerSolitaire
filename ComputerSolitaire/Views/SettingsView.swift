@@ -169,12 +169,18 @@ struct SettingsView: View {
                 RulesAndScoringView()
             }
         }
+        .onChange(of: drawModeRawValue) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HapticManager.shared.play(.settingsSelection)
+        }
     }
 
     private func backgroundColorRow(_ option: TableBackgroundColor) -> some View {
         let isSelected = tableBackgroundColorRawValue == option.rawValue
 
         return Button {
+            guard !isSelected else { return }
+            HapticManager.shared.play(.settingsSelection)
             tableBackgroundColorRawValue = option.rawValue
         } label: {
             HStack(spacing: 12) {
