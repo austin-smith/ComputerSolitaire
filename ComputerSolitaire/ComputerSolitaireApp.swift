@@ -6,6 +6,8 @@ struct ComputerSolitaireApp: App {
 #if os(macOS)
     @Environment(\.openWindow) private var openWindow
 #endif
+    @FocusedValue(\.showSettingsCommand) private var showSettingsCommand
+    @FocusedValue(\.showRulesAndScoringCommand) private var showRulesAndScoringCommand
 
     var body: some Scene {
         WindowGroup {
@@ -23,19 +25,21 @@ struct ComputerSolitaireApp: App {
             }
             CommandGroup(replacing: .help) {
                 Button {
-                    NotificationCenter.default.post(name: .openRulesAndScoring, object: nil)
+                    showRulesAndScoringCommand?.wrappedValue = true
                 } label: {
                     Label("Rules & Scoring", systemImage: "book")
                 }
+                .disabled(showRulesAndScoringCommand == nil)
             }
 #endif
             CommandGroup(replacing: .appSettings) {
                 Button {
-                    NotificationCenter.default.post(name: .openSettings, object: nil)
+                    showSettingsCommand?.wrappedValue = true
                 } label: {
                     Label("Settings…", systemImage: "gearshape")
                 }
                 .keyboardShortcut(",", modifiers: .command)
+                .disabled(showSettingsCommand == nil)
             }
         }
 #if os(macOS)
