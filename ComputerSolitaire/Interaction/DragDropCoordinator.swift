@@ -6,28 +6,38 @@ enum DragDropCoordinator {
         dropFrames: [DropTarget: DropTargetGeometry],
         canDrop: (DropTarget) -> Bool
     ) -> DropTarget? {
-        let candidates = dropFrames.compactMap { target, geometry -> (target: DropTarget, canDrop: Bool, distanceSquared: CGFloat)? in
-            guard geometry.hitFrame.contains(location) else { return nil }
-            let allowed = canDrop(target)
+        var bestTarget: DropTarget?
+        var bestCanDrop = false
+        var bestDistanceSquared = CGFloat.infinity
+        var bestSortKey = Int.max
+
+        for (target, geometry) in dropFrames {
+            guard geometry.hitFrame.contains(location) else { continue }
+
+            let candidateCanDrop = canDrop(target)
             let dx = geometry.snapFrame.midX - location.x
             let dy = geometry.snapFrame.midY - location.y
-            return (target: target, canDrop: allowed, distanceSquared: dx * dx + dy * dy)
+            let candidateDistanceSquared = dx * dx + dy * dy
+            let candidateSortKey = dropTargetSortKey(target)
+
+            let shouldReplaceBest: Bool
+            if candidateCanDrop != bestCanDrop {
+                shouldReplaceBest = candidateCanDrop && !bestCanDrop
+            } else if candidateDistanceSquared != bestDistanceSquared {
+                shouldReplaceBest = candidateDistanceSquared < bestDistanceSquared
+            } else {
+                shouldReplaceBest = candidateSortKey < bestSortKey
+            }
+
+            if shouldReplaceBest || bestTarget == nil {
+                bestTarget = target
+                bestCanDrop = candidateCanDrop
+                bestDistanceSquared = candidateDistanceSquared
+                bestSortKey = candidateSortKey
+            }
         }
 
-        guard !candidates.isEmpty else { return nil }
-
-        return candidates
-            .sorted { lhs, rhs in
-                if lhs.canDrop != rhs.canDrop {
-                    return lhs.canDrop && !rhs.canDrop
-                }
-                if lhs.distanceSquared != rhs.distanceSquared {
-                    return lhs.distanceSquared < rhs.distanceSquared
-                }
-                return dropTargetSortKey(lhs.target) < dropTargetSortKey(rhs.target)
-            }
-            .first?
-            .target
+        return bestTarget
     }
 
     static func dropTargetSortKey(_ target: DropTarget) -> Int {

@@ -87,6 +87,8 @@ struct ContentView: View {
     @State private var dropAnimationOffset: CGSize = .zero
     @State private var pendingDropDestination: Destination?
     @State private var cardFrames: [UUID: CGRect] = [:]
+    @State private var wasteReturnAnchorCardID: UUID?
+    @State private var wasteReturnAnchorFrame: CGRect?
     @State private var cardTilts: [UUID: Double] = [:]
     @State private var overlayTilt: Double = 0
     @State private var isShowingSettings = false
@@ -239,7 +241,9 @@ struct ContentView: View {
                 wasteFrame = frame
             }
             .onPreferenceChange(CardFrameKey.self) { frames in
-                cardFrames = frames
+                if shouldUpdateCardFrames(with: frames) {
+                    cardFrames = frames
+                }
             }
             .onChange(of: viewModel.state.waste.count) { _, newValue in
                 let stockCount = viewModel.state.stock.count
@@ -279,7 +283,7 @@ struct ContentView: View {
                         .zIndex(75)
                         DragOverlayView(
                             viewModel: viewModel,
-                            cardFrames: cardFrames,
+                            cardFrames: dragOverlayCardFrames,
                             cardTilts: cardTilts,
                             dragTranslation: dragTranslation,
                             dragReturnOffset: dragReturnOffset,
@@ -315,7 +319,7 @@ struct ContentView: View {
                     }
                     .disabled(isAutoFinishDisabled)
                 } label: {
-                    Label("Game", systemImage: "cards")
+                    Label("Game", systemImage: "ellipsis.circle")
                 }
                 Button {
                     stopAutoFinish()
@@ -563,6 +567,8 @@ struct ContentView: View {
 
     private func startDrag(from origin: DragOrigin) -> Bool {
         stopAutoFinish()
+        wasteReturnAnchorCardID = nil
+        wasteReturnAnchorFrame = nil
         dragTranslation = .zero
         dragReturnOffset = .zero
         isReturningDrag = false
@@ -577,6 +583,10 @@ struct ContentView: View {
         }
 
         if started, let firstCard = viewModel.selection?.cards.first {
+            if case .waste = origin {
+                wasteReturnAnchorCardID = firstCard.id
+                wasteReturnAnchorFrame = cardFrames[firstCard.id]
+            }
             HapticManager.shared.play(.cardPickUp)
             // Start with the card's current tilt, then animate to straight
             overlayTilt = cardTilts[firstCard.id] ?? 0
@@ -614,6 +624,8 @@ struct ContentView: View {
               let cardFrame = cardFrames[firstCard.id],
               let targetFrame = dropFrames[target]?.snapFrame else {
             viewModel.handleDrop(to: dest)
+            wasteReturnAnchorCardID = nil
+            wasteReturnAnchorFrame = nil
             dragTranslation = .zero
             return
         }
@@ -661,6 +673,8 @@ struct ContentView: View {
                 droppingSelection = nil
                 pendingDropDestination = nil
             }
+            wasteReturnAnchorCardID = nil
+            wasteReturnAnchorFrame = nil
             if !isAutoFinishing {
                 DispatchQueue.main.async {
                     viewModel.refreshAutoFinishAvailability()
@@ -674,25 +688,48 @@ struct ContentView: View {
         guard !isReturningDrag else { return }
         SoundManager.shared.play(.invalidDrop)
         HapticManager.shared.play(.invalidDrop)
+        let isWasteReturn = viewModel.selection?.source == .waste
         let currentTranslation = dragTranslation
         returningCards = viewModel.selection?.cards ?? []
-        let originalTilt = returningCards.first.flatMap { cardTilts[$0.id] } ?? 0
+        let targetTilt: Double = {
+            guard let firstCard = returningCards.first else { return 0 }
+            guard isWasteReturn, isCardTiltEnabled else {
+                return cardTilts[firstCard.id] ?? 0
+            }
+            let rerolledTilt = Double.random(in: CardTilt.angleRange)
+            cardTilts[firstCard.id] = rerolledTilt
+            return rerolledTilt
+        }()
         // Keep viewModel.isDragging true to hide original card during animation
         isReturningDrag = true
         dragReturnOffset = .zero
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
             dragReturnOffset = CGSize(width: -currentTranslation.width, height: -currentTranslation.height)
-            overlayTilt = originalTilt
+            overlayTilt = targetTilt
         }
         let returnDuration = 0.32
         DispatchQueue.main.asyncAfter(deadline: .now() + returnDuration) {
             viewModel.cancelDrag()
+            wasteReturnAnchorCardID = nil
+            wasteReturnAnchorFrame = nil
             dragTranslation = .zero
             dragReturnOffset = .zero
             isReturningDrag = false
             returningCards = []
             processPendingAutoMoveIfPossible()
         }
+    }
+
+    private var dragOverlayCardFrames: [UUID: CGRect] {
+        guard isReturningDrag,
+              let returningCard = returningCards.first,
+              returningCard.id == wasteReturnAnchorCardID,
+              let anchorFrame = wasteReturnAnchorFrame else {
+            return cardFrames
+        }
+        var frames = cardFrames
+        frames[returningCard.id] = anchorFrame
+        return frames
     }
 
     private func syncFanProgress(with waste: [Card], excluding excluded: Set<UUID>) {
@@ -859,6 +896,17 @@ struct ContentView: View {
             cardFrames: cardFrames,
             stockFrame: stockFrame
         )
+    }
+
+    private func shouldUpdateCardFrames(with newFrames: [UUID: CGRect]) -> Bool {
+        guard cardFrames.count == newFrames.count else { return true }
+        for (id, frame) in newFrames {
+            guard let current = cardFrames[id] else { return true }
+            if !framesApproximatelyEqual(current, frame) {
+                return true
+            }
+        }
+        return false
     }
 
     private func framesApproximatelyEqual(_ lhs: CGRect, _ rhs: CGRect) -> Bool {

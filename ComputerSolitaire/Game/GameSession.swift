@@ -8,7 +8,12 @@ final class SolitaireViewModel {
     private(set) var state: GameState
     private(set) var isAutoFinishAvailable: Bool
     private var redealState: GameState
-    var selection: Selection?
+    var selection: Selection? {
+        didSet {
+            selectedCardIDs = Set(selection?.cards.map(\.id) ?? [])
+        }
+    }
+    private var selectedCardIDs: Set<UUID> = []
     var isDragging: Bool = false
     var pendingAutoMove: PendingAutoMove?
     private(set) var movesCount: Int = 0
@@ -302,7 +307,7 @@ final class SolitaireViewModel {
     }
 
     func isSelected(card: Card) -> Bool {
-        selection?.cards.contains(where: { $0.id == card.id }) == true
+        selectedCardIDs.contains(card.id)
     }
 
     @discardableResult
