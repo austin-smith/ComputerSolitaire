@@ -47,8 +47,10 @@ private extension HapticManager.Event {
             return .impact
         case .wasteRecycle:
             return .impact
-        case .cardFlipFaceUp, .undoMove:
+        case .cardFlipFaceUp:
             return .selection
+        case .undoMove:
+            return .impact
         case .invalidDrop:
             return .error
         case .settingsSelection:
