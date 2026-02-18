@@ -686,9 +686,17 @@ struct CardView: View {
             } else {
                 targetTilt = 0
             }
-            withAnimation(.easeOut(duration: 0.2)) {
-                tiltAngle = targetTilt
-            }
+            animateTilt(to: targetTilt)
+        }
+        .onChange(of: cardTilts[card.id]) { _, newTilt in
+            guard isCardTiltEnabled, let newTilt else { return }
+            animateTilt(to: newTilt)
+        }
+    }
+
+    private func animateTilt(to target: Double) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            tiltAngle = target
         }
     }
 
