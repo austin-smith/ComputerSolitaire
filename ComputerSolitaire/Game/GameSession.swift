@@ -222,6 +222,7 @@ final class SolitaireViewModel {
 
     func handleWasteTap() {
         guard let top = state.waste.last, state.wasteDrawCount > 0 else { return }
+        HapticManager.shared.play(.cardPickUp)
         let wasteSelection = Selection(source: .waste, cards: [top])
         if queueBestAutoMove(for: wasteSelection) {
             return
@@ -235,6 +236,9 @@ final class SolitaireViewModel {
     }
 
     func handleFoundationTap(index: Int) {
+        if selection != nil || state.foundations[index].last != nil {
+            HapticManager.shared.play(.cardPickUp)
+        }
         if selection != nil {
             if tryMoveSelection(to: .foundation(index)) {
                 return
@@ -262,12 +266,14 @@ final class SolitaireViewModel {
                     movesCount += 1
                     applyScore(.turnOverTableauCard)
                     SoundManager.shared.play(.cardFlipFaceUp)
+                    HapticManager.shared.play(.cardFlipFaceUp)
                     refreshAutoFinishAvailability()
                 }
                 selection = nil
                 return
             }
 
+            HapticManager.shared.play(.cardPickUp)
             let tappedSelection = Selection(
                 source: .tableau(pile: pileIndex, index: cardIndex),
                 cards: Array(pile[cardIndex...])
@@ -289,6 +295,7 @@ final class SolitaireViewModel {
             selection = tappedSelection
         } else {
             if selection != nil {
+                HapticManager.shared.play(.cardPickUp)
                 _ = tryMoveSelection(to: .tableau(pileIndex))
             }
         }
@@ -404,6 +411,7 @@ private extension SolitaireViewModel {
         state.wasteDrawCount = drawCount
         movesCount += 1
         SoundManager.shared.play(.cardDrawFromStock)
+        HapticManager.shared.play(.stockDraw)
     }
 
     func recycleWaste() {
@@ -432,6 +440,7 @@ private extension SolitaireViewModel {
             applyScore(.recycleWasteInDrawOne)
         }
         SoundManager.shared.play(.wasteRecycleToStock)
+        HapticManager.shared.play(.wasteRecycle)
     }
 
     func selectFromTableau(pileIndex: Int, cardIndex: Int) {
@@ -514,6 +523,7 @@ private extension SolitaireViewModel {
             state.tableau[pileIndex][lastIndex].isFaceUp = true
             applyScore(.turnOverTableauCard)
             SoundManager.shared.play(.cardFlipFaceUp)
+            HapticManager.shared.play(.cardFlipFaceUp)
         }
     }
 
@@ -589,6 +599,7 @@ private extension SolitaireViewModel {
             in: state,
             stockDrawCount: stockDrawCount
         ) else {
+            HapticManager.shared.play(.invalidDrop)
             return false
         }
 
