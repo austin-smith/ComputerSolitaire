@@ -17,11 +17,13 @@ final class SoundManager {
     static let shared = SoundManager()
 
     private var players: [GameSound: AVAudioPlayer] = [:]
+    private var hasConfiguredAudioSession = false
 
     private init() {}
 
     func play(_ sound: GameSound) {
         guard isSoundEffectsEnabled else { return }
+        configureAudioSessionIfNeeded()
         let player = player(for: sound)
         player?.currentTime = 0
         player?.play()
@@ -35,6 +37,19 @@ private extension SoundManager {
             return true
         }
         return defaults.bool(forKey: SettingsKey.soundEffectsEnabled)
+    }
+
+    func configureAudioSessionIfNeeded() {
+#if os(iOS)
+        // Use .playback so game SFX are audible even when Ring/Silent is enabled.
+        guard !hasConfiguredAudioSession else { return }
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setActive(true)
+            hasConfiguredAudioSession = true
+        } catch {}
+#endif
     }
 
     func player(for sound: GameSound) -> AVAudioPlayer? {
