@@ -49,12 +49,6 @@ enum SettingsKey {
     static let soundEffectsEnabled = "settings.soundEffectsEnabled"
 }
 
-extension Notification.Name {
-    static let openSettings = Notification.Name("openSettings")
-    static let openRulesAndScoring = Notification.Name("openRulesAndScoring")
-    static let openStatistics = Notification.Name("openStatistics")
-}
-
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingRulesAndScoring = false

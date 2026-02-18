@@ -1,10 +1,5 @@
 import SwiftUI
 import SwiftData
-#if os(iOS)
-import UIKit
-#elseif os(macOS)
-import AppKit
-#endif
 
 struct DropTargetFrameKey: PreferenceKey {
     static var defaultValue: [DropTarget: DropTargetGeometry] = [:]
@@ -72,6 +67,12 @@ extension View {
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+#if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+#endif
+#if os(macOS)
+    @Environment(\.appearsActive) private var appearsActive
+#endif
 
     @State private var viewModel = SolitaireViewModel()
     @State private var hapticFeedback = HapticManager.shared
@@ -126,14 +127,29 @@ struct ContentView: View {
         isShowingSettings || isShowingRulesAndScoring || isShowingStats
     }
 
+    private var shouldPauseForLifecycle: Bool {
+        if scenePhase != .active {
+            return true
+        }
+#if os(macOS)
+        return !appearsActive
+#else
+        return false
+#endif
+    }
+
     var body: some View {
         GeometryReader { geometry in
+#if os(iOS)
+            let metrics = Layout.metrics(for: geometry.size, isRegularWidth: horizontalSizeClass == .regular)
+#else
             let metrics = Layout.metrics(for: geometry.size)
+#endif
             let cardSize = metrics.cardSize
             let boardContentWidth = (cardSize.width * 7) + (metrics.columnSpacing * 6)
             let isBoardReady = hasLoadedGame && !isHydratingGame
 #if os(iOS)
-            let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && geometry.size.width > geometry.size.height
+            let isPadLandscape = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
 #endif
 
             ZStack {
@@ -438,22 +454,12 @@ struct ContentView: View {
             processPendingAutoMoveIfPossible()
             queueAutoFinishStepIfPossible()
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            handleScenePhaseChange(newPhase)
+        .onChange(of: scenePhase) { _, _ in
+            syncLifecyclePauseState()
         }
-#if os(iOS)
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-            pauseTimeScoringAndPersist()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            resumeTimeScoringAndPersist()
-        }
-#elseif os(macOS)
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in
-            pauseTimeScoringAndPersist()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            resumeTimeScoringAndPersist()
+#if os(macOS)
+        .onChange(of: appearsActive) { _, _ in
+            syncLifecyclePauseState()
         }
 #endif
         .onAppear {
@@ -1031,7 +1037,7 @@ struct ContentView: View {
         }
 
         timeScoringPauseReasons = []
-        if scenePhase != .active {
+        if shouldPauseForLifecycle {
             timeScoringPauseReasons.insert(.lifecycle)
         }
         if isAnyMenuPresented {
@@ -1056,24 +1062,8 @@ struct ContentView: View {
         }
     }
 
-    private func handleScenePhaseChange(_ newPhase: ScenePhase) {
-        guard hasLoadedGame else { return }
-        switch newPhase {
-        case .active:
-            updatePauseReason(.lifecycle, shouldPause: false)
-        case .inactive, .background:
-            updatePauseReason(.lifecycle, shouldPause: true)
-        @unknown default:
-            break
-        }
-    }
-
-    private func pauseTimeScoringAndPersist() {
-        updatePauseReason(.lifecycle, shouldPause: true)
-    }
-
-    private func resumeTimeScoringAndPersist() {
-        updatePauseReason(.lifecycle, shouldPause: false)
+    private func syncLifecyclePauseState() {
+        updatePauseReason(.lifecycle, shouldPause: shouldPauseForLifecycle)
     }
 
     private func updateMenuPresentationPauseState() {

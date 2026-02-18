@@ -13,12 +13,12 @@ enum Layout {
         let wasteFanSpacing: CGFloat
     }
 
-    static func metrics(for boardSize: CGSize) -> Metrics {
+    static func metrics(for boardSize: CGSize, isRegularWidth: Bool = false) -> Metrics {
         let boardWidth = boardSize.width
 #if os(iOS)
         let isCompactBoard = boardWidth <= 430
         let isMediumBoard = boardWidth > 430 && boardWidth < 760
-        let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && boardSize.width > boardSize.height
+        let isPadLandscape = isRegularWidth && boardSize.width > boardSize.height
 
         let horizontalPadding: CGFloat = isCompactBoard ? 12 : (isMediumBoard ? 14 : 24)
         let verticalPadding: CGFloat = isPadLandscape ? 12 : (isCompactBoard ? 16 : 24)
