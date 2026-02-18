@@ -625,16 +625,6 @@ struct CardView: View {
         _flipRotation = State(initialValue: startFaceDown ? 180 : (card.isFaceUp ? 0 : 180))
     }
 
-    private var targetTiltAngle: Double {
-        if !isCardTiltEnabled { return 0 }
-        if let existing = cardTilts[card.id] { return existing }
-        let newTilt = Double.random(in: CardTilt.angleRange)
-        DispatchQueue.main.async {
-            cardTilts[card.id] = newTilt
-        }
-        return newTilt
-    }
-
     var body: some View {
         let cornerRadius = cardSize.width * 0.12
         let borderColor = isSelected ? Color.yellow.opacity(0.9) : Color.black.opacity(0.2)
@@ -684,8 +674,20 @@ struct CardView: View {
                     flipRotation = 0
                 }
             }
+            let targetTilt: Double
+            if isCardTiltEnabled {
+                if let existing = cardTilts[card.id] {
+                    targetTilt = existing
+                } else {
+                    let newTilt = Double.random(in: CardTilt.angleRange)
+                    cardTilts[card.id] = newTilt
+                    targetTilt = newTilt
+                }
+            } else {
+                targetTilt = 0
+            }
             withAnimation(.easeOut(duration: 0.2)) {
-                tiltAngle = targetTiltAngle
+                tiltAngle = targetTilt
             }
         }
     }

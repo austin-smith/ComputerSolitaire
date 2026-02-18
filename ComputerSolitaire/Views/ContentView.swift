@@ -239,7 +239,9 @@ struct ContentView: View {
                 wasteFrame = frame
             }
             .onPreferenceChange(CardFrameKey.self) { frames in
-                cardFrames = frames
+                if shouldUpdateCardFrames(with: frames) {
+                    cardFrames = frames
+                }
             }
             .onChange(of: viewModel.state.waste.count) { _, newValue in
                 let stockCount = viewModel.state.stock.count
@@ -859,6 +861,17 @@ struct ContentView: View {
             cardFrames: cardFrames,
             stockFrame: stockFrame
         )
+    }
+
+    private func shouldUpdateCardFrames(with newFrames: [UUID: CGRect]) -> Bool {
+        guard cardFrames.count == newFrames.count else { return true }
+        for (id, frame) in newFrames {
+            guard let current = cardFrames[id] else { return true }
+            if !framesApproximatelyEqual(current, frame) {
+                return true
+            }
+        }
+        return false
     }
 
     private func framesApproximatelyEqual(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
