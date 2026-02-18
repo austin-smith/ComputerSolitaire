@@ -315,7 +315,7 @@ struct ContentView: View {
                     }
                     .disabled(isAutoFinishDisabled)
                 } label: {
-                    Label("Game", systemImage: "cards")
+                    Label("Game", systemImage: "ellipsis.circle")
                 }
                 Button {
                     stopAutoFinish()
