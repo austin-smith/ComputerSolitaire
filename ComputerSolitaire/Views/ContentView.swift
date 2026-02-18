@@ -36,6 +36,14 @@ struct CardFrameKey: PreferenceKey {
     }
 }
 
+struct BoardContentSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
+
 struct CardFramePreference: ViewModifier {
     let cardID: UUID
     let xOffset: CGFloat
@@ -103,6 +111,7 @@ struct ContentView: View {
     @State private var isUndoAnimating = false
     @State private var hiddenCardIDs: Set<UUID> = []
     @State private var wasteFanProgress: [UUID: Double] = [:]
+    @State private var boardContentSize: CGSize = .zero
     @State private var previousWasteCount: Int = 0
     @State private var previousStockCount: Int = 0
     @State private var hasLoadedGame = false
@@ -148,6 +157,8 @@ struct ContentView: View {
             let metrics = Layout.metrics(for: geometry.size)
 #endif
             let cardSize = metrics.cardSize
+            let boardScaleFactor = boardScaleFactor(for: geometry.size)
+            let effectiveCardSize = CGSize(width: cardSize.width * boardScaleFactor, height: cardSize.height * boardScaleFactor)
             let boardContentWidth = (cardSize.width * 7) + (metrics.columnSpacing * 6)
             let isBoardReady = hasLoadedGame && !isHydratingGame
 #if os(iOS)
@@ -157,7 +168,7 @@ struct ContentView: View {
             ZStack {
                 TableBackground()
                 if isBoardReady {
-                    VStack(alignment: .leading, spacing: metrics.rowSpacing) {
+                    let boardLayout = VStack(alignment: .leading, spacing: metrics.rowSpacing) {
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             HeaderView(
                                 movesCount: viewModel.movesCount,
@@ -208,6 +219,14 @@ struct ContentView: View {
                     .padding(.horizontal, metrics.horizontalPadding)
                     .padding(.vertical, metrics.verticalPadding)
 
+                    boardLayout
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(key: BoardContentSizeKey.self, value: proxy.size)
+                            }
+                        )
+                        .scaleEffect(boardScaleFactor, anchor: .top)
+
                     if viewModel.isWin {
                         WinOverlay(score: viewModel.score) {
                             stopAutoFinish()
@@ -245,6 +264,9 @@ struct ContentView: View {
                     cardFrames = frames
                 }
             }
+            .onPreferenceChange(BoardContentSizeKey.self) { size in
+                boardContentSize = size
+            }
             .onChange(of: viewModel.state.waste.count) { _, newValue in
                 let stockCount = viewModel.state.stock.count
                 if newValue == 0 {
@@ -260,7 +282,7 @@ struct ContentView: View {
                 syncFanProgress(with: viewModel.state.waste, excluding: Set(newCards.map(\.id)))
                 if addedCount > 0, stockCount < previousStockCount {
                     prepareFan(for: newCards)
-                    let travelDelay = startDrawAnimation(for: newCards, cardSize: cardSize)
+                    let travelDelay = startDrawAnimation(for: newCards, cardSize: effectiveCardSize)
                     animateFan(for: newCards, delay: travelDelay)
                 }
                 previousWasteCount = newValue
@@ -273,7 +295,7 @@ struct ContentView: View {
                     ZStack {
                         DrawOverlayView(
                             cards: drawAnimationCards,
-                            cardSize: cardSize
+                            cardSize: effectiveCardSize
                         )
                         .zIndex(50)
                         UndoOverlayView(
@@ -1134,6 +1156,13 @@ struct ContentView: View {
         if didChange {
             persistGameNow()
         }
+    }
+
+    private func boardScaleFactor(for availableSize: CGSize) -> CGFloat {
+        guard boardContentSize.width > 0, boardContentSize.height > 0 else { return 1 }
+        let widthScale = availableSize.width / boardContentSize.width
+        let heightScale = availableSize.height / boardContentSize.height
+        return min(1, widthScale, heightScale)
     }
 
     private func persistGameNow() {
