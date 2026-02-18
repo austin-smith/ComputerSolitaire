@@ -27,6 +27,13 @@ This file defines hard project constraints for any coding agent working in this 
 - Keep state flow explicit and minimal; avoid over-engineering.
 - Preserve accessibility, responsiveness, and animation smoothness.
 
+## Quality Bar (Non-Negotiable)
+
+- Maintain extremely high code quality standards in every change.
+- Do not take shortcuts, add temporary hacks, or leave partial implementations.
+- Follow best practices by default: clear naming, small focused types/functions, and maintainable architecture.
+- Prefer robust, production-ready implementations over quick fixes.
+
 ## What Agents Should Avoid
 
 - No UIKit/AppKit imports.
