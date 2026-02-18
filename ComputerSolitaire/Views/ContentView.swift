@@ -411,8 +411,15 @@ struct ContentView: View {
             StatsView(viewModel: viewModel)
 #endif
         }
-        .focusedSceneValue(\.showSettingsCommand, $isShowingSettings)
-        .focusedSceneValue(\.showRulesAndScoringCommand, $isShowingRulesAndScoring)
+        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+            isShowingSettings = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
+            isShowingRulesAndScoring = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openStatistics)) { _ in
+            isShowingStats = true
+        }
         .onChange(of: drawModeRawValue) { (_, newValue: Int) in
             let mode = DrawMode(rawValue: newValue) ?? .three
             viewModel.updateDrawMode(mode)
