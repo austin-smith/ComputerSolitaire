@@ -47,6 +47,7 @@ enum SettingsKey {
     static let tableBackgroundColor = "settings.tableBackgroundColor"
     static let feltEffectEnabled = "settings.feltEffectEnabled"
     static let soundEffectsEnabled = "settings.soundEffectsEnabled"
+    static let showHintButton = "settings.showHintButton"
 }
 
 struct SettingsView: View {
@@ -57,6 +58,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
     @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
+    @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
 
     var body: some View {
         ScrollView {
@@ -102,6 +104,19 @@ struct SettingsView: View {
                             Text("Sound effects")
                                 .font(.subheadline.weight(.semibold))
                             Text("Play card and game action sounds.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                }
+
+                SettingsCard(title: "Gameplay") {
+                    Toggle(isOn: $isHintButtonVisible) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Show hint button")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Hide hint controls to avoid spoilers about hint availability.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

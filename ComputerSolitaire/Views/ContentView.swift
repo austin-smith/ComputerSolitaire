@@ -125,6 +125,7 @@ struct ContentView: View {
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
+    @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
 
     private var drawMode: DrawMode {
         DrawMode(rawValue: drawModeRawValue) ?? .three
@@ -186,10 +187,12 @@ struct ContentView: View {
                             startAutoFinish()
                         }
                         .disabled(isAutoFinishDisabled)
-                        Button("Hint", systemImage: "lightbulb") {
-                            triggerHint()
+                        if isHintButtonVisible {
+                            Button("Hint", systemImage: "lightbulb") {
+                                triggerHint()
+                            }
+                            .disabled(isHintDisabled)
                         }
-                        .disabled(isHintDisabled)
                     } label: {
                         Label("Game", systemImage: "ellipsis.circle")
                     }
@@ -246,15 +249,17 @@ struct ContentView: View {
                     .help("Auto Finish")
                     .disabled(isAutoFinishDisabled)
                 }
-                ToolbarItem(placement: .automatic) {
-                    Button {
-                        triggerHint()
-                    } label: {
-                        Label("Hint", systemImage: "lightbulb")
+                if isHintButtonVisible {
+                    ToolbarItem(placement: .automatic) {
+                        Button {
+                            triggerHint()
+                        } label: {
+                            Label("Hint", systemImage: "lightbulb")
+                        }
+                        .help("Hint")
+                        .keyboardShortcut("h", modifiers: [])
+                        .disabled(isHintDisabled)
                     }
-                    .help("Hint")
-                    .keyboardShortcut("h", modifiers: [])
-                    .disabled(isHintDisabled)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {

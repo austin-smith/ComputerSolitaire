@@ -58,6 +58,12 @@ enum HintAdvisor {
 
 private extension HintAdvisor {
     static func isActionableHintMove(selection: Selection, evaluation: MoveEvaluation) -> Bool {
+        if case .foundation = selection.source,
+           case .foundation = evaluation.destination {
+            // Avoid hinting foundation-to-foundation shuffles.
+            return false
+        }
+
         if evaluation.revealsFaceDownCard || evaluation.foundationProgressDelta > 0 || evaluation.emptyTableauDelta > 0 {
             return true
         }
@@ -145,6 +151,13 @@ private extension HintAdvisor {
 
         if let topWasteCard = state.waste.last, state.wasteDrawCount > 0 {
             selections.append(Selection(source: .waste, cards: [topWasteCard]))
+        }
+
+        for foundationIndex in state.foundations.indices {
+            guard let topFoundationCard = state.foundations[foundationIndex].last else { continue }
+            selections.append(
+                Selection(source: .foundation(pile: foundationIndex), cards: [topFoundationCard])
+            )
         }
 
         for pileIndex in state.tableau.indices {
