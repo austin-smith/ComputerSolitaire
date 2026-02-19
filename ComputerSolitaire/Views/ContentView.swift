@@ -121,6 +121,7 @@ struct ContentView: View {
     @State private var isShowingRulesAndScoring = false
     @State private var isShowingStats = false
     @State private var timeScoringPauseReasons: Set<TimeScoringPauseReason> = []
+    @State private var hintHighlightOpacity: Double = 0
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
@@ -150,349 +151,421 @@ struct ContentView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-#if os(iOS)
-            let metrics = Layout.metrics(for: geometry.size, isRegularWidth: horizontalSizeClass == .regular)
-#else
-            let metrics = Layout.metrics(for: geometry.size)
-#endif
-            let cardSize = metrics.cardSize
-            let boardScaleFactor = boardScaleFactor(for: geometry.size)
-            let effectiveCardSize = CGSize(width: cardSize.width * boardScaleFactor, height: cardSize.height * boardScaleFactor)
-            let boardContentWidth = (cardSize.width * 7) + (metrics.columnSpacing * 6)
-            let isBoardReady = hasLoadedGame && !isHydratingGame
-#if os(iOS)
-            let isPadLandscape = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
-#endif
+        sceneDecorations(
+            for: AnyView(
+                GeometryReader { geometry in
+                    boardRoot(for: geometry)
+                }
+            )
+        )
+    }
 
-            ZStack {
-                TableBackground()
-                if isBoardReady {
-                    let boardLayout = VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                        TimelineView(.periodic(from: .now, by: 1)) { context in
-                            HeaderView(
-                                movesCount: viewModel.movesCount,
-                                elapsedSeconds: viewModel.elapsedActiveSeconds(at: context.date),
-                                score: viewModel.displayScore(at: context.date),
-                                onScoreTapped: { isShowingStats = true }
-                            )
-                            .frame(width: boardContentWidth, alignment: .leading)
-                        }
-                        TopRowView(
-                            viewModel: viewModel,
-                            cardSize: cardSize,
-                            columnSpacing: metrics.columnSpacing,
-                            wasteFanSpacing: metrics.wasteFanSpacing,
-                            activeTarget: activeTarget,
-                            isCardTiltEnabled: isCardTiltEnabled,
-                            cardTilts: $cardTilts,
-                            hiddenCardIDs: hiddenCardIDs,
-                            drawingCardIDs: drawingCardIDs,
-                            fanProgress: wasteFanProgress,
-                            dragGesture: dragGesture(for:)
-                        )
-                        .frame(width: boardContentWidth, alignment: .leading)
-                        TableauRowView(
-                            viewModel: viewModel,
-                            cardSize: cardSize,
-                            columnSpacing: metrics.columnSpacing,
-                            faceDownOffset: metrics.tableauFaceDownOffset,
-                            faceUpOffset: metrics.tableauFaceUpOffset,
-                            activeTarget: activeTarget,
-                            isCardTiltEnabled: isCardTiltEnabled,
-                            cardTilts: $cardTilts,
-                            hiddenCardIDs: hiddenCardIDs,
-                            dragGesture: dragGesture(for:)
-                        )
-                        .frame(width: boardContentWidth, alignment: .leading)
-                        Spacer(minLength: 0)
-                    }
+    private func sceneDecorations(for baseView: AnyView) -> some View {
+        let toolbarView = applyToolbar(to: baseView)
+        let sheetsView = applySheets(to: toolbarView)
+        return applyObservers(to: sheetsView)
+    }
+
+    private func applyToolbar(to view: AnyView) -> AnyView {
+        AnyView(
+            view.toolbar {
 #if os(iOS)
-                    .frame(
-                        maxWidth: .infinity,
-                        maxHeight: .infinity,
-                        alignment: isPadLandscape ? .top : .topLeading
-                    )
-#else
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-#endif
-                    .padding(.horizontal, metrics.horizontalPadding)
-                    .padding(.vertical, metrics.verticalPadding)
-
-                    boardLayout
-                        .background(
-                            GeometryReader { proxy in
-                                Color.clear.preference(key: BoardContentSizeKey.self, value: proxy.size)
-                            }
-                        )
-                        .scaleEffect(boardScaleFactor, anchor: .top)
-
-                    if viewModel.isWin {
-                        WinOverlay(score: viewModel.score) {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Menu {
+                        Button("New Game", systemImage: "plus") {
                             stopAutoFinish()
                             viewModel.newGame(drawMode: drawMode)
                             persistGameNow()
                         }
-                        .transition(.opacity)
+                        Button("Redeal", systemImage: "arrow.clockwise") {
+                            stopAutoFinish()
+                            viewModel.redeal()
+                            persistGameNow()
+                        }
+                        Button("Auto Finish", systemImage: "bolt") {
+                            startAutoFinish()
+                        }
+                        .disabled(isAutoFinishDisabled)
+                    } label: {
+                        Label("Game", systemImage: "ellipsis.circle")
                     }
-
-                    Button("Cancel Drag") {
-                        handleEscape()
+                    Button {
+                        stopAutoFinish()
+                        beginUndoAnimationIfNeeded()
+                    } label: {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
                     }
-                    .keyboardShortcut(.cancelAction)
-                    .opacity(0.01)
-                    .frame(width: 1, height: 1)
-                    .accessibilityHidden(true)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .coordinateSpace(name: "board")
-            .sensoryFeedback(trigger: hapticFeedback.trigger) {
-                hapticFeedback.feedbackForTrigger
-            }
-            .onPreferenceChange(DropTargetFrameKey.self) { frames in
-                dropFrames = frames
-            }
-            .onPreferenceChange(StockFrameKey.self) { frame in
-                stockFrame = frame
-            }
-            .onPreferenceChange(WasteFrameKey.self) { frame in
-                wasteFrame = frame
-            }
-            .onPreferenceChange(CardFrameKey.self) { frames in
-                if shouldUpdateCardFrames(with: frames) {
-                    cardFrames = frames
-                }
-            }
-            .onPreferenceChange(BoardContentSizeKey.self) { size in
-                boardContentSize = size
-            }
-            .onChange(of: viewModel.state.waste.count) { _, newValue in
-                let stockCount = viewModel.state.stock.count
-                if newValue == 0 {
-                    drawAnimationCards = []
-                    drawingCardIDs = []
-                    wasteFanProgress = [:]
-                    previousWasteCount = 0
-                    previousStockCount = stockCount
-                    return
-                }
-                let addedCount = max(0, newValue - previousWasteCount)
-                let newCards = addedCount > 0 ? Array(viewModel.state.waste.suffix(addedCount)) : []
-                syncFanProgress(with: viewModel.state.waste, excluding: Set(newCards.map(\.id)))
-                if addedCount > 0, stockCount < previousStockCount {
-                    prepareFan(for: newCards)
-                    let travelDelay = startDrawAnimation(for: newCards, cardSize: effectiveCardSize)
-                    animateFan(for: newCards, delay: travelDelay)
-                }
-                previousWasteCount = newValue
-                previousStockCount = stockCount
-            }
-            .animation(.spring(response: 0.35, dampingFraction: 0.86), value: viewModel.state)
-            .animation(.easeInOut(duration: 0.12), value: activeTarget)
-            .overlay {
-                GeometryReader { _ in
-                    ZStack {
-                        DrawOverlayView(
-                            cards: drawAnimationCards,
-                            cardSize: effectiveCardSize
-                        )
-                        .zIndex(50)
-                        UndoOverlayView(
-                            items: undoAnimationItems,
-                            progress: undoAnimationProgress
-                        )
-                        .zIndex(75)
-                        DragOverlayView(
-                            viewModel: viewModel,
-                            cardFrames: dragOverlayCardFrames,
-                            cardTilts: cardTilts,
-                            dragTranslation: dragTranslation,
-                            dragReturnOffset: dragReturnOffset,
-                            isReturningDrag: isReturningDrag,
-                            returningCards: returningCards,
-                            isDroppingCards: isDroppingCards,
-                            droppingCards: droppingSelection?.cards ?? [],
-                            dropAnimationOffset: dropAnimationOffset,
-                            overlayTilt: overlayTilt
-                        )
-                        .zIndex(100)
+                    .disabled(isUndoDisabled)
+                    Button {
+                        triggerHint()
+                    } label: {
+                        Label("Hint", systemImage: "lightbulb")
+                    }
+                    .disabled(isHintDisabled)
+                    Spacer(minLength: 0)
+                    Button {
+                        isShowingStats = true
+                    } label: {
+                        Label("Statistics", systemImage: "chart.bar")
+                    }
+                    Button {
+                        isShowingSettings = true
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
                     }
                 }
-                .accessibilityHidden(true)
-            }
-        }
-        .toolbar {
-#if os(iOS)
-            ToolbarItemGroup(placement: .bottomBar) {
-                Menu {
-                    Button("New Game", systemImage: "plus") {
+#endif
+#if os(macOS)
+                ToolbarItemGroup(placement: .automatic) {
+                    Button("New Game") {
                         stopAutoFinish()
                         viewModel.newGame(drawMode: drawMode)
                         persistGameNow()
                     }
-                    Button("Redeal", systemImage: "arrow.clockwise") {
+                    Button("Redeal") {
                         stopAutoFinish()
                         viewModel.redeal()
                         persistGameNow()
                     }
-                    Button("Auto Finish", systemImage: "bolt") {
-                        startAutoFinish()
+                }
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        stopAutoFinish()
+                        beginUndoAnimationIfNeeded()
+                    } label: {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
                     }
+                    .labelStyle(.iconOnly)
+                    .help("Undo")
+                    .disabled(isUndoDisabled)
+                }
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        startAutoFinish()
+                    } label: {
+                        Label("Auto Finish", systemImage: "bolt")
+                    }
+                    .help("Auto Finish")
                     .disabled(isAutoFinishDisabled)
-                } label: {
-                    Label("Game", systemImage: "ellipsis.circle")
                 }
-                Button {
-                    stopAutoFinish()
-                    beginUndoAnimationIfNeeded()
-                } label: {
-                    Label("Undo", systemImage: "arrow.uturn.backward")
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        triggerHint()
+                    } label: {
+                        Label("Hint", systemImage: "lightbulb")
+                    }
+                    .help("Hint")
+                    .keyboardShortcut("h", modifiers: [])
+                    .disabled(isHintDisabled)
                 }
-                .disabled(isUndoDisabled)
-                Spacer(minLength: 0)
-                Button {
-                    isShowingStats = true
-                } label: {
-                    Label("Statistics", systemImage: "chart.bar")
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        isShowingStats = true
+                    } label: {
+                        Label("Statistics", systemImage: "chart.bar")
+                    }
+                    .help("Statistics")
                 }
-                Button {
-                    isShowingSettings = true
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        isShowingSettings = true
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                    .help("Settings")
                 }
-            }
 #endif
-#if os(macOS)
-            ToolbarItemGroup(placement: .automatic) {
-                Button("New Game") {
-                    stopAutoFinish()
-                    viewModel.newGame(drawMode: drawMode)
-                    persistGameNow()
-                }
-                Button("Redeal") {
-                    stopAutoFinish()
-                    viewModel.redeal()
-                    persistGameNow()
-                }
             }
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    stopAutoFinish()
-                    beginUndoAnimationIfNeeded()
-                } label: {
-                    Label("Undo", systemImage: "arrow.uturn.backward")
-                }
-                .labelStyle(.iconOnly)
-                .help("Undo")
-                .disabled(isUndoDisabled)
-            }
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    startAutoFinish()
-                } label: {
-                    Label("Auto Finish", systemImage: "bolt")
-                }
-                .help("Auto Finish")
-                .disabled(isAutoFinishDisabled)
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    isShowingStats = true
-                } label: {
-                    Label("Statistics", systemImage: "chart.bar")
-                }
-                .help("Statistics")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    isShowingSettings = true
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .help("Settings")
-            }
-#endif
-        }
-        .sheet(isPresented: $isShowingSettings) {
+        )
+    }
+
+    private func applySheets(to view: AnyView) -> AnyView {
+        AnyView(
+            view.sheet(isPresented: $isShowingSettings) {
 #if os(iOS)
-            NavigationStack {
+                NavigationStack {
+                    SettingsView()
+                }
+#else
                 SettingsView()
-            }
-#else
-            SettingsView()
 #endif
-        }
-        .sheet(isPresented: $isShowingRulesAndScoring) {
-            NavigationStack {
-                RulesAndScoringView()
             }
-        }
-        .sheet(isPresented: $isShowingStats) {
+            .sheet(isPresented: $isShowingRulesAndScoring) {
+                NavigationStack {
+                    RulesAndScoringView()
+                }
+            }
+            .sheet(isPresented: $isShowingStats) {
 #if os(iOS)
-            NavigationStack {
-                StatsView(viewModel: viewModel)
-            }
+                NavigationStack {
+                    StatsView(viewModel: viewModel)
+                }
 #else
-            StatsView(viewModel: viewModel)
+                StatsView(viewModel: viewModel)
 #endif
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
-            isShowingSettings = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
-            isShowingRulesAndScoring = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openStatistics)) { _ in
-            isShowingStats = true
-        }
-        .onChange(of: drawModeRawValue) { (_, newValue: Int) in
-            let mode = DrawMode(rawValue: newValue) ?? .three
-            viewModel.updateDrawMode(mode)
-            scheduleAutosave()
-        }
-        .onChange(of: isAnyMenuPresented) { _, _ in
-            updateMenuPresentationPauseState()
-        }
-        .onChange(of: viewModel.state) { _, _ in
-            scheduleAutosave()
-            queueAutoFinishStepIfPossible()
-        }
-        .onChange(of: viewModel.movesCount) { _, _ in
-            scheduleAutosave()
-        }
-        .onChange(of: viewModel.stockDrawCount) { _, _ in
-            scheduleAutosave()
-        }
-        .onChange(of: viewModel.pendingAutoMove?.id) { _, _ in
-            processPendingAutoMoveIfPossible()
-            queueAutoFinishStepIfPossible()
-        }
-        .onChange(of: isDroppingCards) { _, _ in
-            processPendingAutoMoveIfPossible()
-            queueAutoFinishStepIfPossible()
-        }
-        .onChange(of: isReturningDrag) { _, _ in
-            processPendingAutoMoveIfPossible()
-            queueAutoFinishStepIfPossible()
-        }
-        .onChange(of: isUndoAnimating) { _, _ in
-            processPendingAutoMoveIfPossible()
-            queueAutoFinishStepIfPossible()
-        }
-        .onChange(of: scenePhase) { _, _ in
-            syncLifecyclePauseState()
-        }
+            }
+        )
+    }
+
+    private func applyObservers(to view: AnyView) -> AnyView {
+        AnyView(
+            view
+                .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+                isShowingSettings = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
+                isShowingRulesAndScoring = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openStatistics)) { _ in
+                isShowingStats = true
+            }
+            .onChange(of: drawModeRawValue) { (_, newValue: Int) in
+                let mode = DrawMode(rawValue: newValue) ?? .three
+                viewModel.updateDrawMode(mode)
+                scheduleAutosave()
+            }
+            .onChange(of: isAnyMenuPresented) { _, _ in
+                updateMenuPresentationPauseState()
+            }
+            .onChange(of: viewModel.state) { _, _ in
+                scheduleAutosave()
+                queueAutoFinishStepIfPossible()
+            }
+            .onChange(of: viewModel.movesCount) { _, _ in
+                scheduleAutosave()
+            }
+            .onChange(of: viewModel.stockDrawCount) { _, _ in
+                scheduleAutosave()
+            }
+            .onChange(of: viewModel.hasActiveHint) { _, hasActiveHint in
+                if !hasActiveHint {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        hintHighlightOpacity = 0
+                    }
+                } else {
+                    withAnimation(.easeOut(duration: 0.12)) {
+                        hintHighlightOpacity = 1
+                    }
+                }
+            }
+            .onChange(of: viewModel.pendingAutoMove?.id) { _, _ in
+                processPendingAutoMoveIfPossible()
+                queueAutoFinishStepIfPossible()
+            }
+            .onChange(of: isDroppingCards) { _, _ in
+                processPendingAutoMoveIfPossible()
+                queueAutoFinishStepIfPossible()
+            }
+            .onChange(of: isReturningDrag) { _, _ in
+                processPendingAutoMoveIfPossible()
+                queueAutoFinishStepIfPossible()
+            }
+            .onChange(of: isUndoAnimating) { _, _ in
+                processPendingAutoMoveIfPossible()
+                queueAutoFinishStepIfPossible()
+            }
+            .onChange(of: scenePhase) { _, _ in
+                syncLifecyclePauseState()
+            }
 #if os(macOS)
-        .onChange(of: appearsActive) { _, _ in
-            syncLifecyclePauseState()
-        }
+            .onChange(of: appearsActive) { _, _ in
+                syncLifecyclePauseState()
+            }
 #endif
-        .onAppear {
-            initializeGameIfNeeded()
+            .onAppear {
+                initializeGameIfNeeded()
+            }
+            .onDisappear {
+                persistGameNow()
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func boardRoot(for geometry: GeometryProxy) -> some View {
+#if os(iOS)
+        let metrics = Layout.metrics(for: geometry.size, isRegularWidth: horizontalSizeClass == .regular)
+#else
+        let metrics = Layout.metrics(for: geometry.size)
+#endif
+        let cardSize = metrics.cardSize
+        let boardScaleFactor = boardScaleFactor(for: geometry.size)
+        let effectiveCardSize = CGSize(width: cardSize.width * boardScaleFactor, height: cardSize.height * boardScaleFactor)
+        let boardContentWidth = (cardSize.width * 7) + (metrics.columnSpacing * 6)
+        let isBoardReady = hasLoadedGame && !isHydratingGame
+        let hintedTarget: DropTarget? = {
+            guard let destination = viewModel.hintedDestination else { return nil }
+            return dropTarget(for: destination)
+        }()
+#if os(iOS)
+        let isPadLandscape = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
+#endif
+
+        ZStack {
+            TableBackground()
+            if isBoardReady {
+                let boardLayout = VStack(alignment: .leading, spacing: metrics.rowSpacing) {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        HeaderView(
+                            movesCount: viewModel.movesCount,
+                            elapsedSeconds: viewModel.elapsedActiveSeconds(at: context.date),
+                            score: viewModel.displayScore(at: context.date),
+                            onScoreTapped: { isShowingStats = true }
+                        )
+                        .frame(width: boardContentWidth, alignment: .leading)
+                    }
+                    TopRowView(
+                        viewModel: viewModel,
+                        cardSize: cardSize,
+                        columnSpacing: metrics.columnSpacing,
+                        wasteFanSpacing: metrics.wasteFanSpacing,
+                        activeTarget: activeTarget,
+                        hintedTarget: hintedTarget,
+                        isStockHinted: viewModel.isStockHinted,
+                        isWasteHinted: viewModel.isWasteHinted,
+                        hintHighlightOpacity: hintHighlightOpacity,
+                        isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts,
+                        hiddenCardIDs: hiddenCardIDs,
+                        hintedCardIDs: viewModel.hintedCardIDs,
+                        hintWiggleToken: viewModel.hintWiggleToken,
+                        drawingCardIDs: drawingCardIDs,
+                        fanProgress: wasteFanProgress,
+                        dragGesture: dragGesture(for:)
+                    )
+                    .frame(width: boardContentWidth, alignment: .leading)
+                    TableauRowView(
+                        viewModel: viewModel,
+                        cardSize: cardSize,
+                        columnSpacing: metrics.columnSpacing,
+                        faceDownOffset: metrics.tableauFaceDownOffset,
+                        faceUpOffset: metrics.tableauFaceUpOffset,
+                        activeTarget: activeTarget,
+                        hintedTarget: hintedTarget,
+                        hintHighlightOpacity: hintHighlightOpacity,
+                        isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts,
+                        hiddenCardIDs: hiddenCardIDs,
+                        hintedCardIDs: viewModel.hintedCardIDs,
+                        hintWiggleToken: viewModel.hintWiggleToken,
+                        dragGesture: dragGesture(for:)
+                    )
+                    .frame(width: boardContentWidth, alignment: .leading)
+                    Spacer(minLength: 0)
+                }
+#if os(iOS)
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: isPadLandscape ? .top : .topLeading
+                )
+#else
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+#endif
+                .padding(.horizontal, metrics.horizontalPadding)
+                .padding(.vertical, metrics.verticalPadding)
+
+                boardLayout
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: BoardContentSizeKey.self, value: proxy.size)
+                        }
+                    )
+                    .scaleEffect(boardScaleFactor, anchor: .top)
+
+                if viewModel.isWin {
+                    WinOverlay(score: viewModel.score) {
+                        stopAutoFinish()
+                        viewModel.newGame(drawMode: drawMode)
+                        persistGameNow()
+                    }
+                    .transition(.opacity)
+                }
+
+                Button("Cancel Drag") {
+                    handleEscape()
+                }
+                .keyboardShortcut(.cancelAction)
+                .opacity(0.01)
+                .frame(width: 1, height: 1)
+                .accessibilityHidden(true)
+            }
         }
-        .onDisappear {
-            persistGameNow()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .coordinateSpace(name: "board")
+        .sensoryFeedback(trigger: hapticFeedback.trigger) {
+            hapticFeedback.feedbackForTrigger
+        }
+        .onPreferenceChange(DropTargetFrameKey.self) { frames in
+            dropFrames = frames
+        }
+        .onPreferenceChange(StockFrameKey.self) { frame in
+            stockFrame = frame
+        }
+        .onPreferenceChange(WasteFrameKey.self) { frame in
+            wasteFrame = frame
+        }
+        .onPreferenceChange(CardFrameKey.self) { frames in
+            if shouldUpdateCardFrames(with: frames) {
+                cardFrames = frames
+            }
+        }
+        .onPreferenceChange(BoardContentSizeKey.self) { size in
+            boardContentSize = size
+        }
+        .onChange(of: viewModel.state.waste.count) { _, newValue in
+            let stockCount = viewModel.state.stock.count
+            if newValue == 0 {
+                drawAnimationCards = []
+                drawingCardIDs = []
+                wasteFanProgress = [:]
+                previousWasteCount = 0
+                previousStockCount = stockCount
+                return
+            }
+            let addedCount = max(0, newValue - previousWasteCount)
+            let newCards = addedCount > 0 ? Array(viewModel.state.waste.suffix(addedCount)) : []
+            syncFanProgress(with: viewModel.state.waste, excluding: Set(newCards.map(\.id)))
+            if addedCount > 0, stockCount < previousStockCount {
+                prepareFan(for: newCards)
+                let travelDelay = startDrawAnimation(for: newCards, cardSize: effectiveCardSize)
+                animateFan(for: newCards, delay: travelDelay)
+            }
+            previousWasteCount = newValue
+            previousStockCount = stockCount
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: viewModel.state)
+        .animation(.easeInOut(duration: 0.12), value: activeTarget)
+        .overlay {
+            GeometryReader { _ in
+                ZStack {
+                    DrawOverlayView(
+                        cards: drawAnimationCards,
+                        cardSize: effectiveCardSize
+                    )
+                    .zIndex(50)
+                    UndoOverlayView(
+                        items: undoAnimationItems,
+                        progress: undoAnimationProgress
+                    )
+                    .zIndex(75)
+                    DragOverlayView(
+                        viewModel: viewModel,
+                        cardFrames: dragOverlayCardFrames,
+                        cardTilts: cardTilts,
+                        dragTranslation: dragTranslation,
+                        dragReturnOffset: dragReturnOffset,
+                        isReturningDrag: isReturningDrag,
+                        returningCards: returningCards,
+                        isDroppingCards: isDroppingCards,
+                        droppingCards: droppingSelection?.cards ?? [],
+                        dropAnimationOffset: dropAnimationOffset,
+                        overlayTilt: overlayTilt
+                    )
+                    .zIndex(100)
+                }
+            }
+            .accessibilityHidden(true)
         }
     }
 
@@ -507,6 +580,22 @@ struct ContentView: View {
             || isReturningDrag
             || viewModel.isDragging
             || viewModel.pendingAutoMove != nil
+    }
+
+    private var isHintDisabled: Bool {
+        viewModel.isWin
+            || isUndoAnimating
+            || isDroppingCards
+            || isReturningDrag
+            || viewModel.isDragging
+            || viewModel.pendingAutoMove != nil
+            || !viewModel.isHintAvailable
+    }
+
+    private func triggerHint() {
+        guard !isHintDisabled else { return }
+        stopAutoFinish()
+        viewModel.requestHint()
     }
 
     private func startAutoFinish() {

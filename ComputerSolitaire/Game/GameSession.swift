@@ -4,6 +4,7 @@ import Observation
 @Observable
 final class SolitaireViewModel {
     static let maxUndoHistoryCount = 200
+    private static let hintVisibilityDuration: TimeInterval = 1.5
 
     private(set) var state: GameState
     private(set) var isAutoFinishAvailable: Bool
@@ -14,6 +15,9 @@ final class SolitaireViewModel {
         }
     }
     private var selectedCardIDs: Set<UUID> = []
+    private(set) var activeHint: HintAdvisor.Hint?
+    private(set) var hintWiggleToken = UUID()
+    private var hintAutoClearToken = UUID()
     var isDragging: Bool = false
     var pendingAutoMove: PendingAutoMove?
     private(set) var movesCount: Int = 0
@@ -47,6 +51,79 @@ final class SolitaireViewModel {
 
     var canUndo: Bool {
         !history.isEmpty && !isWin
+    }
+
+    var hintedCardIDs: Set<UUID> {
+        switch activeHint {
+        case .move(let move):
+            return Set(move.selection.cards.map(\.id))
+        case .stockTap, .none:
+            return []
+        }
+    }
+
+    var hintedDestination: Destination? {
+        switch activeHint {
+        case .move(let move):
+            return move.destination
+        case .stockTap, .none:
+            return nil
+        }
+    }
+
+    var isStockHinted: Bool {
+        if case .stockTap = activeHint {
+            return true
+        }
+        return false
+    }
+
+    var isWasteHinted: Bool {
+        guard case .stockTap = activeHint else { return false }
+        return state.stock.isEmpty && !state.waste.isEmpty
+    }
+
+    var hasActiveHint: Bool {
+        activeHint != nil
+    }
+
+    var isHintAvailable: Bool {
+        guard !isWin else { return false }
+        return HintAdvisor.bestHint(in: state, stockDrawCount: stockDrawCount) != nil
+    }
+
+    func requestHint() {
+        guard !isWin else {
+            clearHint()
+            return
+        }
+
+        guard let hint = HintAdvisor.bestHint(in: state, stockDrawCount: stockDrawCount) else {
+            clearHint()
+            HapticManager.shared.play(.invalidDrop)
+            return
+        }
+
+        activeHint = hint
+        hintWiggleToken = UUID()
+        scheduleHintAutoClear(for: hint)
+        HapticManager.shared.play(.settingsSelection)
+    }
+
+    func clearHint() {
+        hintAutoClearToken = UUID()
+        activeHint = nil
+    }
+
+    private func scheduleHintAutoClear(for hint: HintAdvisor.Hint) {
+        let token = UUID()
+        hintAutoClearToken = token
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.hintVisibilityDuration) { [weak self] in
+            guard let self else { return }
+            guard self.hintAutoClearToken == token else { return }
+            guard self.activeHint == hint else { return }
+            self.activeHint = nil
+        }
     }
 
     func unfinalizedElapsedSecondsForStats(at date: Date = .now) -> Int {
@@ -91,6 +168,7 @@ final class SolitaireViewModel {
 
     func newGame(drawMode: DrawMode = .three) {
         finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: .now)
+        clearHint()
         let initialState = GameState.newGame()
         state = initialState
         redealState = initialState
@@ -113,6 +191,7 @@ final class SolitaireViewModel {
 
     func redeal() {
         finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: .now)
+        clearHint()
         state = redealState
         selection = nil
         isDragging = false
@@ -131,6 +210,7 @@ final class SolitaireViewModel {
     }
 
     func updateDrawMode(_ drawMode: DrawMode) {
+        clearHint()
         stockDrawCount = drawMode.rawValue
         if drawMode == .one {
             state.wasteDrawCount = min(1, state.waste.count)
@@ -151,6 +231,7 @@ final class SolitaireViewModel {
     func undo() {
         guard !isWin else { return }
         guard let snapshot = history.popLast() else { return }
+        clearHint()
         state = snapshot.state
         movesCount = snapshot.movesCount
         score = snapshot.score
@@ -186,6 +267,7 @@ final class SolitaireViewModel {
     @discardableResult
     func restore(from payload: SavedGamePayload) -> Bool {
         guard let sanitizedPayload = payload.sanitizedForRestore() else { return false }
+        clearHint()
         let offlineDurationSinceSave = max(0, Date().timeIntervalSince(sanitizedPayload.savedAt))
         state = sanitizedPayload.state
         movesCount = sanitizedPayload.movesCount
@@ -215,6 +297,7 @@ final class SolitaireViewModel {
     }
 
     func handleStockTap() {
+        clearHint()
         selection = nil
         isDragging = false
         pendingAutoMove = nil
@@ -261,6 +344,7 @@ final class SolitaireViewModel {
 
             if !card.isFaceUp {
                 if cardIndex == pile.count - 1 {
+                    clearHint()
                     pushHistory(
                         undoContext: UndoAnimationContext(
                             action: .flipTableauTop,
@@ -313,6 +397,7 @@ final class SolitaireViewModel {
     @discardableResult
     func startDragFromWaste() -> Bool {
         guard let top = state.waste.last, state.wasteDrawCount > 0 else { return false }
+        clearHint()
         selection = Selection(source: .waste, cards: [top])
         isDragging = true
         return true
@@ -321,6 +406,7 @@ final class SolitaireViewModel {
     @discardableResult
     func startDragFromFoundation(index: Int) -> Bool {
         guard let top = state.foundations[index].last else { return false }
+        clearHint()
         selection = Selection(source: .foundation(pile: index), cards: [top])
         isDragging = true
         return true
@@ -332,6 +418,7 @@ final class SolitaireViewModel {
         guard cardIndex < pile.count else { return false }
         let card = pile[cardIndex]
         guard card.isFaceUp else { return false }
+        clearHint()
         let cards = Array(pile[cardIndex...])
         selection = Selection(source: .tableau(pile: pileIndex, index: cardIndex), cards: cards)
         isDragging = true
@@ -398,6 +485,7 @@ final class SolitaireViewModel {
 private extension SolitaireViewModel {
     func drawFromStock() {
         guard !state.stock.isEmpty else { return }
+        clearHint()
         let drawCount = min(stockDrawCount, state.stock.count)
         let drawnCardIDs = (0..<drawCount).map { offset in
             state.stock[state.stock.count - 1 - offset].id
@@ -421,6 +509,7 @@ private extension SolitaireViewModel {
 
     func recycleWaste() {
         guard state.stock.isEmpty, !state.waste.isEmpty else { return }
+        clearHint()
         let visibleWasteIDs = visibleWasteCards().map(\.id)
         let animatedWasteIDs = visibleWasteIDs.isEmpty
             ? [state.waste.last?.id].compactMap { $0 }
@@ -469,6 +558,7 @@ private extension SolitaireViewModel {
         case .foundation(let index):
             guard selection.cards.count == 1 else { return false }
             guard GameRules.canMoveToFoundation(card: movingCard, foundation: state.foundations[index]) else { return false }
+            clearHint()
             pushHistory(
                 undoContext: UndoAnimationContext(
                     action: .moveSelection,
@@ -486,6 +576,7 @@ private extension SolitaireViewModel {
 
         case .tableau(let index):
             guard GameRules.canMoveToTableau(card: movingCard, destinationPile: state.tableau[index]) else { return false }
+            clearHint()
             pushHistory(
                 undoContext: UndoAnimationContext(
                     action: .moveSelection,
