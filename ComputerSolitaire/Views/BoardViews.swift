@@ -193,24 +193,39 @@ struct TopRowView: View {
     let columnSpacing: CGFloat
     let wasteFanSpacing: CGFloat
     let activeTarget: DropTarget?
+    let hintedTarget: DropTarget?
+    let isStockHinted: Bool
+    let isWasteHinted: Bool
+    let hintHighlightOpacity: Double
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
     let hiddenCardIDs: Set<UUID>
+    let hintedCardIDs: Set<UUID>
+    let hintWiggleToken: UUID
     let drawingCardIDs: Set<UUID>
     let fanProgress: [UUID: Double]
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
         HStack(alignment: .top, spacing: columnSpacing) {
-            StockView(viewModel: viewModel, cardSize: cardSize)
+            StockView(
+                viewModel: viewModel,
+                cardSize: cardSize,
+                isHintTargeted: isStockHinted,
+                hintHighlightOpacity: hintHighlightOpacity,
+                hintWiggleToken: hintWiggleToken
+            )
                 .frame(width: cardSize.width, alignment: .leading)
             WasteView(
                 viewModel: viewModel,
                 cardSize: cardSize,
                 fanSpacing: wasteFanSpacing,
+                isHintTargeted: isWasteHinted,
                 isCardTiltEnabled: isCardTiltEnabled,
                 cardTilts: $cardTilts,
                 hiddenCardIDs: hiddenCardIDs,
+                hintedCardIDs: hintedCardIDs,
+                hintWiggleToken: hintWiggleToken,
                 drawingCardIDs: drawingCardIDs,
                 fanProgress: fanProgress,
                 dragGesture: dragGesture
@@ -229,9 +244,13 @@ struct TopRowView: View {
                     index: index,
                     cardSize: cardSize,
                     isTargeted: activeTarget == .foundation(index),
+                    isHintTargeted: hintedTarget == .foundation(index),
+                    hintHighlightOpacity: hintHighlightOpacity,
                     isCardTiltEnabled: isCardTiltEnabled,
                     cardTilts: $cardTilts,
                     hiddenCardIDs: hiddenCardIDs,
+                    hintedCardIDs: hintedCardIDs,
+                    hintWiggleToken: hintWiggleToken,
                     dragGesture: dragGesture
                 )
                 .frame(width: cardSize.width, alignment: .leading)
@@ -250,9 +269,13 @@ struct TableauRowView: View {
     let faceDownOffset: CGFloat
     let faceUpOffset: CGFloat
     let activeTarget: DropTarget?
+    let hintedTarget: DropTarget?
+    let hintHighlightOpacity: Double
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
     let hiddenCardIDs: Set<UUID>
+    let hintedCardIDs: Set<UUID>
+    let hintWiggleToken: UUID
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -265,9 +288,13 @@ struct TableauRowView: View {
                     faceDownOffset: faceDownOffset,
                     faceUpOffset: faceUpOffset,
                     isTargeted: activeTarget == .tableau(index),
+                    isHintTargeted: hintedTarget == .tableau(index),
+                    hintHighlightOpacity: hintHighlightOpacity,
                     isCardTiltEnabled: isCardTiltEnabled,
                     cardTilts: $cardTilts,
                     hiddenCardIDs: hiddenCardIDs,
+                    hintedCardIDs: hintedCardIDs,
+                    hintWiggleToken: hintWiggleToken,
                     dragGesture: dragGesture
                 )
             }
@@ -281,6 +308,9 @@ struct TableauRowView: View {
 struct StockView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
+    let isHintTargeted: Bool
+    let hintHighlightOpacity: Double
+    let hintWiggleToken: UUID
 
     var body: some View {
         ZStack {
@@ -297,7 +327,16 @@ struct StockView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.8))
                 .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
+
+            DropHighlightView(
+                cardSize: cardSize,
+                isTargeted: false,
+                isHintTargeted: isHintTargeted,
+                hintOpacity: hintHighlightOpacity
+            )
+            .allowsHitTesting(false)
         }
+        .hintWiggle(token: isHintTargeted ? hintWiggleToken : nil)
         .background(
             GeometryReader { proxy in
                 Color.clear
@@ -316,9 +355,12 @@ struct WasteView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
     let fanSpacing: CGFloat
+    let isHintTargeted: Bool
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
     let hiddenCardIDs: Set<UUID>
+    let hintedCardIDs: Set<UUID>
+    let hintWiggleToken: UUID
     let drawingCardIDs: Set<UUID>
     let fanProgress: [UUID: Double]
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
@@ -337,6 +379,7 @@ struct WasteView: View {
 
         ZStack(alignment: .topLeading) {
             PilePlaceholderView(cardSize: cardSize)
+                .hintWiggle(token: isHintTargeted ? hintWiggleToken : nil)
             ForEach(Array(visibleWaste.enumerated()), id: \.element.id) { index, card in
                 let isTopCard = index == visibleWaste.count - 1
                 let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
@@ -349,7 +392,8 @@ struct WasteView: View {
                     isSelected: viewModel.isSelected(card: card),
                     cardSize: cardSize,
                     isCardTiltEnabled: isCardTiltEnabled,
-                    cardTilts: $cardTilts
+                    cardTilts: $cardTilts,
+                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
                 )
                 .opacity(isDragged || isDrawing || isHidden ? 0 : 1)
                 .offset(x: xOffset, y: 0)
@@ -384,9 +428,13 @@ struct FoundationView: View {
     let index: Int
     let cardSize: CGSize
     let isTargeted: Bool
+    let isHintTargeted: Bool
+    let hintHighlightOpacity: Double
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
     let hiddenCardIDs: Set<UUID>
+    let hintedCardIDs: Set<UUID>
+    let hintWiggleToken: UUID
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -403,7 +451,12 @@ struct FoundationView: View {
         let highlightZ: Double = 1
         ZStack {
             PilePlaceholderView(cardSize: cardSize)
-            DropHighlightView(cardSize: cardSize, isTargeted: isTargeted)
+            DropHighlightView(
+                cardSize: cardSize,
+                isTargeted: isTargeted,
+                isHintTargeted: isHintTargeted,
+                hintOpacity: hintHighlightOpacity
+            )
                 .zIndex(highlightZ)
             ForEach(Array(foundation.enumerated().dropFirst(startIndex)), id: \.element.id) { cardIndex, card in
                 let isTopCard = cardIndex == foundation.count - 1
@@ -414,7 +467,8 @@ struct FoundationView: View {
                     isSelected: isTopCard && viewModel.isSelected(card: card),
                     cardSize: cardSize,
                     isCardTiltEnabled: isCardTiltEnabled,
-                    cardTilts: $cardTilts
+                    cardTilts: $cardTilts,
+                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
                 )
                 .opacity(isDragged || isHidden ? 0 : 1)
                 .zIndex(isTopCard && isDragged ? 20 : 0)
@@ -465,9 +519,13 @@ struct TableauPileView: View {
     let faceDownOffset: CGFloat
     let faceUpOffset: CGFloat
     let isTargeted: Bool
+    let isHintTargeted: Bool
+    let hintHighlightOpacity: Double
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
     let hiddenCardIDs: Set<UUID>
+    let hintedCardIDs: Set<UUID>
+    let hintWiggleToken: UUID
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
@@ -506,7 +564,12 @@ struct TableauPileView: View {
                 }
 
             PilePlaceholderView(cardSize: cardSize)
-            DropHighlightView(cardSize: cardSize, isTargeted: isTargeted)
+            DropHighlightView(
+                cardSize: cardSize,
+                isTargeted: isTargeted,
+                isHintTargeted: isHintTargeted,
+                hintOpacity: hintHighlightOpacity
+            )
                 .offset(y: highlightYOffset)
                 .zIndex(highlightZ)
 
@@ -519,7 +582,8 @@ struct TableauPileView: View {
                     isSelected: viewModel.isSelected(card: card),
                     cardSize: cardSize,
                     isCardTiltEnabled: isCardTiltEnabled,
-                    cardTilts: $cardTilts
+                    cardTilts: $cardTilts,
+                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
                 )
                 .opacity(isDragged || isHidden ? 0 : 1)
                 .offset(x: 0, y: yOffset)
@@ -594,12 +658,67 @@ struct TableauPileView: View {
     }
 }
 
+private enum HintWiggleStyle {
+    static let angles: [Double] = [-1.4, 1.4, -0.8, 0.8, 0]
+    static let stepDuration: Double = 0.13
+    static let stepSleepNanoseconds: UInt64 = 200_000_000
+}
+
+private struct HintWiggleModifier: ViewModifier {
+    let token: UUID?
+    @State private var wiggleAngle: Double = 0
+    @State private var wiggleTask: Task<Void, Never>?
+
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(wiggleAngle))
+            .onChange(of: token) { _, newToken in
+                if newToken == nil {
+                    wiggleTask?.cancel()
+                    wiggleAngle = 0
+                    return
+                }
+                startHintWiggle()
+            }
+            .onAppear {
+                if token != nil {
+                    startHintWiggle()
+                }
+            }
+            .onDisappear {
+                wiggleTask?.cancel()
+                wiggleAngle = 0
+            }
+    }
+
+    private func startHintWiggle() {
+        wiggleTask?.cancel()
+        wiggleTask = Task { @MainActor in
+            for angle in HintWiggleStyle.angles {
+                if Task.isCancelled { return }
+                withAnimation(.easeInOut(duration: HintWiggleStyle.stepDuration)) {
+                    wiggleAngle = angle
+                }
+                try? await Task.sleep(nanoseconds: HintWiggleStyle.stepSleepNanoseconds)
+            }
+            wiggleAngle = 0
+        }
+    }
+}
+
+private extension View {
+    func hintWiggle(token: UUID?) -> some View {
+        modifier(HintWiggleModifier(token: token))
+    }
+}
+
 struct CardView: View {
     let card: Card
     let isSelected: Bool
     let cardSize: CGSize
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
+    let hintWiggleToken: UUID?
     let flipOnAppear: Bool
     let flipDelay: Double
     @State private var flipRotation: Double
@@ -611,6 +730,7 @@ struct CardView: View {
         cardSize: CGSize,
         isCardTiltEnabled: Bool,
         cardTilts: Binding<[UUID: Double]>,
+        hintWiggleToken: UUID? = nil,
         flipOnAppear: Bool = false,
         flipDelay: Double = 0
     ) {
@@ -619,6 +739,7 @@ struct CardView: View {
         self.cardSize = cardSize
         self.isCardTiltEnabled = isCardTiltEnabled
         self._cardTilts = cardTilts
+        self.hintWiggleToken = hintWiggleToken
         self.flipOnAppear = flipOnAppear
         self.flipDelay = flipDelay
         let startFaceDown = flipOnAppear && card.isFaceUp
@@ -662,6 +783,7 @@ struct CardView: View {
         }
         .frame(width: cardSize.width, height: cardSize.height)
         .rotationEffect(.degrees(tiltAngle))
+        .hintWiggle(token: hintWiggleToken)
         .scaleEffect(isSelected ? 1.03 : 1)
         .onChange(of: card.isFaceUp) { _, newValue in
             withAnimation(.easeInOut(duration: 0.32)) {
@@ -904,12 +1026,24 @@ struct PilePlaceholderView: View {
 struct DropHighlightView: View {
     let cardSize: CGSize
     let isTargeted: Bool
+    let isHintTargeted: Bool
+    let hintOpacity: Double
 
     var body: some View {
         let cornerRadius = cardSize.width * 0.12
+        let clampedHintOpacity = max(0, min(1, hintOpacity))
+        let strokeColor: Color = {
+            if isTargeted {
+                return Color.yellow.opacity(0.85)
+            }
+            if isHintTargeted {
+                return Color.yellow.opacity(0.85 * clampedHintOpacity)
+            }
+            return Color.clear
+        }()
 
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(isTargeted ? Color.yellow.opacity(0.85) : Color.clear, lineWidth: 2)
+            .stroke(strokeColor, lineWidth: 2)
             .frame(width: cardSize.width, height: cardSize.height)
             .scaleEffect(1.05)
     }
