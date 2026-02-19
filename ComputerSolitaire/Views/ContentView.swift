@@ -186,6 +186,10 @@ struct ContentView: View {
                             startAutoFinish()
                         }
                         .disabled(isAutoFinishDisabled)
+                        Button("Hint", systemImage: "lightbulb") {
+                            triggerHint()
+                        }
+                        .disabled(isHintDisabled)
                     } label: {
                         Label("Game", systemImage: "ellipsis.circle")
                     }
@@ -196,12 +200,6 @@ struct ContentView: View {
                         Label("Undo", systemImage: "arrow.uturn.backward")
                     }
                     .disabled(isUndoDisabled)
-                    Button {
-                        triggerHint()
-                    } label: {
-                        Label("Hint", systemImage: "lightbulb")
-                    }
-                    .disabled(isHintDisabled)
                     Spacer(minLength: 0)
                     Button {
                         isShowingStats = true
