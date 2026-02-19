@@ -8,6 +8,7 @@ final class SolitaireViewModel {
 
     private(set) var state: GameState
     private(set) var isAutoFinishAvailable: Bool
+    private(set) var isHintAvailable: Bool
     private var redealState: GameState
     var selection: Selection? {
         didSet {
@@ -42,6 +43,10 @@ final class SolitaireViewModel {
         let initialState = GameState.newGame()
         state = initialState
         isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: initialState)
+        isHintAvailable = HintAdvisor.bestHint(
+            in: initialState,
+            stockDrawCount: DrawMode.three.rawValue
+        ) != nil
         redealState = initialState
     }
 
@@ -85,11 +90,6 @@ final class SolitaireViewModel {
 
     var hasActiveHint: Bool {
         activeHint != nil
-    }
-
-    var isHintAvailable: Bool {
-        guard !isWin else { return false }
-        return HintAdvisor.bestHint(in: state, stockDrawCount: stockDrawCount) != nil
     }
 
     func requestHint() {
@@ -479,6 +479,7 @@ final class SolitaireViewModel {
 
     func refreshAutoFinishAvailability() {
         isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: state)
+        isHintAvailable = !isWin && HintAdvisor.bestHint(in: state, stockDrawCount: stockDrawCount) != nil
     }
 }
 
@@ -505,6 +506,7 @@ private extension SolitaireViewModel {
         movesCount += 1
         SoundManager.shared.play(.cardDrawFromStock)
         HapticManager.shared.play(.stockDraw)
+        refreshAutoFinishAvailability()
     }
 
     func recycleWaste() {
@@ -535,6 +537,7 @@ private extension SolitaireViewModel {
         }
         SoundManager.shared.play(.wasteRecycleToStock)
         HapticManager.shared.play(.wasteRecycle)
+        refreshAutoFinishAvailability()
     }
 
     func selectFromTableau(pileIndex: Int, cardIndex: Int) {
@@ -572,6 +575,7 @@ private extension SolitaireViewModel {
             applyTimeBonusIfWon()
             self.selection = nil
             SoundManager.shared.play(.cardPlaced)
+            refreshAutoFinishAvailability()
             return true
 
         case .tableau(let index):
@@ -590,6 +594,7 @@ private extension SolitaireViewModel {
             applyTimeBonusIfWon()
             self.selection = nil
             SoundManager.shared.play(.cardPlaced)
+            refreshAutoFinishAvailability()
             return true
         }
     }
