@@ -26,16 +26,12 @@ enum HintAdvisor {
     static func bestHintMove(in state: GameState, stockDrawCount: Int) -> HintMove? {
         var bestChoice: (selection: Selection, evaluation: MoveEvaluation)?
 
-        for selection in candidateSelections(in: state) {
-            guard let evaluation = AutoMoveAdvisor.bestMoveEvaluation(
+        for selection in AutoMoveAdvisor.candidateSelections(in: state) {
+            guard let evaluation = AutoMoveAdvisor.bestAdvisableMoveEvaluation(
                 for: selection,
                 in: state,
                 stockDrawCount: stockDrawCount
             ) else {
-                continue
-            }
-
-            guard isActionableHintMove(selection: selection, evaluation: evaluation) else {
                 continue
             }
 
@@ -57,38 +53,6 @@ enum HintAdvisor {
 }
 
 private extension HintAdvisor {
-    static func isActionableHintMove(selection: Selection, evaluation: MoveEvaluation) -> Bool {
-        if case .foundation = selection.source,
-           case .foundation = evaluation.destination {
-            // Avoid hinting foundation-to-foundation shuffles.
-            return false
-        }
-
-        if evaluation.revealsFaceDownCard || evaluation.foundationProgressDelta > 0 || evaluation.emptyTableauDelta > 0 {
-            return true
-        }
-
-        switch selection.source {
-        case .waste:
-            // Waste moves are resource-limited and usually unblock future draws.
-            return true
-
-        case .foundation:
-            // Only suggest moving off foundations when it meaningfully expands options.
-            return evaluation.mobilityDelta > 0
-
-        case .tableau:
-            break
-        }
-
-        if case .tableau = evaluation.destination {
-            // Avoid neutral tableau reshuffles unless they strongly improve options.
-            return evaluation.mobilityDelta > 1
-        }
-
-        return evaluation.mobilityDelta > 0
-    }
-
     static func canRevealPlayableMoveViaStockTap(in state: GameState, stockDrawCount: Int) -> Bool {
         var simulatedState = state
         let maxLookaheadSteps = stockTapLookaheadSteps(in: state, stockDrawCount: stockDrawCount)
@@ -144,44 +108,5 @@ private extension HintAdvisor {
         nextState.waste.removeAll()
         nextState.wasteDrawCount = 0
         return nextState
-    }
-
-    static func candidateSelections(in state: GameState) -> [Selection] {
-        var selections: [Selection] = []
-
-        if let topWasteCard = state.waste.last, state.wasteDrawCount > 0 {
-            selections.append(Selection(source: .waste, cards: [topWasteCard]))
-        }
-
-        for foundationIndex in state.foundations.indices {
-            guard let topFoundationCard = state.foundations[foundationIndex].last else { continue }
-            selections.append(
-                Selection(source: .foundation(pile: foundationIndex), cards: [topFoundationCard])
-            )
-        }
-
-        for pileIndex in state.tableau.indices {
-            let pile = state.tableau[pileIndex]
-            for cardIndex in pile.indices where pile[cardIndex].isFaceUp {
-                let cards = Array(pile[cardIndex...])
-                guard isValidTableauSequence(cards) else { continue }
-                selections.append(
-                    Selection(source: .tableau(pile: pileIndex, index: cardIndex), cards: cards)
-                )
-            }
-        }
-
-        return selections
-    }
-
-    static func isValidTableauSequence(_ cards: [Card]) -> Bool {
-        guard cards.count > 1 else { return true }
-        for index in 0..<(cards.count - 1) {
-            let upper = cards[index]
-            let lower = cards[index + 1]
-            guard upper.suit.isRed != lower.suit.isRed else { return false }
-            guard upper.rank.rawValue == lower.rank.rawValue + 1 else { return false }
-        }
-        return true
     }
 }

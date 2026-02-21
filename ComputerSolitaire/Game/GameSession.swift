@@ -344,6 +344,14 @@ final class SolitaireViewModel {
             if tryMoveSelection(to: .foundation(index)) {
                 return
             }
+        } else if let topCard = state.foundations[index].last {
+            let tappedSelection = Selection(source: .foundation(pile: index), cards: [topCard])
+            if queueBestAutoMove(
+                for: tappedSelection,
+                playFailureFeedback: false
+            ) {
+                return
+            }
         }
         isDragging = false
         selectFromFoundation(index: index)
@@ -707,14 +715,19 @@ private extension SolitaireViewModel {
     }
 
     @discardableResult
-    func queueBestAutoMove(for sourceSelection: Selection) -> Bool {
+    func queueBestAutoMove(
+        for sourceSelection: Selection,
+        playFailureFeedback: Bool = true
+    ) -> Bool {
         isDragging = false
-        guard let destination = AutoMoveAdvisor.bestDestination(
+        guard let destination = AutoMoveAdvisor.bestAdvisableDestination(
             for: sourceSelection,
             in: state,
             stockDrawCount: stockDrawCount
         ) else {
-            HapticManager.shared.play(.invalidDrop)
+            if playFailureFeedback {
+                HapticManager.shared.play(.invalidDrop)
+            }
             return false
         }
 

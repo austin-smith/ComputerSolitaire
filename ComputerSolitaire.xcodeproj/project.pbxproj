@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		4B75C1EA2F1A233500761A12 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4B75C1C92F1A233400761A12 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4B75C1D02F1A233400761A12;
+			remoteInfo = ComputerSolitaire;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		4B75C1D12F1A233400761A12 /* Computer Solitaire.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Computer Solitaire.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		4B75C1E42F1A233500761A12 /* ComputerSolitaireTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ComputerSolitaireTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -29,10 +40,22 @@
 			path = ComputerSolitaire;
 			sourceTree = "<group>";
 		};
+		4B75C1E52F1A233500761A12 /* ComputerSolitaireTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ComputerSolitaireTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		4B75C1CE2F1A233400761A12 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4B75C1E62F1A233500761A12 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -46,6 +69,7 @@
 			isa = PBXGroup;
 			children = (
 				4B75C1D32F1A233400761A12 /* ComputerSolitaire */,
+				4B75C1E52F1A233500761A12 /* ComputerSolitaireTests */,
 				4B75C1D22F1A233400761A12 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,6 +78,7 @@
 			isa = PBXGroup;
 			children = (
 				4B75C1D12F1A233400761A12 /* Computer Solitaire.app */,
+				4B75C1E42F1A233500761A12 /* ComputerSolitaireTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -83,6 +108,29 @@
 			productReference = 4B75C1D12F1A233400761A12 /* Computer Solitaire.app */;
 			productType = "com.apple.product-type.application";
 		};
+		4B75C1E92F1A233500761A12 /* ComputerSolitaireTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4B75C1EC2F1A233500761A12 /* Build configuration list for PBXNativeTarget "ComputerSolitaireTests" */;
+			buildPhases = (
+				4B75C1E72F1A233500761A12 /* Sources */,
+				4B75C1E62F1A233500761A12 /* Frameworks */,
+				4B75C1E82F1A233500761A12 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4B75C1EB2F1A233500761A12 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				4B75C1E52F1A233500761A12 /* ComputerSolitaireTests */,
+			);
+			name = ComputerSolitaireTests;
+			packageProductDependencies = (
+			);
+			productName = ComputerSolitaireTests;
+			productReference = 4B75C1E42F1A233500761A12 /* ComputerSolitaireTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -95,6 +143,10 @@
 				TargetAttributes = {
 					4B75C1D02F1A233400761A12 = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					4B75C1E92F1A233500761A12 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 4B75C1D02F1A233400761A12;
 					};
 				};
 			};
@@ -113,12 +165,20 @@
 			projectRoot = "";
 			targets = (
 				4B75C1D02F1A233400761A12 /* ComputerSolitaire */,
+				4B75C1E92F1A233500761A12 /* ComputerSolitaireTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		4B75C1CF2F1A233400761A12 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4B75C1E82F1A233500761A12 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -135,7 +195,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4B75C1E72F1A233500761A12 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4B75C1EB2F1A233500761A12 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4B75C1D02F1A233400761A12 /* ComputerSolitaire */;
+			targetProxy = 4B75C1EA2F1A233500761A12 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4B75C1E02F1A233500761A12 /* Debug */ = {
@@ -170,7 +245,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 0.4.1;
+				MARKETING_VERSION = 0.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = crapshack.ComputerSolitaire;
 				PRODUCT_NAME = "Computer Solitaire";
 				REGISTER_APP_GROUPS = YES;
@@ -220,7 +295,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 0.4.1;
+				MARKETING_VERSION = 0.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = crapshack.ComputerSolitaire;
 				PRODUCT_NAME = "Computer Solitaire";
 				REGISTER_APP_GROUPS = YES;
@@ -354,6 +429,42 @@
 			};
 			name = Release;
 		};
+		4B75C1ED2F1A233500761A12 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T778QMSML9;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				PRODUCT_BUNDLE_IDENTIFIER = crapshack.ComputerSolitaireTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Computer Solitaire.app/Contents/MacOS/Computer Solitaire";
+			};
+			name = Debug;
+		};
+		4B75C1EE2F1A233500761A12 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T778QMSML9;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				PRODUCT_BUNDLE_IDENTIFIER = crapshack.ComputerSolitaireTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Computer Solitaire.app/Contents/MacOS/Computer Solitaire";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -371,6 +482,15 @@
 			buildConfigurations = (
 				4B75C1E02F1A233500761A12 /* Debug */,
 				4B75C1E12F1A233500761A12 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4B75C1EC2F1A233500761A12 /* Build configuration list for PBXNativeTarget "ComputerSolitaireTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4B75C1ED2F1A233500761A12 /* Debug */,
+				4B75C1EE2F1A233500761A12 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

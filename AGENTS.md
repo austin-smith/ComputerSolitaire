@@ -43,3 +43,31 @@ This file defines hard project constraints for any coding agent working in this 
 - No speculative abstraction layers that make SwiftUI code harder to read.
 
 When in doubt, choose the simplest modern SwiftUI-first solution.
+
+## Build Workflow
+
+This command builds the macOS destination only.
+
+From repo root (`/Users/austinsmith/Developer/Repos/ComputerSolitaire`), run:
+
+```bash
+/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild \
+  -project ComputerSolitaire.xcodeproj \
+  -scheme ComputerSolitaire \
+  -configuration Debug \
+  -destination 'generic/platform=macOS' \
+  build
+```
+
+## Test Workflow
+
+From repo root (`/Users/austinsmith/Developer/Repos/ComputerSolitaire`), run:
+
+```bash
+/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild \
+  -project ComputerSolitaire.xcodeproj \
+  -scheme ComputerSolitaire \
+  -configuration Debug \
+  -destination 'platform=macOS' \
+  test
+```
