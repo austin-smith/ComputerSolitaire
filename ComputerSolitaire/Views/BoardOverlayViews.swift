@@ -42,6 +42,29 @@ struct UndoOverlayView: View {
     }
 }
 
+struct WinCascadeOverlayView: View {
+    let cards: [WinCascadeCardState]
+
+    var body: some View {
+        ForEach(cards) { item in
+            let isVisible = item.elapsed >= item.activationDelay
+            CardView(
+                card: item.card,
+                isSelected: false,
+                cardSize: item.size,
+                isCardTiltEnabled: false,
+                cardTilts: .constant([:])
+            )
+            .rotationEffect(.degrees(item.rotationDegrees))
+            .position(item.position)
+            .opacity(isVisible ? 1 : 0)
+            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 private struct DrawOverlayCardView: View {
     let card: Card
     let cardSize: CGSize
