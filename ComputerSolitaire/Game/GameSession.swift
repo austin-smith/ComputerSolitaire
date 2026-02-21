@@ -25,6 +25,7 @@ final class SolitaireViewModel {
     private(set) var score: Int = 0
     private(set) var gameStartedAt: Date = .now
     private var hasAppliedTimeBonus = false
+    private(set) var finalElapsedSeconds: Int?
     private var pauseStartedAt: Date?
     private(set) var stockDrawCount: Int = 3
     private var scoringDrawCount: Int = DrawMode.three.rawValue
@@ -92,6 +93,10 @@ final class SolitaireViewModel {
         activeHint != nil
     }
 
+    var isClockAdvancing: Bool {
+        pauseStartedAt == nil && finalElapsedSeconds == nil
+    }
+
     func requestHint() {
         guard !isWin else {
             clearHint()
@@ -144,6 +149,9 @@ final class SolitaireViewModel {
     }
 
     func elapsedActiveSeconds(at date: Date = .now) -> Int {
+        if let finalElapsedSeconds {
+            return finalElapsedSeconds
+        }
         let effectiveNow = min(pauseStartedAt ?? date, date)
         return max(0, Int(effectiveNow.timeIntervalSince(gameStartedAt)))
     }
@@ -179,6 +187,7 @@ final class SolitaireViewModel {
         score = 0
         gameStartedAt = .now
         hasAppliedTimeBonus = false
+        finalElapsedSeconds = nil
         pauseStartedAt = nil
         stockDrawCount = drawMode.rawValue
         scoringDrawCount = drawMode.rawValue
@@ -200,6 +209,7 @@ final class SolitaireViewModel {
         score = 0
         gameStartedAt = .now
         hasAppliedTimeBonus = false
+        finalElapsedSeconds = nil
         pauseStartedAt = nil
         scoringDrawCount = stockDrawCount
         hasStartedTrackedGame = true
@@ -236,6 +246,7 @@ final class SolitaireViewModel {
         movesCount = snapshot.movesCount
         score = snapshot.score
         hasAppliedTimeBonus = snapshot.hasAppliedTimeBonus
+        finalElapsedSeconds = nil
         selection = nil
         isDragging = false
         pendingAutoMove = nil
@@ -255,6 +266,7 @@ final class SolitaireViewModel {
             gameStartedAt: gameStartedAt,
             pauseStartedAt: pauseStartedAt,
             hasAppliedTimeBonus: hasAppliedTimeBonus,
+            finalElapsedSeconds: finalElapsedSeconds,
             stockDrawCount: stockDrawCount,
             scoringDrawCount: scoringDrawCount,
             history: history,
@@ -275,6 +287,7 @@ final class SolitaireViewModel {
         gameStartedAt = sanitizedPayload.gameStartedAt
         pauseStartedAt = sanitizedPayload.pauseStartedAt
         hasAppliedTimeBonus = sanitizedPayload.hasAppliedTimeBonus
+        finalElapsedSeconds = sanitizedPayload.finalElapsedSeconds
         if pauseStartedAt == nil, !hasAppliedTimeBonus {
             gameStartedAt = gameStartedAt.addingTimeInterval(offlineDurationSinceSave)
         }
@@ -673,6 +686,7 @@ private extension SolitaireViewModel {
             pointsLostPerSecond: Scoring.timedPointsLostPerSecond
         )
         score = Scoring.clamped(score + bonus)
+        finalElapsedSeconds = elapsedSeconds
         hasAppliedTimeBonus = true
         pauseStartedAt = nil
         finalizeCurrentGameIfNeeded(didWin: true, endedAt: endedAt)

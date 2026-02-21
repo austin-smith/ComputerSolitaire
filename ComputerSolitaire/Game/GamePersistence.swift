@@ -31,6 +31,7 @@ struct SavedGamePayload: Codable {
     let gameStartedAt: Date
     let pauseStartedAt: Date?
     let hasAppliedTimeBonus: Bool
+    let finalElapsedSeconds: Int?
     let stockDrawCount: Int
     let scoringDrawCount: Int
     let history: [GameSnapshot]
@@ -47,6 +48,7 @@ struct SavedGamePayload: Codable {
         case gameStartedAt
         case pauseStartedAt
         case hasAppliedTimeBonus
+        case finalElapsedSeconds
         case stockDrawCount
         case scoringDrawCount
         case history
@@ -64,6 +66,7 @@ struct SavedGamePayload: Codable {
         gameStartedAt: Date = .now,
         pauseStartedAt: Date? = nil,
         hasAppliedTimeBonus: Bool = false,
+        finalElapsedSeconds: Int? = nil,
         stockDrawCount: Int,
         scoringDrawCount: Int? = nil,
         history: [GameSnapshot],
@@ -79,6 +82,7 @@ struct SavedGamePayload: Codable {
         self.gameStartedAt = gameStartedAt
         self.pauseStartedAt = pauseStartedAt
         self.hasAppliedTimeBonus = hasAppliedTimeBonus
+        self.finalElapsedSeconds = finalElapsedSeconds.map { max(0, $0) }
         self.stockDrawCount = stockDrawCount
         self.scoringDrawCount = scoringDrawCount ?? stockDrawCount
         self.history = history
@@ -97,6 +101,7 @@ struct SavedGamePayload: Codable {
         gameStartedAt = try container.decodeIfPresent(Date.self, forKey: .gameStartedAt) ?? .now
         pauseStartedAt = try container.decodeIfPresent(Date.self, forKey: .pauseStartedAt)
         hasAppliedTimeBonus = try container.decodeIfPresent(Bool.self, forKey: .hasAppliedTimeBonus) ?? false
+        finalElapsedSeconds = try container.decodeIfPresent(Int.self, forKey: .finalElapsedSeconds).map { max(0, $0) }
         stockDrawCount = try container.decode(Int.self, forKey: .stockDrawCount)
         scoringDrawCount = try container.decodeIfPresent(Int.self, forKey: .scoringDrawCount) ?? stockDrawCount
         history = try container.decode([GameSnapshot].self, forKey: .history)
@@ -118,6 +123,10 @@ struct SavedGamePayload: Codable {
         let sanitizedPauseStartedAt = pauseStartedAt
             .map { min($0, .now) }
             .flatMap { $0 >= sanitizedStartedAt ? $0 : nil }
+        let sanitizedFinalElapsedSeconds: Int? = {
+            guard hasAppliedTimeBonus else { return nil }
+            return finalElapsedSeconds.map { max(0, $0) }
+        }()
         let sanitizedHasStartedTrackedGame = hasStartedTrackedGame
         let sanitizedIsCurrentGameFinalized = sanitizedHasStartedTrackedGame ? isCurrentGameFinalized : false
         let sanitizedHistory = history
@@ -157,6 +166,7 @@ struct SavedGamePayload: Codable {
             gameStartedAt: sanitizedStartedAt,
             pauseStartedAt: sanitizedPauseStartedAt,
             hasAppliedTimeBonus: hasAppliedTimeBonus,
+            finalElapsedSeconds: sanitizedFinalElapsedSeconds,
             stockDrawCount: sanitizedStockDrawCount,
             scoringDrawCount: sanitizedScoringDrawCount,
             history: Array(sanitizedHistory),

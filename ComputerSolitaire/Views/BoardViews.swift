@@ -115,8 +115,7 @@ struct HeaderView: View {
                 StatTileView(
                     title: "Score",
                     value: "\(score)",
-                    systemImage: "star.fill",
-                    isEmphasized: true
+                    systemImage: "star.fill"
                 )
             }
             .buttonStyle(.plain)

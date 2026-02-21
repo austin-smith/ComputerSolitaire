@@ -3,7 +3,7 @@ import SwiftUI
 struct RulesAndScoringView: View {
     @Environment(\.dismiss) private var dismiss
 
-    private enum GuideSection: String, CaseIterable, Identifiable {
+    enum Section: String, CaseIterable, Identifiable {
         case rules = "Rules"
         case scoring = "Scoring"
         case terms = "Terms"
@@ -11,7 +11,11 @@ struct RulesAndScoringView: View {
         var id: String { rawValue }
     }
 
-    @State private var selectedSection: GuideSection = .rules
+    @State private var selectedSection: Section
+
+    init(initialSection: Section = .rules) {
+        _selectedSection = State(initialValue: initialSection)
+    }
 
     private struct TermRow: Identifiable {
         let id = UUID()
@@ -51,7 +55,7 @@ struct RulesAndScoringView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Picker("Guide Section", selection: $selectedSection) {
-                    ForEach(GuideSection.allCases) { section in
+                    ForEach(Section.allCases) { section in
                         Text(section.rawValue).tag(section)
                     }
                 }

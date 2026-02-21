@@ -12,6 +12,7 @@ This file defines hard project constraints for any coding agent working in this 
   - iPadOS 26+
   - macOS 26+
 - We do **not** support older OS versions. Avoid backward-compatibility code paths.
+- While building a feature, stay focused on the current-platform implementation; do not interrupt work to add backward-compatibility support unless a maintainer explicitly requests it.
 - Do **not** introduce `if #available(...)` checks for older platforms unless a maintainer explicitly asks for them.
 
 ## Product Direction

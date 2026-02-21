@@ -112,6 +112,7 @@ struct ContentView: View {
     @State private var hiddenCardIDs: Set<UUID> = []
     @State private var wasteFanProgress: [UUID: Double] = [:]
     @State private var boardContentSize: CGSize = .zero
+    @State private var boardViewportSize: CGSize = .zero
     @State private var previousWasteCount: Int = 0
     @State private var previousStockCount: Int = 0
     @State private var hasLoadedGame = false
@@ -119,9 +120,11 @@ struct ContentView: View {
     @State private var autosaveTask: Task<Void, Never>?
     @State private var isAutoFinishing = false
     @State private var isShowingRulesAndScoring = false
+    @State private var rulesAndScoringInitialSection: RulesAndScoringView.Section = .rules
     @State private var isShowingStats = false
     @State private var timeScoringPauseReasons: Set<TimeScoringPauseReason> = []
     @State private var hintHighlightOpacity: Double = 0
+    @State private var winCelebration = WinCelebrationController()
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
@@ -174,14 +177,10 @@ struct ContentView: View {
                 ToolbarItemGroup(placement: .bottomBar) {
                     Menu {
                         Button("New Game", systemImage: "plus") {
-                            stopAutoFinish()
-                            viewModel.newGame(drawMode: drawMode)
-                            persistGameNow()
+                            startNewGameFromUI()
                         }
                         Button("Redeal", systemImage: "arrow.clockwise") {
-                            stopAutoFinish()
-                            viewModel.redeal()
-                            persistGameNow()
+                            redealFromUI()
                         }
                         Button("Auto Finish", systemImage: "bolt") {
                             startAutoFinish()
@@ -219,14 +218,10 @@ struct ContentView: View {
 #if os(macOS)
                 ToolbarItemGroup(placement: .automatic) {
                     Button("New Game") {
-                        stopAutoFinish()
-                        viewModel.newGame(drawMode: drawMode)
-                        persistGameNow()
+                        startNewGameFromUI()
                     }
                     Button("Redeal") {
-                        stopAutoFinish()
-                        viewModel.redeal()
-                        persistGameNow()
+                        redealFromUI()
                     }
                 }
                 ToolbarItem(placement: .automatic) {
@@ -295,7 +290,7 @@ struct ContentView: View {
             }
             .sheet(isPresented: $isShowingRulesAndScoring) {
                 NavigationStack {
-                    RulesAndScoringView()
+                    RulesAndScoringView(initialSection: rulesAndScoringInitialSection)
                 }
             }
             .sheet(isPresented: $isShowingStats) {
@@ -317,7 +312,7 @@ struct ContentView: View {
                 isShowingSettings = true
             }
             .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
-                isShowingRulesAndScoring = true
+                presentRulesAndScoring(initialSection: .rules)
             }
             .onReceive(NotificationCenter.default.publisher(for: .openStatistics)) { _ in
                 isShowingStats = true
@@ -379,6 +374,7 @@ struct ContentView: View {
                 initializeGameIfNeeded()
             }
             .onDisappear {
+                winCelebration.cancelTask()
                 persistGameNow()
             }
         )
@@ -400,6 +396,7 @@ struct ContentView: View {
             guard let destination = viewModel.hintedDestination else { return nil }
             return dropTarget(for: destination)
         }()
+        let openScoringDetails: () -> Void = { presentRulesAndScoring(initialSection: .scoring) }
 #if os(iOS)
         let isPadLandscape = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
 #endif
@@ -409,13 +406,13 @@ struct ContentView: View {
             if isBoardReady {
                 let boardLayout = VStack(alignment: .leading, spacing: metrics.rowSpacing) {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
-                        HeaderView(
-                            movesCount: viewModel.movesCount,
-                            elapsedSeconds: viewModel.elapsedActiveSeconds(at: context.date),
-                            score: viewModel.displayScore(at: context.date),
-                            onScoreTapped: { isShowingStats = true }
+                        let headerMetrics = headerMetrics(at: context.date)
+                        headerView(
+                            elapsedSeconds: headerMetrics.elapsedSeconds,
+                            score: headerMetrics.score,
+                            boardContentWidth: boardContentWidth,
+                            onScoreTapped: openScoringDetails
                         )
-                        .frame(width: boardContentWidth, alignment: .leading)
                     }
                     TopRowView(
                         viewModel: viewModel,
@@ -429,7 +426,7 @@ struct ContentView: View {
                         hintHighlightOpacity: hintHighlightOpacity,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
-                        hiddenCardIDs: hiddenCardIDs,
+                        hiddenCardIDs: effectiveHiddenCardIDs,
                         hintedCardIDs: viewModel.hintedCardIDs,
                         hintWiggleToken: viewModel.hintWiggleToken,
                         drawingCardIDs: drawingCardIDs,
@@ -448,7 +445,7 @@ struct ContentView: View {
                         hintHighlightOpacity: hintHighlightOpacity,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
-                        hiddenCardIDs: hiddenCardIDs,
+                        hiddenCardIDs: effectiveHiddenCardIDs,
                         hintedCardIDs: viewModel.hintedCardIDs,
                         hintWiggleToken: viewModel.hintWiggleToken,
                         dragGesture: dragGesture(for:)
@@ -456,6 +453,7 @@ struct ContentView: View {
                     .frame(width: boardContentWidth, alignment: .leading)
                     Spacer(minLength: 0)
                 }
+                .allowsHitTesting(!isWinCascadeAnimating)
 #if os(iOS)
                 .frame(
                     maxWidth: .infinity,
@@ -476,15 +474,6 @@ struct ContentView: View {
                     )
                     .scaleEffect(boardScaleFactor, anchor: .top)
 
-                if viewModel.isWin {
-                    WinOverlay(score: viewModel.score) {
-                        stopAutoFinish()
-                        viewModel.newGame(drawMode: drawMode)
-                        persistGameNow()
-                    }
-                    .transition(.opacity)
-                }
-
                 Button("Cancel Drag") {
                     handleEscape()
                 }
@@ -501,6 +490,7 @@ struct ContentView: View {
         }
         .onPreferenceChange(DropTargetFrameKey.self) { frames in
             dropFrames = frames
+            refreshLoadedWinPresentationIfNeeded()
         }
         .onPreferenceChange(StockFrameKey.self) { frame in
             stockFrame = frame
@@ -515,6 +505,26 @@ struct ContentView: View {
         }
         .onPreferenceChange(BoardContentSizeKey.self) { size in
             boardContentSize = size
+        }
+        .onAppear {
+            boardViewportSize = geometry.size
+            refreshLoadedWinPresentationIfNeeded()
+        }
+        .onChange(of: geometry.size) { _, newSize in
+            boardViewportSize = newSize
+            refreshLoadedWinPresentationIfNeeded()
+        }
+        .onChange(of: viewModel.isWin) { _, isWin in
+            guard !isHydratingGame else { return }
+            if isWin {
+                winCelebration.beginIfNeededForWin(
+                    foundations: viewModel.state.foundations,
+                    dropFrames: dropFrames,
+                    boardViewportSize: boardViewportSize
+                )
+            } else if winCelebration.phase != .idle {
+                winCelebration.reset(to: .idle)
+            }
         }
         .onChange(of: viewModel.state.waste.count) { _, newValue in
             let stockCount = viewModel.state.stock.count
@@ -552,6 +562,8 @@ struct ContentView: View {
                         progress: undoAnimationProgress
                     )
                     .zIndex(75)
+                    WinCascadeOverlayView(cards: winCelebration.cards)
+                        .zIndex(90)
                     DragOverlayView(
                         viewModel: viewModel,
                         cardFrames: dragOverlayCardFrames,
@@ -566,14 +578,61 @@ struct ContentView: View {
                         overlayTilt: overlayTilt
                     )
                     .zIndex(100)
+                    if viewModel.isWin && winCelebration.phase != .idle {
+                        WinOverlay(score: viewModel.score) {
+                            startNewGameFromUI()
+                        }
+                        .zIndex(200)
+                        .transition(.opacity)
+                    }
                 }
             }
             .accessibilityHidden(true)
         }
     }
 
+    private func headerMetrics(at date: Date) -> (elapsedSeconds: Int, score: Int) {
+        if viewModel.isClockAdvancing {
+            return (viewModel.elapsedActiveSeconds(at: date), viewModel.displayScore(at: date))
+        }
+        return (viewModel.elapsedActiveSeconds(), viewModel.displayScore())
+    }
+
+    private func presentRulesAndScoring(initialSection: RulesAndScoringView.Section = .rules) {
+        rulesAndScoringInitialSection = initialSection
+        isShowingRulesAndScoring = true
+    }
+
+    private func headerView(
+        elapsedSeconds: Int,
+        score: Int,
+        boardContentWidth: CGFloat,
+        onScoreTapped: @escaping () -> Void
+    ) -> some View {
+        HeaderView(
+            movesCount: viewModel.movesCount,
+            elapsedSeconds: elapsedSeconds,
+            score: score,
+            onScoreTapped: onScoreTapped
+        )
+        .frame(width: boardContentWidth, alignment: .leading)
+    }
+
+    private var effectiveHiddenCardIDs: Set<UUID> {
+        hiddenCardIDs.union(winCelebration.hiddenFoundationCardIDs)
+    }
+
+    private var isWinCascadeAnimating: Bool {
+        winCelebration.isAnimating
+    }
+
     private var isUndoDisabled: Bool {
-        !viewModel.canUndo || isUndoAnimating || isDroppingCards || isReturningDrag || viewModel.isDragging
+        !viewModel.canUndo
+            || isUndoAnimating
+            || isDroppingCards
+            || isReturningDrag
+            || viewModel.isDragging
+            || isWinCascadeAnimating
     }
 
     private var isAutoFinishDisabled: Bool {
@@ -583,6 +642,7 @@ struct ContentView: View {
             || isReturningDrag
             || viewModel.isDragging
             || viewModel.pendingAutoMove != nil
+            || isWinCascadeAnimating
     }
 
     private var isHintDisabled: Bool {
@@ -593,12 +653,27 @@ struct ContentView: View {
             || viewModel.isDragging
             || viewModel.pendingAutoMove != nil
             || !viewModel.isHintAvailable
+            || isWinCascadeAnimating
     }
 
     private func triggerHint() {
         guard !isHintDisabled else { return }
         stopAutoFinish()
         viewModel.requestHint()
+    }
+
+    private func startNewGameFromUI() {
+        stopAutoFinish()
+        winCelebration.reset(to: .idle)
+        viewModel.newGame(drawMode: drawMode)
+        persistGameNow()
+    }
+
+    private func redealFromUI() {
+        stopAutoFinish()
+        winCelebration.reset(to: .idle)
+        viewModel.redeal()
+        persistGameNow()
     }
 
     private func startAutoFinish() {
@@ -894,7 +969,6 @@ struct ContentView: View {
         }
         return plan.travelDuration + plan.totalDelay
     }
-
 
     private func destination(for target: DropTarget) -> Destination {
         switch target {
@@ -1194,9 +1268,16 @@ struct ContentView: View {
                 drawModeRawValue = viewModel.stockDrawCount
             }
         } else {
+            winCelebration.reset(to: .idle)
             viewModel.newGame(drawMode: drawMode)
             persistGameNow()
         }
+        winCelebration.syncForLoadedGame(
+            foundations: viewModel.state.foundations,
+            isWin: viewModel.isWin,
+            dropFrames: dropFrames,
+            boardViewportSize: boardViewportSize
+        )
 
         timeScoringPauseReasons = []
         if shouldPauseForLifecycle {
@@ -1222,6 +1303,18 @@ struct ContentView: View {
             guard !Task.isCancelled else { return }
             persistGameNow()
         }
+    }
+
+    private func refreshLoadedWinPresentationIfNeeded() {
+        guard hasLoadedGame, viewModel.isWin else { return }
+        guard winCelebration.phase == .completed else { return }
+        guard winCelebration.cards.isEmpty else { return }
+        winCelebration.syncForLoadedGame(
+            foundations: viewModel.state.foundations,
+            isWin: true,
+            dropFrames: dropFrames,
+            boardViewportSize: boardViewportSize
+        )
     }
 
     private func syncLifecyclePauseState() {
