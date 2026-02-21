@@ -420,14 +420,26 @@ struct ContentView: View {
             TableBackground()
             if isBoardReady {
                 let boardLayout = VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        HeaderView(
-                            movesCount: viewModel.movesCount,
-                            elapsedSeconds: viewModel.elapsedActiveSeconds(at: context.date),
-                            score: viewModel.displayScore(at: context.date),
-                            onScoreTapped: { isShowingStats = true }
-                        )
-                        .frame(width: boardContentWidth, alignment: .leading)
+                    Group {
+                        if viewModel.isClockAdvancing {
+                            TimelineView(.periodic(from: .now, by: 1)) { context in
+                                HeaderView(
+                                    movesCount: viewModel.movesCount,
+                                    elapsedSeconds: viewModel.elapsedActiveSeconds(at: context.date),
+                                    score: viewModel.displayScore(at: context.date),
+                                    onScoreTapped: { isShowingStats = true }
+                                )
+                                .frame(width: boardContentWidth, alignment: .leading)
+                            }
+                        } else {
+                            HeaderView(
+                                movesCount: viewModel.movesCount,
+                                elapsedSeconds: viewModel.elapsedActiveSeconds(),
+                                score: viewModel.displayScore(),
+                                onScoreTapped: { isShowingStats = true }
+                            )
+                            .frame(width: boardContentWidth, alignment: .leading)
+                        }
                     }
                     TopRowView(
                         viewModel: viewModel,
