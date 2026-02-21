@@ -9,7 +9,8 @@ xcuserdata/
 ## Visual Studio Code
 .vscode
 
-## Build folder
+## Build artifacts
+build/
 .build/
 .derivedData/
 
