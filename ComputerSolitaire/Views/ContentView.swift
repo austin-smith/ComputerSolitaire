@@ -120,6 +120,7 @@ struct ContentView: View {
     @State private var autosaveTask: Task<Void, Never>?
     @State private var isAutoFinishing = false
     @State private var isShowingRulesAndScoring = false
+    @State private var rulesAndScoringInitialSection: RulesAndScoringView.Section = .rules
     @State private var isShowingStats = false
     @State private var timeScoringPauseReasons: Set<TimeScoringPauseReason> = []
     @State private var hintHighlightOpacity: Double = 0
@@ -306,7 +307,7 @@ struct ContentView: View {
             }
             .sheet(isPresented: $isShowingRulesAndScoring) {
                 NavigationStack {
-                    RulesAndScoringView()
+                    RulesAndScoringView(initialSection: rulesAndScoringInitialSection)
                 }
             }
             .sheet(isPresented: $isShowingStats) {
@@ -328,7 +329,7 @@ struct ContentView: View {
                 isShowingSettings = true
             }
             .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
-                isShowingRulesAndScoring = true
+                presentRulesAndScoring(initialSection: .rules)
             }
             .onReceive(NotificationCenter.default.publisher(for: .openStatistics)) { _ in
                 isShowingStats = true
@@ -412,6 +413,7 @@ struct ContentView: View {
             guard let destination = viewModel.hintedDestination else { return nil }
             return dropTarget(for: destination)
         }()
+        let openScoringDetails: () -> Void = { presentRulesAndScoring(initialSection: .scoring) }
 #if os(iOS)
         let isPadLandscape = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
 #endif
@@ -420,26 +422,14 @@ struct ContentView: View {
             TableBackground()
             if isBoardReady {
                 let boardLayout = VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                    Group {
-                        if viewModel.isClockAdvancing {
-                            TimelineView(.periodic(from: .now, by: 1)) { context in
-                                HeaderView(
-                                    movesCount: viewModel.movesCount,
-                                    elapsedSeconds: viewModel.elapsedActiveSeconds(at: context.date),
-                                    score: viewModel.displayScore(at: context.date),
-                                    onScoreTapped: { isShowingStats = true }
-                                )
-                                .frame(width: boardContentWidth, alignment: .leading)
-                            }
-                        } else {
-                            HeaderView(
-                                movesCount: viewModel.movesCount,
-                                elapsedSeconds: viewModel.elapsedActiveSeconds(),
-                                score: viewModel.displayScore(),
-                                onScoreTapped: { isShowingStats = true }
-                            )
-                            .frame(width: boardContentWidth, alignment: .leading)
-                        }
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let headerMetrics = headerMetrics(at: context.date)
+                        headerView(
+                            elapsedSeconds: headerMetrics.elapsedSeconds,
+                            score: headerMetrics.score,
+                            boardContentWidth: boardContentWidth,
+                            onScoreTapped: openScoringDetails
+                        )
                     }
                     TopRowView(
                         viewModel: viewModel,
@@ -620,6 +610,33 @@ struct ContentView: View {
             }
             .accessibilityHidden(true)
         }
+    }
+
+    private func headerMetrics(at date: Date) -> (elapsedSeconds: Int, score: Int) {
+        if viewModel.isClockAdvancing {
+            return (viewModel.elapsedActiveSeconds(at: date), viewModel.displayScore(at: date))
+        }
+        return (viewModel.elapsedActiveSeconds(), viewModel.displayScore())
+    }
+
+    private func presentRulesAndScoring(initialSection: RulesAndScoringView.Section = .rules) {
+        rulesAndScoringInitialSection = initialSection
+        isShowingRulesAndScoring = true
+    }
+
+    private func headerView(
+        elapsedSeconds: Int,
+        score: Int,
+        boardContentWidth: CGFloat,
+        onScoreTapped: @escaping () -> Void
+    ) -> some View {
+        HeaderView(
+            movesCount: viewModel.movesCount,
+            elapsedSeconds: elapsedSeconds,
+            score: score,
+            onScoreTapped: onScoreTapped
+        )
+        .frame(width: boardContentWidth, alignment: .leading)
     }
 
     private var effectiveHiddenCardIDs: Set<UUID> {
