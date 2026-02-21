@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   macos-unit-tests:
-    name: macOS Unit Tests
+    name: macOS Build & Test
     runs-on: macos-26
 
     steps:
@@ -40,3 +40,22 @@ jobs:
         with:
           name: macos-test-results
           path: ${{ runner.temp }}/ComputerSolitaireTests.xcresult
+
+  ios-build:
+    name: iOS Build
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build app (iOS Simulator)
+        run: |
+          xcodebuild build \
+            -project ComputerSolitaire.xcodeproj \
+            -scheme ComputerSolitaire \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
