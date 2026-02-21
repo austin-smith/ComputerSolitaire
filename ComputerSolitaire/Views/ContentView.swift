@@ -505,6 +505,7 @@ struct ContentView: View {
         }
         .onPreferenceChange(DropTargetFrameKey.self) { frames in
             dropFrames = frames
+            refreshLoadedWinPresentationIfNeeded()
         }
         .onPreferenceChange(StockFrameKey.self) { frame in
             stockFrame = frame
@@ -522,11 +523,14 @@ struct ContentView: View {
         }
         .onAppear {
             boardViewportSize = geometry.size
+            refreshLoadedWinPresentationIfNeeded()
         }
         .onChange(of: geometry.size) { _, newSize in
             boardViewportSize = newSize
+            refreshLoadedWinPresentationIfNeeded()
         }
         .onChange(of: viewModel.isWin) { _, isWin in
+            guard !isHydratingGame else { return }
             if isWin {
                 winCelebration.beginIfNeededForWin(
                     foundations: viewModel.state.foundations,
@@ -1279,7 +1283,12 @@ struct ContentView: View {
             viewModel.newGame(drawMode: drawMode)
             persistGameNow()
         }
-        winCelebration.syncForLoadedGame(isWin: viewModel.isWin)
+        winCelebration.syncForLoadedGame(
+            foundations: viewModel.state.foundations,
+            isWin: viewModel.isWin,
+            dropFrames: dropFrames,
+            boardViewportSize: boardViewportSize
+        )
 
         timeScoringPauseReasons = []
         if shouldPauseForLifecycle {
@@ -1305,6 +1314,18 @@ struct ContentView: View {
             guard !Task.isCancelled else { return }
             persistGameNow()
         }
+    }
+
+    private func refreshLoadedWinPresentationIfNeeded() {
+        guard hasLoadedGame, viewModel.isWin else { return }
+        guard winCelebration.phase == .completed else { return }
+        guard winCelebration.cards.isEmpty else { return }
+        winCelebration.syncForLoadedGame(
+            foundations: viewModel.state.foundations,
+            isWin: true,
+            dropFrames: dropFrames,
+            boardViewportSize: boardViewportSize
+        )
     }
 
     private func syncLifecyclePauseState() {

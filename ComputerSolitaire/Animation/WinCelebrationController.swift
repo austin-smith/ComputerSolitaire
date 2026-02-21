@@ -31,7 +31,7 @@ final class WinCelebrationController {
         isDebugMode = false
         begin(
             foundations: foundations,
-            hiddenFoundationCardIDs: Set(foundations.flatMap { pile in pile.map(\.id) }),
+            hiddenFoundationCardIDs: Self.foundationCardIDs(from: foundations),
             dropFrames: dropFrames,
             boardViewportSize: boardViewportSize,
             completedPhaseAfterAnimation: true
@@ -46,7 +46,7 @@ final class WinCelebrationController {
         isDebugMode = true
         begin(
             foundations: Self.debugWinningFoundations(from: liveFoundations),
-            hiddenFoundationCardIDs: Set(liveFoundations.flatMap { pile in pile.map(\.id) }),
+            hiddenFoundationCardIDs: Self.foundationCardIDs(from: liveFoundations),
             dropFrames: dropFrames,
             boardViewportSize: boardViewportSize,
             completedPhaseAfterAnimation: true
@@ -62,8 +62,31 @@ final class WinCelebrationController {
         self.phase = phase
     }
 
-    func syncForLoadedGame(isWin: Bool) {
-        reset(to: isWin ? .completed : .idle)
+    func syncForLoadedGame(
+        foundations: [[Card]],
+        isWin: Bool,
+        dropFrames: [DropTarget: DropTargetGeometry],
+        boardViewportSize: CGSize
+    ) {
+        cascadeTask?.cancel()
+        cascadeTask = nil
+        isDebugMode = false
+        if isWin {
+            let completedCards = completedStatesForLoadedWin(
+                foundations: foundations,
+                dropFrames: dropFrames,
+                boardViewportSize: boardViewportSize
+            )
+            cards = completedCards
+            hiddenFoundationCardIDs = completedCards.isEmpty
+                ? []
+                : Self.foundationCardIDs(from: foundations)
+            phase = .completed
+        } else {
+            cards = []
+            hiddenFoundationCardIDs = []
+            phase = .idle
+        }
     }
 
     func cancelTask() {
@@ -78,6 +101,7 @@ final class WinCelebrationController {
         boardViewportSize: CGSize,
         completedPhaseAfterAnimation: Bool
     ) {
+        self.hiddenFoundationCardIDs = hiddenFoundationCardIDs
         let boardBounds = CGRect(origin: .zero, size: boardViewportSize)
         guard boardBounds.width > 0, boardBounds.height > 0 else {
             phase = completedPhaseAfterAnimation ? .completed : .idle
@@ -112,7 +136,6 @@ final class WinCelebrationController {
 
         cascadeTask?.cancel()
         cards = initialStates
-        self.hiddenFoundationCardIDs = hiddenFoundationCardIDs
         phase = .animating
 
         cascadeTask = Task { @MainActor in
@@ -142,6 +165,42 @@ final class WinCelebrationController {
         cascadeTask?.cancel()
         cascadeTask = nil
         phase = completedPhaseAfterAnimation ? .completed : .idle
+    }
+
+    private static func foundationCardIDs(from foundations: [[Card]]) -> Set<UUID> {
+        Set(foundations.flatMap { pile in pile.map(\.id) })
+    }
+
+    private func completedStatesForLoadedWin(
+        foundations: [[Card]],
+        dropFrames: [DropTarget: DropTargetGeometry],
+        boardViewportSize: CGSize
+    ) -> [WinCascadeCardState] {
+        let boardBounds = CGRect(origin: .zero, size: boardViewportSize)
+        guard boardBounds.width > 0, boardBounds.height > 0 else { return [] }
+
+        var launchFrames: [Int: CGRect] = [:]
+        for index in 0..<4 {
+            if let frame = dropFrames[.foundation(index)]?.snapFrame, frame != .zero {
+                launchFrames[index] = frame
+            }
+        }
+
+        let fallbackLaunchFrame = launchFrames[0]
+            ?? launchFrames.values.first
+            ?? CGRect(
+                x: boardBounds.midX - 50,
+                y: max(0, boardBounds.height * 0.22 - 72),
+                width: 100,
+                height: 145
+            )
+
+        return WinCascadeCoordinator.makeCompletedStates(
+            foundations: foundations,
+            foundationFrames: launchFrames,
+            fallbackLaunchFrame: fallbackLaunchFrame,
+            boardBounds: boardBounds
+        )
     }
 
     private static func debugWinningFoundations(from foundations: [[Card]]) -> [[Card]] {

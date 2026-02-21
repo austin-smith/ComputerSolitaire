@@ -148,6 +148,34 @@ enum WinCascadeCoordinator {
         }
     }
 
+    static func makeCompletedStates(
+        foundations: [[Card]],
+        foundationFrames: [Int: CGRect],
+        fallbackLaunchFrame: CGRect,
+        boardBounds: CGRect
+    ) -> [WinCascadeCardState] {
+        guard boardBounds.width > 0, boardBounds.height > 0 else { return [] }
+        var states = makeInitialStates(
+            foundations: foundations,
+            foundationFrames: foundationFrames,
+            fallbackLaunchFrame: fallbackLaunchFrame
+        )
+        guard !states.isEmpty else { return [] }
+
+        let tick: TimeInterval = 1.0 / 60.0
+        let maxSimulatedDuration = maxActiveLifetime + 3
+        let maxSteps = Int(ceil(maxSimulatedDuration / tick))
+
+        for _ in 0..<maxSteps {
+            if states.allSatisfy(\.isSettled) {
+                break
+            }
+            step(states: &states, deltaTime: tick, boardBounds: boardBounds)
+        }
+
+        return states
+    }
+
     private static func interleavedLaunchCards(from foundations: [[Card]]) -> [LaunchCard] {
         let maxDepth = foundations.map(\.count).max() ?? 0
         guard maxDepth > 0 else { return [] }
