@@ -13,6 +13,18 @@ enum AutoMoveAdvisor {
         )?.destination
     }
 
+    static func bestAdvisableDestination(
+        for selection: Selection,
+        in state: GameState,
+        stockDrawCount: Int
+    ) -> Destination? {
+        bestAdvisableMoveEvaluation(
+            for: selection,
+            in: state,
+            stockDrawCount: stockDrawCount
+        )?.destination
+    }
+
     static func bestMoveEvaluation(
         for selection: Selection,
         in state: GameState,
@@ -27,7 +39,27 @@ enum AutoMoveAdvisor {
             stockDrawCount: stockDrawCount,
             baselineMobility: baselineMobility,
             baselineFoundationCount: baselineFoundationCount,
-            baselineEmptyTableauCount: baselineEmptyTableauCount
+            baselineEmptyTableauCount: baselineEmptyTableauCount,
+            requireAdvisable: false
+        )
+    }
+
+    static func bestAdvisableMoveEvaluation(
+        for selection: Selection,
+        in state: GameState,
+        stockDrawCount: Int
+    ) -> MoveEvaluation? {
+        let baselineMobility = mobilityScore(in: state, stockDrawCount: stockDrawCount)
+        let baselineFoundationCount = totalFoundationCards(in: state)
+        let baselineEmptyTableauCount = countEmptyTableauPiles(in: state)
+        return bestEvaluation(
+            for: selection,
+            in: state,
+            stockDrawCount: stockDrawCount,
+            baselineMobility: baselineMobility,
+            baselineFoundationCount: baselineFoundationCount,
+            baselineEmptyTableauCount: baselineEmptyTableauCount,
+            requireAdvisable: true
         )
     }
 
@@ -65,6 +97,34 @@ enum AutoMoveAdvisor {
 
         return destinations
     }
+
+    static func candidateSelections(in state: GameState) -> [Selection] {
+        var selections: [Selection] = []
+
+        if let topWasteCard = state.waste.last, state.wasteDrawCount > 0 {
+            selections.append(Selection(source: .waste, cards: [topWasteCard]))
+        }
+
+        for foundationIndex in state.foundations.indices {
+            guard let topFoundationCard = state.foundations[foundationIndex].last else { continue }
+            selections.append(
+                Selection(source: .foundation(pile: foundationIndex), cards: [topFoundationCard])
+            )
+        }
+
+        for pileIndex in state.tableau.indices {
+            let pile = state.tableau[pileIndex]
+            for cardIndex in pile.indices where pile[cardIndex].isFaceUp {
+                let cards = Array(pile[cardIndex...])
+                guard isValidTableauSequence(cards) else { continue }
+                selections.append(
+                    Selection(source: .tableau(pile: pileIndex, index: cardIndex), cards: cards)
+                )
+            }
+        }
+
+        return selections
+    }
 }
 
 private extension AutoMoveAdvisor {
@@ -74,12 +134,51 @@ private extension AutoMoveAdvisor {
         stockDrawCount: Int,
         baselineMobility: Int,
         baselineFoundationCount: Int,
-        baselineEmptyTableauCount: Int
+        baselineEmptyTableauCount: Int,
+        requireAdvisable: Bool
     ) -> MoveEvaluation? {
-        let destinations = legalDestinations(for: selection, in: state)
-        guard !destinations.isEmpty else { return nil }
+        let evaluations = allEvaluations(
+            for: selection,
+            in: state,
+            stockDrawCount: stockDrawCount,
+            baselineMobility: baselineMobility,
+            baselineFoundationCount: baselineFoundationCount,
+            baselineEmptyTableauCount: baselineEmptyTableauCount
+        )
+        let filteredEvaluations = requireAdvisable
+            ? evaluations.filter {
+                isAdvisableMove(
+                    selection: selection,
+                    evaluation: $0,
+                    in: state,
+                    stockDrawCount: stockDrawCount
+                )
+            }
+            : evaluations
 
-        var bestEvaluation: MoveEvaluation?
+        guard var bestEvaluation = filteredEvaluations.first else { return nil }
+        for evaluation in filteredEvaluations.dropFirst() {
+            if MoveEvaluationRanking.isBetter(evaluation, than: bestEvaluation) {
+                bestEvaluation = evaluation
+            }
+        }
+        return bestEvaluation
+    }
+
+    static func allEvaluations(
+        for selection: Selection,
+        in state: GameState,
+        stockDrawCount: Int,
+        baselineMobility: Int,
+        baselineFoundationCount: Int,
+        baselineEmptyTableauCount: Int
+    ) -> [MoveEvaluation] {
+        let destinations = legalDestinations(for: selection, in: state)
+        guard !destinations.isEmpty else { return [] }
+
+        var evaluations: [MoveEvaluation] = []
+        evaluations.reserveCapacity(destinations.count)
+
         for destination in destinations {
             guard let nextState = simulatedState(
                 afterMoving: selection,
@@ -103,17 +202,136 @@ private extension AutoMoveAdvisor {
                 resultingMobility: nextMobility,
                 destinationPriority: destinationPriority(for: destination, in: state)
             )
+            evaluations.append(evaluation)
+        }
 
-            if let currentBest = bestEvaluation {
-                if MoveEvaluationRanking.isBetter(evaluation, than: currentBest) {
-                    bestEvaluation = evaluation
+        return evaluations
+    }
+
+    static func isAdvisableMove(
+        selection: Selection,
+        evaluation: MoveEvaluation,
+        in state: GameState,
+        stockDrawCount: Int
+    ) -> Bool {
+        if case .foundation = selection.source,
+           case .foundation = evaluation.destination {
+            return false
+        }
+
+        if hasImmediateForwardGain(evaluation) {
+            return true
+        }
+
+        switch selection.source {
+        case .waste:
+            // Waste moves are resource-limited and usually unblock future draws.
+            return true
+
+        case .foundation(let sourceFoundationIndex):
+            guard case .tableau(let destinationTableauIndex) = evaluation.destination else {
+                return false
+            }
+            guard let movedCard = selection.cards.first else { return false }
+            return foundationMoveUnlocksForwardFollowUp(
+                movedCardID: movedCard.id,
+                sourceFoundationIndex: sourceFoundationIndex,
+                destinationTableauIndex: destinationTableauIndex,
+                afterApplying: selection,
+                using: evaluation.destination,
+                in: state,
+                stockDrawCount: stockDrawCount
+            )
+
+        case .tableau:
+            break
+        }
+
+        if case .tableau = evaluation.destination {
+            // Avoid neutral tableau reshuffles unless they strongly improve options.
+            return evaluation.mobilityDelta > 1
+        }
+
+        return evaluation.mobilityDelta > 0
+    }
+
+    static func foundationMoveUnlocksForwardFollowUp(
+        movedCardID: UUID,
+        sourceFoundationIndex: Int,
+        destinationTableauIndex: Int,
+        afterApplying selection: Selection,
+        using destination: Destination,
+        in state: GameState,
+        stockDrawCount: Int
+    ) -> Bool {
+        guard let nextState = simulatedState(
+            afterMoving: selection,
+            to: destination,
+            in: state,
+            stockDrawCount: stockDrawCount
+        ) else {
+            return false
+        }
+
+        let baselineMobility = mobilityScore(in: nextState, stockDrawCount: stockDrawCount)
+        let baselineFoundationCount = totalFoundationCards(in: nextState)
+        let baselineEmptyTableauCount = countEmptyTableauPiles(in: nextState)
+
+        for followUpSelection in candidateSelections(in: nextState) {
+            let followUpEvaluations = allEvaluations(
+                for: followUpSelection,
+                in: nextState,
+                stockDrawCount: stockDrawCount,
+                baselineMobility: baselineMobility,
+                baselineFoundationCount: baselineFoundationCount,
+                baselineEmptyTableauCount: baselineEmptyTableauCount
+            )
+
+            for followUpEvaluation in followUpEvaluations {
+                if isImmediateFoundationReversal(
+                    followUpSelection: followUpSelection,
+                    followUpEvaluation: followUpEvaluation,
+                    movedCardID: movedCardID,
+                    sourceFoundationIndex: sourceFoundationIndex,
+                    destinationTableauIndex: destinationTableauIndex
+                ) {
+                    continue
                 }
-            } else {
-                bestEvaluation = evaluation
+
+                if hasImmediateForwardGain(followUpEvaluation) {
+                    return true
+                }
             }
         }
 
-        return bestEvaluation
+        return false
+    }
+
+    static func isImmediateFoundationReversal(
+        followUpSelection: Selection,
+        followUpEvaluation: MoveEvaluation,
+        movedCardID: UUID,
+        sourceFoundationIndex: Int,
+        destinationTableauIndex: Int
+    ) -> Bool {
+        guard case .tableau(let sourcePile, _) = followUpSelection.source,
+              sourcePile == destinationTableauIndex else {
+            return false
+        }
+        guard followUpSelection.cards.count == 1,
+              followUpSelection.cards[0].id == movedCardID else {
+            return false
+        }
+        guard case .foundation(let destinationFoundationIndex) = followUpEvaluation.destination else {
+            return false
+        }
+        return destinationFoundationIndex == sourceFoundationIndex
+    }
+
+    static func hasImmediateForwardGain(_ evaluation: MoveEvaluation) -> Bool {
+        evaluation.revealsFaceDownCard
+            || evaluation.foundationProgressDelta > 0
+            || evaluation.emptyTableauDelta > 0
     }
 
     static func totalFoundationCards(in state: GameState) -> Int {
@@ -173,24 +391,7 @@ private extension AutoMoveAdvisor {
     static func mobilityScore(in state: GameState, stockDrawCount: Int) -> Int {
         var score = 0
 
-        if let topWasteCard = state.waste.last, state.wasteDrawCount > 0 {
-            let wasteSelection = Selection(source: .waste, cards: [topWasteCard])
-            score += legalDestinations(for: wasteSelection, in: state).count
-        }
-
-        for pileIndex in state.tableau.indices {
-            let pile = state.tableau[pileIndex]
-            for cardIndex in pile.indices where pile[cardIndex].isFaceUp {
-                let cards = Array(pile[cardIndex...])
-                guard isValidTableauSequence(cards) else { continue }
-                let selection = Selection(source: .tableau(pile: pileIndex, index: cardIndex), cards: cards)
-                score += legalDestinations(for: selection, in: state).count
-            }
-        }
-
-        for foundationIndex in state.foundations.indices {
-            guard let topCard = state.foundations[foundationIndex].last else { continue }
-            let selection = Selection(source: .foundation(pile: foundationIndex), cards: [topCard])
+        for selection in candidateSelections(in: state) {
             score += legalDestinations(for: selection, in: state).count
         }
 
