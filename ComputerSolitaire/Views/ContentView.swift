@@ -123,11 +123,7 @@ struct ContentView: View {
     @State private var isShowingStats = false
     @State private var timeScoringPauseReasons: Set<TimeScoringPauseReason> = []
     @State private var hintHighlightOpacity: Double = 0
-    @State private var winCascadeCards: [WinCascadeCardState] = []
-    @State private var winCascadeTask: Task<Void, Never>?
-    @State private var winCascadeHiddenFoundationCardIDs: Set<UUID> = []
-    @State private var winCelebrationPhase: WinCelebrationPhase = .idle
-    @State private var isDebugWinCelebration = false
+    @State private var winCelebration = WinCelebrationController()
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
@@ -140,12 +136,6 @@ struct ContentView: View {
     private enum TimeScoringPauseReason: Hashable {
         case lifecycle
         case menuPresentation
-    }
-
-    private enum WinCelebrationPhase: Equatable {
-        case idle
-        case animating
-        case completed
     }
 
     private var isAnyMenuPresented: Bool {
@@ -400,8 +390,7 @@ struct ContentView: View {
                 initializeGameIfNeeded()
             }
             .onDisappear {
-                winCascadeTask?.cancel()
-                winCascadeTask = nil
+                winCelebration.cancelTask()
                 persistGameNow()
             }
         )
@@ -539,9 +528,13 @@ struct ContentView: View {
         }
         .onChange(of: viewModel.isWin) { _, isWin in
             if isWin {
-                beginWinCelebrationIfNeeded()
-            } else if winCelebrationPhase != .idle {
-                resetWinCelebration(phase: .idle)
+                winCelebration.beginIfNeededForWin(
+                    foundations: viewModel.state.foundations,
+                    dropFrames: dropFrames,
+                    boardViewportSize: boardViewportSize
+                )
+            } else if winCelebration.phase != .idle {
+                winCelebration.reset(to: .idle)
             }
         }
         .onChange(of: viewModel.state.waste.count) { _, newValue in
@@ -580,7 +573,7 @@ struct ContentView: View {
                         progress: undoAnimationProgress
                     )
                     .zIndex(75)
-                    WinCascadeOverlayView(cards: winCascadeCards)
+                    WinCascadeOverlayView(cards: winCelebration.cards)
                         .zIndex(90)
                     DragOverlayView(
                         viewModel: viewModel,
@@ -596,10 +589,10 @@ struct ContentView: View {
                         overlayTilt: overlayTilt
                     )
                     .zIndex(100)
-                    if (viewModel.isWin || isDebugWinCelebration) && winCelebrationPhase != .idle {
+                    if (viewModel.isWin || winCelebration.isDebugMode) && winCelebration.phase != .idle {
                         WinOverlay(score: viewModel.score) {
-                            if isDebugWinCelebration {
-                                resetWinCelebration(phase: .idle)
+                            if winCelebration.isDebugMode {
+                                winCelebration.reset(to: .idle)
                             } else {
                                 startNewGameFromUI()
                             }
@@ -614,11 +607,11 @@ struct ContentView: View {
     }
 
     private var effectiveHiddenCardIDs: Set<UUID> {
-        hiddenCardIDs.union(winCascadeHiddenFoundationCardIDs)
+        hiddenCardIDs.union(winCelebration.hiddenFoundationCardIDs)
     }
 
     private var isWinCascadeAnimating: Bool {
-        winCelebrationPhase == .animating
+        winCelebration.isAnimating
     }
 
     private var isUndoDisabled: Bool {
@@ -668,14 +661,14 @@ struct ContentView: View {
 
     private func startNewGameFromUI() {
         stopAutoFinish()
-        resetWinCelebration(phase: .idle)
+        winCelebration.reset(to: .idle)
         viewModel.newGame(drawMode: drawMode)
         persistGameNow()
     }
 
     private func redealFromUI() {
         stopAutoFinish()
-        resetWinCelebration(phase: .idle)
+        winCelebration.reset(to: .idle)
         viewModel.redeal()
         persistGameNow()
     }
@@ -683,15 +676,10 @@ struct ContentView: View {
     private func triggerDebugWinCascade() {
         guard !isWinCascadeTestDisabled else { return }
         stopAutoFinish()
-        isDebugWinCelebration = true
-
-        let liveFoundations = viewModel.state.foundations
-        let hiddenFoundationIDs = Set(liveFoundations.flatMap { pile in pile.map(\.id) })
-        let debugFoundations = debugWinningFoundations(from: liveFoundations)
-
-        beginWinCelebration(
-            foundations: debugFoundations,
-            hiddenFoundationCardIDs: hiddenFoundationIDs
+        winCelebration.triggerDebug(
+            liveFoundations: viewModel.state.foundations,
+            dropFrames: dropFrames,
+            boardViewportSize: boardViewportSize
         )
     }
 
@@ -988,144 +976,6 @@ struct ContentView: View {
         }
         return plan.travelDuration + plan.totalDelay
     }
-
-    private func beginWinCelebrationIfNeeded() {
-        guard winCelebrationPhase == .idle else { return }
-        isDebugWinCelebration = false
-        beginWinCelebration(
-            foundations: viewModel.state.foundations,
-            hiddenFoundationCardIDs: Set(viewModel.state.foundations.flatMap { pile in pile.map(\.id) })
-        )
-    }
-
-    private func beginWinCelebration(
-        foundations: [[Card]],
-        hiddenFoundationCardIDs: Set<UUID>
-    ) {
-        let boardBounds = CGRect(origin: .zero, size: boardViewportSize)
-        guard boardBounds.width > 0, boardBounds.height > 0 else {
-            winCelebrationPhase = viewModel.isWin ? .completed : .idle
-            return
-        }
-
-        var launchFrames: [Int: CGRect] = [:]
-        for index in 0..<4 {
-            if let frame = dropFrames[.foundation(index)]?.snapFrame, frame != .zero {
-                launchFrames[index] = frame
-            }
-        }
-
-        let fallbackLaunchFrame = launchFrames[0]
-            ?? launchFrames.values.first
-            ?? CGRect(
-                x: boardBounds.midX - 50,
-                y: max(0, boardBounds.height * 0.22 - 72),
-                width: 100,
-                height: 145
-            )
-        let initialStates = WinCascadeCoordinator.makeInitialStates(
-            foundations: foundations,
-            foundationFrames: launchFrames,
-            fallbackLaunchFrame: fallbackLaunchFrame
-        )
-        guard !initialStates.isEmpty else {
-            winCelebrationPhase = viewModel.isWin ? .completed : .idle
-            return
-        }
-
-        winCascadeTask?.cancel()
-        winCascadeCards = initialStates
-        winCascadeHiddenFoundationCardIDs = hiddenFoundationCardIDs
-        winCelebrationPhase = .animating
-
-        winCascadeTask = Task { @MainActor in
-            let tickNanos: UInt64 = 16_666_667
-
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: tickNanos)
-                guard !Task.isCancelled else { return }
-                guard winCelebrationPhase == .animating else { return }
-
-                let bounds = CGRect(origin: .zero, size: boardViewportSize)
-                WinCascadeCoordinator.step(
-                    states: &winCascadeCards,
-                    deltaTime: 1.0 / 60.0,
-                    boardBounds: bounds
-                )
-
-                if !winCascadeCards.isEmpty && winCascadeCards.allSatisfy(\.isSettled) {
-                    finishWinCelebration()
-                    return
-                }
-            }
-        }
-    }
-
-    private func finishWinCelebration() {
-        winCascadeTask?.cancel()
-        winCascadeTask = nil
-
-        if viewModel.isWin || isDebugWinCelebration {
-            winCelebrationPhase = .completed
-        } else {
-            winCelebrationPhase = .idle
-        }
-    }
-
-    private func resetWinCelebration(phase: WinCelebrationPhase) {
-        winCascadeTask?.cancel()
-        winCascadeTask = nil
-        winCascadeCards = []
-        winCascadeHiddenFoundationCardIDs = []
-        isDebugWinCelebration = false
-        winCelebrationPhase = phase
-    }
-
-    private func debugWinningFoundations(from foundations: [[Card]]) -> [[Card]] {
-        var pileSuits: [Suit?] = Array(repeating: nil, count: foundations.count)
-        var usedSuits: Set<Suit> = []
-
-        for pile in foundations.indices {
-            if let suit = foundations[pile].first?.suit {
-                pileSuits[pile] = suit
-                usedSuits.insert(suit)
-            }
-        }
-
-        for pile in pileSuits.indices where pileSuits[pile] == nil {
-            if let suit = Suit.allCases.first(where: { !usedSuits.contains($0) }) {
-                pileSuits[pile] = suit
-                usedSuits.insert(suit)
-            } else {
-                pileSuits[pile] = Suit.allCases[pile % Suit.allCases.count]
-            }
-        }
-
-        var debugFoundations = Array(repeating: [Card](), count: foundations.count)
-        for pile in foundations.indices {
-            let suit = pileSuits[pile] ?? Suit.allCases[pile % Suit.allCases.count]
-            var existingByRank: [Rank: Card] = [:]
-            for card in foundations[pile] where card.suit == suit {
-                var faceUpCard = card
-                faceUpCard.isFaceUp = true
-                existingByRank[faceUpCard.rank] = faceUpCard
-            }
-
-            var pileCards: [Card] = []
-            pileCards.reserveCapacity(Rank.allCases.count)
-            for rank in Rank.allCases {
-                if let existing = existingByRank[rank] {
-                    pileCards.append(existing)
-                } else {
-                    pileCards.append(Card(suit: suit, rank: rank, isFaceUp: true))
-                }
-            }
-            debugFoundations[pile] = pileCards
-        }
-
-        return debugFoundations
-    }
-
 
     private func destination(for target: DropTarget) -> Destination {
         switch target {
@@ -1425,19 +1275,11 @@ struct ContentView: View {
                 drawModeRawValue = viewModel.stockDrawCount
             }
         } else {
-            resetWinCelebration(phase: .idle)
+            winCelebration.reset(to: .idle)
             viewModel.newGame(drawMode: drawMode)
             persistGameNow()
         }
-
-        if viewModel.isWin {
-            winCelebrationPhase = .completed
-        } else {
-            winCelebrationPhase = .idle
-        }
-        isDebugWinCelebration = false
-        winCascadeCards = []
-        winCascadeHiddenFoundationCardIDs = []
+        winCelebration.syncForLoadedGame(isWin: viewModel.isWin)
 
         timeScoringPauseReasons = []
         if shouldPauseForLifecycle {
