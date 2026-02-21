@@ -192,12 +192,6 @@ struct ContentView: View {
                             }
                             .disabled(isHintDisabled)
                         }
-#if DEBUG
-                        Button("Test Win Cascade", systemImage: "sparkles") {
-                            triggerDebugWinCascade()
-                        }
-                        .disabled(isWinCascadeTestDisabled)
-#endif
                     } label: {
                         Label("Game", systemImage: "ellipsis.circle")
                     }
@@ -250,17 +244,6 @@ struct ContentView: View {
                     .help("Auto Finish")
                     .disabled(isAutoFinishDisabled)
                 }
-#if DEBUG
-                ToolbarItem(placement: .automatic) {
-                    Button {
-                        triggerDebugWinCascade()
-                    } label: {
-                        Label("Test Win Cascade", systemImage: "sparkles")
-                    }
-                    .help("Test Win Cascade")
-                    .disabled(isWinCascadeTestDisabled)
-                }
-#endif
                 if isHintButtonVisible {
                     ToolbarItem(placement: .automatic) {
                         Button {
@@ -595,13 +578,9 @@ struct ContentView: View {
                         overlayTilt: overlayTilt
                     )
                     .zIndex(100)
-                    if (viewModel.isWin || winCelebration.isDebugMode) && winCelebration.phase != .idle {
+                    if viewModel.isWin && winCelebration.phase != .idle {
                         WinOverlay(score: viewModel.score) {
-                            if winCelebration.isDebugMode {
-                                winCelebration.reset(to: .idle)
-                            } else {
-                                startNewGameFromUI()
-                            }
+                            startNewGameFromUI()
                         }
                         .zIndex(200)
                         .transition(.opacity)
@@ -683,15 +662,6 @@ struct ContentView: View {
         viewModel.requestHint()
     }
 
-    private var isWinCascadeTestDisabled: Bool {
-        isUndoAnimating
-            || isDroppingCards
-            || isReturningDrag
-            || viewModel.isDragging
-            || isWinCascadeAnimating
-            || boardViewportSize == .zero
-    }
-
     private func startNewGameFromUI() {
         stopAutoFinish()
         winCelebration.reset(to: .idle)
@@ -704,16 +674,6 @@ struct ContentView: View {
         winCelebration.reset(to: .idle)
         viewModel.redeal()
         persistGameNow()
-    }
-
-    private func triggerDebugWinCascade() {
-        guard !isWinCascadeTestDisabled else { return }
-        stopAutoFinish()
-        winCelebration.triggerDebug(
-            liveFoundations: viewModel.state.foundations,
-            dropFrames: dropFrames,
-            boardViewportSize: boardViewportSize
-        )
     }
 
     private func startAutoFinish() {

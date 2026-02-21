@@ -14,7 +14,6 @@ final class WinCelebrationController {
     private(set) var cards: [WinCascadeCardState] = []
     private(set) var hiddenFoundationCardIDs: Set<UUID> = []
     private(set) var phase: Phase = .idle
-    private(set) var isDebugMode = false
 
     private var cascadeTask: Task<Void, Never>?
 
@@ -28,28 +27,11 @@ final class WinCelebrationController {
         boardViewportSize: CGSize
     ) {
         guard phase == .idle else { return }
-        isDebugMode = false
         begin(
             foundations: foundations,
             hiddenFoundationCardIDs: Self.foundationCardIDs(from: foundations),
             dropFrames: dropFrames,
-            boardViewportSize: boardViewportSize,
-            completedPhaseAfterAnimation: true
-        )
-    }
-
-    func triggerDebug(
-        liveFoundations: [[Card]],
-        dropFrames: [DropTarget: DropTargetGeometry],
-        boardViewportSize: CGSize
-    ) {
-        isDebugMode = true
-        begin(
-            foundations: Self.debugWinningFoundations(from: liveFoundations),
-            hiddenFoundationCardIDs: Self.foundationCardIDs(from: liveFoundations),
-            dropFrames: dropFrames,
-            boardViewportSize: boardViewportSize,
-            completedPhaseAfterAnimation: true
+            boardViewportSize: boardViewportSize
         )
     }
 
@@ -58,7 +40,6 @@ final class WinCelebrationController {
         cascadeTask = nil
         cards = []
         hiddenFoundationCardIDs = []
-        isDebugMode = false
         self.phase = phase
     }
 
@@ -70,7 +51,6 @@ final class WinCelebrationController {
     ) {
         cascadeTask?.cancel()
         cascadeTask = nil
-        isDebugMode = false
         if isWin {
             let completedCards = completedStatesForLoadedWin(
                 foundations: foundations,
@@ -98,13 +78,12 @@ final class WinCelebrationController {
         foundations: [[Card]],
         hiddenFoundationCardIDs: Set<UUID>,
         dropFrames: [DropTarget: DropTargetGeometry],
-        boardViewportSize: CGSize,
-        completedPhaseAfterAnimation: Bool
+        boardViewportSize: CGSize
     ) {
         self.hiddenFoundationCardIDs = hiddenFoundationCardIDs
         let boardBounds = CGRect(origin: .zero, size: boardViewportSize)
         guard boardBounds.width > 0, boardBounds.height > 0 else {
-            phase = completedPhaseAfterAnimation ? .completed : .idle
+            phase = .completed
             return
         }
 
@@ -130,7 +109,7 @@ final class WinCelebrationController {
             fallbackLaunchFrame: fallbackLaunchFrame
         )
         guard !initialStates.isEmpty else {
-            phase = completedPhaseAfterAnimation ? .completed : .idle
+            phase = .completed
             return
         }
 
@@ -154,17 +133,17 @@ final class WinCelebrationController {
                 )
 
                 if !cards.isEmpty && cards.allSatisfy(\.isSettled) {
-                    finish(completedPhaseAfterAnimation: completedPhaseAfterAnimation)
+                    finish()
                     return
                 }
             }
         }
     }
 
-    private func finish(completedPhaseAfterAnimation: Bool) {
+    private func finish() {
         cascadeTask?.cancel()
         cascadeTask = nil
-        phase = completedPhaseAfterAnimation ? .completed : .idle
+        phase = .completed
     }
 
     private static func foundationCardIDs(from foundations: [[Card]]) -> Set<UUID> {
@@ -203,48 +182,4 @@ final class WinCelebrationController {
         )
     }
 
-    private static func debugWinningFoundations(from foundations: [[Card]]) -> [[Card]] {
-        var pileSuits: [Suit?] = Array(repeating: nil, count: foundations.count)
-        var usedSuits: Set<Suit> = []
-
-        for pile in foundations.indices {
-            if let suit = foundations[pile].first?.suit {
-                pileSuits[pile] = suit
-                usedSuits.insert(suit)
-            }
-        }
-
-        for pile in pileSuits.indices where pileSuits[pile] == nil {
-            if let suit = Suit.allCases.first(where: { !usedSuits.contains($0) }) {
-                pileSuits[pile] = suit
-                usedSuits.insert(suit)
-            } else {
-                pileSuits[pile] = Suit.allCases[pile % Suit.allCases.count]
-            }
-        }
-
-        var debugFoundations = Array(repeating: [Card](), count: foundations.count)
-        for pile in foundations.indices {
-            let suit = pileSuits[pile] ?? Suit.allCases[pile % Suit.allCases.count]
-            var existingByRank: [Rank: Card] = [:]
-            for card in foundations[pile] where card.suit == suit {
-                var faceUpCard = card
-                faceUpCard.isFaceUp = true
-                existingByRank[faceUpCard.rank] = faceUpCard
-            }
-
-            var pileCards: [Card] = []
-            pileCards.reserveCapacity(Rank.allCases.count)
-            for rank in Rank.allCases {
-                if let existing = existingByRank[rank] {
-                    pileCards.append(existing)
-                } else {
-                    pileCards.append(Card(suit: suit, rank: rank, isFaceUp: true))
-                }
-            }
-            debugFoundations[pile] = pileCards
-        }
-
-        return debugFoundations
-    }
 }
