@@ -10,7 +10,7 @@ xcuserdata/
 .vscode
 
 ## Build folder
-build/
+.build/
 .derivedData/
 
 ## macOS custom folder icon

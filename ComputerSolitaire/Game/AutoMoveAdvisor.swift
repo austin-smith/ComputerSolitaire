@@ -232,13 +232,11 @@ private extension AutoMoveAdvisor {
             guard case .tableau(let destinationTableauIndex) = evaluation.destination else {
                 return false
             }
-            guard let movedCard = selection.cards.first else { return false }
-            return foundationMoveUnlocksForwardFollowUp(
-                movedCardID: movedCard.id,
+            return isFoundationRollbackAdvisable(
+                selection: selection,
+                rollbackEvaluation: evaluation,
                 sourceFoundationIndex: sourceFoundationIndex,
                 destinationTableauIndex: destinationTableauIndex,
-                afterApplying: selection,
-                using: evaluation.destination,
                 in: state,
                 stockDrawCount: stockDrawCount
             )
@@ -255,83 +253,253 @@ private extension AutoMoveAdvisor {
         return evaluation.mobilityDelta > 0
     }
 
-    static func foundationMoveUnlocksForwardFollowUp(
-        movedCardID: UUID,
+    static func isFoundationRollbackAdvisable(
+        selection: Selection,
+        rollbackEvaluation: MoveEvaluation,
         sourceFoundationIndex: Int,
         destinationTableauIndex: Int,
-        afterApplying selection: Selection,
-        using destination: Destination,
         in state: GameState,
         stockDrawCount: Int
     ) -> Bool {
-        guard let nextState = simulatedState(
+        guard let movedCard = selection.cards.first else { return false }
+        guard let rollbackState = simulatedState(
             afterMoving: selection,
-            to: destination,
+            to: rollbackEvaluation.destination,
             in: state,
             stockDrawCount: stockDrawCount
         ) else {
             return false
         }
 
-        let baselineMobility = mobilityScore(in: nextState, stockDrawCount: stockDrawCount)
-        let baselineFoundationCount = totalFoundationCards(in: nextState)
-        let baselineEmptyTableauCount = countEmptyTableauPiles(in: nextState)
+        let baseline = OpportunityBaseline(
+            foundationCount: totalFoundationCards(in: state),
+            emptyTableauCount: countEmptyTableauPiles(in: state),
+            mobility: mobilityScore(in: state, stockDrawCount: stockDrawCount)
+        )
+        let rollbackPolicy = FoundationRollbackPolicy(
+            movedCardID: movedCard.id,
+            sourceFoundationIndex: sourceFoundationIndex,
+            destinationTableauIndex: destinationTableauIndex
+        )
 
-        for followUpSelection in candidateSelections(in: nextState) {
-            let followUpEvaluations = allEvaluations(
-                for: followUpSelection,
-                in: nextState,
-                stockDrawCount: stockDrawCount,
-                baselineMobility: baselineMobility,
-                baselineFoundationCount: baselineFoundationCount,
-                baselineEmptyTableauCount: baselineEmptyTableauCount
-            )
+        let bestBefore = bestImmediateForwardOpportunity(
+            in: state,
+            relativeTo: baseline,
+            stockDrawCount: stockDrawCount,
+            rollbackPolicy: rollbackPolicy,
+            excludeMovedCardRefoundation: false
+        )
+        let bestAfter = bestImmediateForwardOpportunity(
+            in: rollbackState,
+            relativeTo: baseline,
+            stockDrawCount: stockDrawCount,
+            rollbackPolicy: rollbackPolicy,
+            excludeMovedCardRefoundation: true
+        )
 
-            for followUpEvaluation in followUpEvaluations {
-                if isImmediateFoundationReversal(
-                    followUpSelection: followUpSelection,
-                    followUpEvaluation: followUpEvaluation,
-                    movedCardID: movedCardID,
-                    sourceFoundationIndex: sourceFoundationIndex,
-                    destinationTableauIndex: destinationTableauIndex
+        guard let bestAfter else { return false }
+        guard let bestBefore else { return true }
+        return ImmediateOpportunityRanking.isBetter(bestAfter, than: bestBefore)
+    }
+
+    static func bestImmediateForwardOpportunity(
+        in state: GameState,
+        relativeTo baseline: OpportunityBaseline,
+        stockDrawCount: Int,
+        rollbackPolicy: FoundationRollbackPolicy,
+        excludeMovedCardRefoundation: Bool
+    ) -> ImmediateOpportunity? {
+        var opportunities: [ImmediateOpportunity] = []
+
+        for followUpSelection in candidateSelections(in: state) {
+            for followUpDestination in legalDestinations(for: followUpSelection, in: state) {
+                if excludeMovedCardRefoundation && isImmediateMovedCardRefoundation(
+                    selection: followUpSelection,
+                    destination: followUpDestination,
+                    rollbackPolicy: rollbackPolicy
                 ) {
                     continue
                 }
-
-                if hasImmediateForwardGain(followUpEvaluation) {
-                    return true
+                guard followUpTouchesRollbackImpact(
+                    selection: followUpSelection,
+                    destination: followUpDestination,
+                    rollbackPolicy: rollbackPolicy
+                ) else {
+                    continue
                 }
+                guard let nextState = simulatedState(
+                    afterMoving: followUpSelection,
+                    to: followUpDestination,
+                    in: state,
+                    stockDrawCount: stockDrawCount
+                ) else {
+                    continue
+                }
+
+                let resultingMobility = mobilityScore(in: nextState, stockDrawCount: stockDrawCount)
+                let opportunity = ImmediateOpportunity(
+                    selection: followUpSelection,
+                    destination: followUpDestination,
+                    revealsFaceDownCard: revealsFaceDownCard(selection: followUpSelection, in: state),
+                    clearsSourcePile: clearsSourcePile(selection: followUpSelection, in: state),
+                    netFoundationProgress: totalFoundationCards(in: nextState) - baseline.foundationCount,
+                    mobilityDelta: resultingMobility - baseline.mobility,
+                    netEmptyTableauGain: countEmptyTableauPiles(in: nextState) - baseline.emptyTableauCount,
+                    destinationPriority: destinationPriority(for: followUpDestination, in: state),
+                    resultingMobility: resultingMobility
+                )
+                guard opportunity.isForwardProgress else { continue }
+                opportunities.append(opportunity)
             }
         }
 
-        return false
+        guard var bestOpportunity = opportunities.first else { return nil }
+        for opportunity in opportunities.dropFirst() {
+            if ImmediateOpportunityRanking.isBetter(opportunity, than: bestOpportunity) {
+                bestOpportunity = opportunity
+            }
+        }
+        return bestOpportunity
     }
 
-    static func isImmediateFoundationReversal(
-        followUpSelection: Selection,
-        followUpEvaluation: MoveEvaluation,
-        movedCardID: UUID,
-        sourceFoundationIndex: Int,
-        destinationTableauIndex: Int
+    static func isImmediateMovedCardRefoundation(
+        selection: Selection,
+        destination: Destination,
+        rollbackPolicy: FoundationRollbackPolicy
     ) -> Bool {
-        guard case .tableau(let sourcePile, _) = followUpSelection.source,
-              sourcePile == destinationTableauIndex else {
+        guard case .tableau(let sourcePile, _) = selection.source,
+              sourcePile == rollbackPolicy.destinationTableauIndex else {
             return false
         }
-        guard followUpSelection.cards.count == 1,
-              followUpSelection.cards[0].id == movedCardID else {
+        guard selection.cards.count == 1,
+              selection.cards[0].id == rollbackPolicy.movedCardID else {
             return false
         }
-        guard case .foundation(let destinationFoundationIndex) = followUpEvaluation.destination else {
+        guard case .foundation = destination else {
             return false
         }
-        return destinationFoundationIndex == sourceFoundationIndex
+        return true
+    }
+
+    static func followUpTouchesRollbackImpact(
+        selection: Selection,
+        destination: Destination,
+        rollbackPolicy: FoundationRollbackPolicy
+    ) -> Bool {
+        if selection.cards.contains(where: { $0.id == rollbackPolicy.movedCardID }) {
+            return true
+        }
+
+        switch selection.source {
+        case .foundation(let pile):
+            if pile == rollbackPolicy.sourceFoundationIndex {
+                return true
+            }
+        case .tableau(let pile, _):
+            if pile == rollbackPolicy.destinationTableauIndex {
+                return true
+            }
+        case .waste:
+            break
+        }
+
+        switch destination {
+        case .foundation(let pile):
+            return pile == rollbackPolicy.sourceFoundationIndex
+        case .tableau(let pile):
+            return pile == rollbackPolicy.destinationTableauIndex
+        }
     }
 
     static func hasImmediateForwardGain(_ evaluation: MoveEvaluation) -> Bool {
         evaluation.revealsFaceDownCard
             || evaluation.foundationProgressDelta > 0
             || evaluation.emptyTableauDelta > 0
+    }
+
+    struct OpportunityBaseline {
+        let foundationCount: Int
+        let emptyTableauCount: Int
+        let mobility: Int
+    }
+
+    struct FoundationRollbackPolicy {
+        let movedCardID: UUID
+        let sourceFoundationIndex: Int
+        let destinationTableauIndex: Int
+    }
+
+    struct ImmediateOpportunity {
+        let selection: Selection
+        let destination: Destination
+        let revealsFaceDownCard: Bool
+        let clearsSourcePile: Bool
+        let netFoundationProgress: Int
+        let mobilityDelta: Int
+        let netEmptyTableauGain: Int
+        let destinationPriority: Int
+        let resultingMobility: Int
+
+        var isForwardProgress: Bool {
+            revealsFaceDownCard || netFoundationProgress > 0 || netEmptyTableauGain > 0
+        }
+    }
+
+    enum ImmediateOpportunityRanking {
+        static func isBetter(_ lhs: ImmediateOpportunity, than rhs: ImmediateOpportunity) -> Bool {
+            if lhs.revealsFaceDownCard != rhs.revealsFaceDownCard {
+                return lhs.revealsFaceDownCard && !rhs.revealsFaceDownCard
+            }
+            if lhs.netFoundationProgress != rhs.netFoundationProgress {
+                return lhs.netFoundationProgress > rhs.netFoundationProgress
+            }
+            if lhs.mobilityDelta != rhs.mobilityDelta {
+                return lhs.mobilityDelta > rhs.mobilityDelta
+            }
+            if lhs.netEmptyTableauGain != rhs.netEmptyTableauGain {
+                return lhs.netEmptyTableauGain > rhs.netEmptyTableauGain
+            }
+            if lhs.clearsSourcePile != rhs.clearsSourcePile {
+                return lhs.clearsSourcePile && !rhs.clearsSourcePile
+            }
+            if lhs.destinationPriority != rhs.destinationPriority {
+                return lhs.destinationPriority > rhs.destinationPriority
+            }
+            if lhs.resultingMobility != rhs.resultingMobility {
+                return lhs.resultingMobility > rhs.resultingMobility
+            }
+            return tieBreakKey(lhs) < tieBreakKey(rhs)
+        }
+
+        private static func tieBreakKey(_ opportunity: ImmediateOpportunity) -> String {
+            let sourceKey = sourceSortKey(opportunity.selection.source)
+            let destinationKey = destinationSortKey(opportunity.destination)
+            let cardIDs = opportunity.selection.cards
+                .map(\.id)
+                .map(\.uuidString)
+                .joined(separator: ",")
+            return "\(sourceKey)|\(destinationKey)|\(cardIDs)"
+        }
+
+        private static func sourceSortKey(_ source: Selection.Source) -> Int {
+            switch source {
+            case .waste:
+                return 0
+            case .foundation(let pile):
+                return 100 + pile
+            case .tableau(let pile, let index):
+                return 1000 + (pile * 100) + index
+            }
+        }
+
+        private static func destinationSortKey(_ destination: Destination) -> Int {
+            switch destination {
+            case .foundation(let index):
+                return index
+            case .tableau(let index):
+                return 100 + index
+            }
+        }
     }
 
     static func totalFoundationCards(in state: GameState) -> Int {

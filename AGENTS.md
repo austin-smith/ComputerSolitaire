@@ -58,3 +58,16 @@ From repo root (`/Users/austinsmith/Developer/Repos/ComputerSolitaire`), run:
   -destination 'generic/platform=macOS' \
   build
 ```
+
+## Test Workflow
+
+From repo root (`/Users/austinsmith/Developer/Repos/ComputerSolitaire`), run:
+
+```bash
+/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild \
+  -project ComputerSolitaire.xcodeproj \
+  -scheme ComputerSolitaire \
+  -configuration Debug \
+  -destination 'platform=macOS' \
+  test
+```
