@@ -296,10 +296,10 @@ struct ContentView: View {
             .sheet(isPresented: $isShowingStats) {
 #if os(iOS)
                 NavigationStack {
-                    StatsView(viewModel: viewModel)
+                    StatisticsView(viewModel: viewModel)
                 }
 #else
-                StatsView(viewModel: viewModel)
+                StatisticsView(viewModel: viewModel)
 #endif
             }
         )
