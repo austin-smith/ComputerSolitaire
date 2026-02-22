@@ -151,7 +151,7 @@ struct StatisticsView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.system(.subheadline, design: .rounded, weight: .bold))
+                .font(.system(.headline, design: .monospaced, weight: .bold))
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
