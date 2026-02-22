@@ -228,8 +228,8 @@ struct GameStatistics: Codable, Equatable {
     var gamesWon: Int
     var totalTimeSeconds: Int
     var bestTimeSeconds: Int?
-    var highScoreDrawThree: Int
-    var highScoreDrawOne: Int
+    var highScoreDrawThree: Int?
+    var highScoreDrawOne: Int?
 
     init(
         schemaVersion: Int = currentSchemaVersion,
@@ -237,16 +237,16 @@ struct GameStatistics: Codable, Equatable {
         gamesWon: Int = 0,
         totalTimeSeconds: Int = 0,
         bestTimeSeconds: Int? = nil,
-        highScoreDrawThree: Int = 0,
-        highScoreDrawOne: Int = 0
+        highScoreDrawThree: Int? = nil,
+        highScoreDrawOne: Int? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.gamesPlayed = max(0, gamesPlayed)
         self.gamesWon = max(0, min(gamesWon, gamesPlayed))
         self.totalTimeSeconds = max(0, totalTimeSeconds)
         self.bestTimeSeconds = bestTimeSeconds.map { max(0, $0) }
-        self.highScoreDrawThree = max(0, highScoreDrawThree)
-        self.highScoreDrawOne = max(0, highScoreDrawOne)
+        self.highScoreDrawThree = highScoreDrawThree.map { max(0, $0) }
+        self.highScoreDrawOne = highScoreDrawOne.map { max(0, $0) }
     }
 
     var winRate: Double {
@@ -281,9 +281,9 @@ struct GameStatistics: Codable, Equatable {
         }
 
         if drawCount == DrawMode.one.rawValue {
-            highScoreDrawOne = max(highScoreDrawOne, sanitizedScore)
+            highScoreDrawOne = max(highScoreDrawOne ?? 0, sanitizedScore)
         } else {
-            highScoreDrawThree = max(highScoreDrawThree, sanitizedScore)
+            highScoreDrawThree = max(highScoreDrawThree ?? 0, sanitizedScore)
         }
     }
 

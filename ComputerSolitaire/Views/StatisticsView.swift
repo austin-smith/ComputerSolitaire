@@ -59,8 +59,8 @@ struct StatisticsView: View {
                     keyValueRow("Total Time", durationLabel(displayTotalTimeSeconds(at: context.date)))
                     keyValueRow("Avg Time", durationLabel(stats.averageTimeSeconds))
                     keyValueRow("Best Time", bestTimeLabel)
-                    keyValueRow("High Score (3-card)", "\(stats.highScoreDrawThree)")
-                    keyValueRow("High Score (1-card)", "\(stats.highScoreDrawOne)")
+                    keyValueRow("High Score (3-card)", stats.highScoreDrawThree.map { "\($0)" } ?? "-")
+                    keyValueRow("High Score (1-card)", stats.highScoreDrawOne.map { "\($0)" } ?? "-")
                 }
             }
         }
