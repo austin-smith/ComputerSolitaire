@@ -6,6 +6,7 @@ struct StatisticsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var stats = GameStatistics()
     @State private var barHoverState: (label: String, x: CGFloat)?
+    @State private var isShowingCleanWinsInfo = false
     private let durationFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.day, .hour, .minute, .second]
@@ -46,13 +47,14 @@ struct StatisticsView: View {
 
                 Section("Games") {
                     keyValueRow("Games Played", "\(stats.gamesPlayed)")
-                    keyValueRow("Games Won", "\(stats.gamesWon)")
+                    keyValueRow("Wins", "\(stats.gamesWon)")
                     VStack(spacing: 6) {
                         keyValueRow("Win Rate", winRateLabel)
                         if stats.gamesPlayed > 0 {
                             winLossBar
                         }
                     }
+                    cleanWinsRow
                 }
 
                 Section("Performance") {
@@ -113,7 +115,7 @@ struct StatisticsView: View {
             }
         }
         .frame(height: 8)
-        .padding(.top, 4)
+        .padding(.top, 2)
     }
 
     private func barSegment(fill: some ShapeStyle, width: CGFloat, label: String, xOffset: CGFloat) -> some View {
@@ -137,6 +139,10 @@ struct StatisticsView: View {
     private var bestTimeLabel: String {
         guard let bestTimeSeconds = stats.bestTimeSeconds else { return "-" }
         return durationLabel(bestTimeSeconds)
+    }
+
+    private var cleanWinRateLabel: String {
+        return String(format: "%.1f%%", stats.cleanWinRate * 100)
     }
 
     private func displayTotalTimeSeconds(at date: Date) -> Int {
@@ -168,6 +174,39 @@ struct StatisticsView: View {
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var cleanWinsRow: some View {
+        HStack(spacing: 4) {
+            Text("Clean Wins")
+            Button {
+                isShowingCleanWinsInfo = true
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Clean Wins info")
+            .popover(isPresented: $isShowingCleanWinsInfo, arrowEdge: .top) {
+                Text("Wins completed without the use of hints, undos, or redeals.")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 280, alignment: .leading)
+                    .padding(12)
+#if os(iOS)
+                    .presentationCompactAdaptation(.popover)
+#endif
+            }
+            Spacer(minLength: 12)
+            Text("\(stats.cleanWins) (\(cleanWinRateLabel))")
+                .font(.system(.footnote, design: .monospaced))
+                .foregroundStyle(.tertiary)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .padding(.top, 2)
+        .padding(.leading, 2)
     }
 
     private func durationLabel(_ seconds: Int) -> String {

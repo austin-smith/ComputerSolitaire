@@ -31,6 +31,9 @@ final class SolitaireViewModel {
     private var scoringDrawCount: Int = DrawMode.three.rawValue
     private var hasStartedTrackedGame = false
     private var isCurrentGameFinalized = false
+    private var hintRequestsInCurrentGame: Int = 0
+    private var undosUsedInCurrentGame: Int = 0
+    private var usedRedealInCurrentGame = false
 
     private var history: [GameSnapshot] = []
 
@@ -112,6 +115,7 @@ final class SolitaireViewModel {
         activeHint = hint
         hintWiggleToken = UUID()
         scheduleHintAutoClear(for: hint)
+        hintRequestsInCurrentGame += 1
         HapticManager.shared.play(.settingsSelection)
     }
 
@@ -193,6 +197,9 @@ final class SolitaireViewModel {
         scoringDrawCount = drawMode.rawValue
         hasStartedTrackedGame = true
         isCurrentGameFinalized = false
+        hintRequestsInCurrentGame = 0
+        undosUsedInCurrentGame = 0
+        usedRedealInCurrentGame = false
         state.wasteDrawCount = 0
         history.removeAll()
         refreshAutoFinishAvailability()
@@ -214,6 +221,9 @@ final class SolitaireViewModel {
         scoringDrawCount = stockDrawCount
         hasStartedTrackedGame = true
         isCurrentGameFinalized = false
+        hintRequestsInCurrentGame = 0
+        undosUsedInCurrentGame = 0
+        usedRedealInCurrentGame = true
         state.wasteDrawCount = min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         history.removeAll()
         refreshAutoFinishAvailability()
@@ -247,6 +257,7 @@ final class SolitaireViewModel {
         score = snapshot.score
         hasAppliedTimeBonus = snapshot.hasAppliedTimeBonus
         finalElapsedSeconds = nil
+        undosUsedInCurrentGame += 1
         selection = nil
         isDragging = false
         pendingAutoMove = nil
@@ -272,7 +283,10 @@ final class SolitaireViewModel {
             history: history,
             redealState: redealState,
             hasStartedTrackedGame: hasStartedTrackedGame,
-            isCurrentGameFinalized: isCurrentGameFinalized
+            isCurrentGameFinalized: isCurrentGameFinalized,
+            hintRequestsInCurrentGame: hintRequestsInCurrentGame,
+            undosUsedInCurrentGame: undosUsedInCurrentGame,
+            usedRedealInCurrentGame: usedRedealInCurrentGame
         )
     }
 
@@ -295,6 +309,9 @@ final class SolitaireViewModel {
         scoringDrawCount = sanitizedPayload.scoringDrawCount
         hasStartedTrackedGame = sanitizedPayload.hasStartedTrackedGame
         isCurrentGameFinalized = sanitizedPayload.isCurrentGameFinalized
+        hintRequestsInCurrentGame = sanitizedPayload.hintRequestsInCurrentGame
+        undosUsedInCurrentGame = sanitizedPayload.undosUsedInCurrentGame
+        usedRedealInCurrentGame = sanitizedPayload.usedRedealInCurrentGame
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
         var restoredRedealState = sanitizedPayload.redealState ?? history.first?.state ?? state
         restoredRedealState.wasteDrawCount = min(
@@ -708,7 +725,10 @@ private extension SolitaireViewModel {
                 didWin: didWin,
                 elapsedSeconds: elapsedSeconds,
                 finalScore: score,
-                drawCount: scoringDrawCount
+                drawCount: scoringDrawCount,
+                hintsUsedInGame: hintRequestsInCurrentGame,
+                undosUsedInGame: undosUsedInCurrentGame,
+                usedRedealInGame: usedRedealInCurrentGame
             )
         }
         isCurrentGameFinalized = true

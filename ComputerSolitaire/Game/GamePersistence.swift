@@ -38,6 +38,9 @@ struct SavedGamePayload: Codable {
     let redealState: GameState?
     let hasStartedTrackedGame: Bool
     let isCurrentGameFinalized: Bool
+    let hintRequestsInCurrentGame: Int
+    let undosUsedInCurrentGame: Int
+    let usedRedealInCurrentGame: Bool
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -55,6 +58,9 @@ struct SavedGamePayload: Codable {
         case redealState
         case hasStartedTrackedGame
         case isCurrentGameFinalized
+        case hintRequestsInCurrentGame
+        case undosUsedInCurrentGame
+        case usedRedealInCurrentGame
     }
 
     init(
@@ -72,7 +78,10 @@ struct SavedGamePayload: Codable {
         history: [GameSnapshot],
         redealState: GameState? = nil,
         hasStartedTrackedGame: Bool = true,
-        isCurrentGameFinalized: Bool = false
+        isCurrentGameFinalized: Bool = false,
+        hintRequestsInCurrentGame: Int = 0,
+        undosUsedInCurrentGame: Int = 0,
+        usedRedealInCurrentGame: Bool = false
     ) {
         self.schemaVersion = schemaVersion
         self.savedAt = savedAt
@@ -89,6 +98,9 @@ struct SavedGamePayload: Codable {
         self.redealState = redealState
         self.hasStartedTrackedGame = hasStartedTrackedGame
         self.isCurrentGameFinalized = isCurrentGameFinalized
+        self.hintRequestsInCurrentGame = max(0, hintRequestsInCurrentGame)
+        self.undosUsedInCurrentGame = max(0, undosUsedInCurrentGame)
+        self.usedRedealInCurrentGame = usedRedealInCurrentGame
     }
 
     init(from decoder: Decoder) throws {
@@ -108,6 +120,15 @@ struct SavedGamePayload: Codable {
         redealState = try container.decodeIfPresent(GameState.self, forKey: .redealState)
         hasStartedTrackedGame = try container.decodeIfPresent(Bool.self, forKey: .hasStartedTrackedGame) ?? true
         isCurrentGameFinalized = try container.decodeIfPresent(Bool.self, forKey: .isCurrentGameFinalized) ?? false
+        hintRequestsInCurrentGame = max(
+            0,
+            try container.decodeIfPresent(Int.self, forKey: .hintRequestsInCurrentGame) ?? 0
+        )
+        undosUsedInCurrentGame = max(
+            0,
+            try container.decodeIfPresent(Int.self, forKey: .undosUsedInCurrentGame) ?? 0
+        )
+        usedRedealInCurrentGame = try container.decodeIfPresent(Bool.self, forKey: .usedRedealInCurrentGame) ?? false
     }
 
     func sanitizedForRestore() -> SavedGamePayload? {
@@ -129,6 +150,9 @@ struct SavedGamePayload: Codable {
         }()
         let sanitizedHasStartedTrackedGame = hasStartedTrackedGame
         let sanitizedIsCurrentGameFinalized = sanitizedHasStartedTrackedGame ? isCurrentGameFinalized : false
+        let sanitizedHintRequestsInCurrentGame = sanitizedHasStartedTrackedGame ? max(0, hintRequestsInCurrentGame) : 0
+        let sanitizedUndosUsedInCurrentGame = sanitizedHasStartedTrackedGame ? max(0, undosUsedInCurrentGame) : 0
+        let sanitizedUsedRedealInCurrentGame = sanitizedHasStartedTrackedGame ? usedRedealInCurrentGame : false
         let sanitizedHistory = history
             .filter { $0.movesCount >= 0 && $0.state.isValidForPersistence }
             .map { snapshot in
@@ -172,7 +196,10 @@ struct SavedGamePayload: Codable {
             history: Array(sanitizedHistory),
             redealState: sanitizedRedealState,
             hasStartedTrackedGame: sanitizedHasStartedTrackedGame,
-            isCurrentGameFinalized: sanitizedIsCurrentGameFinalized
+            isCurrentGameFinalized: sanitizedIsCurrentGameFinalized,
+            hintRequestsInCurrentGame: sanitizedHintRequestsInCurrentGame,
+            undosUsedInCurrentGame: sanitizedUndosUsedInCurrentGame,
+            usedRedealInCurrentGame: sanitizedUsedRedealInCurrentGame
         )
     }
 }
@@ -230,6 +257,18 @@ struct GameStatistics: Codable, Equatable {
     var bestTimeSeconds: Int?
     var highScoreDrawThree: Int?
     var highScoreDrawOne: Int?
+    var cleanWins: Int
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case gamesPlayed
+        case gamesWon
+        case totalTimeSeconds
+        case bestTimeSeconds
+        case highScoreDrawThree
+        case highScoreDrawOne
+        case cleanWins
+    }
 
     init(
         schemaVersion: Int = currentSchemaVersion,
@@ -238,7 +277,8 @@ struct GameStatistics: Codable, Equatable {
         totalTimeSeconds: Int = 0,
         bestTimeSeconds: Int? = nil,
         highScoreDrawThree: Int? = nil,
-        highScoreDrawOne: Int? = nil
+        highScoreDrawOne: Int? = nil,
+        cleanWins: Int = 0
     ) {
         self.schemaVersion = schemaVersion
         self.gamesPlayed = max(0, gamesPlayed)
@@ -247,6 +287,36 @@ struct GameStatistics: Codable, Equatable {
         self.bestTimeSeconds = bestTimeSeconds.map { max(0, $0) }
         self.highScoreDrawThree = highScoreDrawThree.map { max(0, $0) }
         self.highScoreDrawOne = highScoreDrawOne.map { max(0, $0) }
+        self.cleanWins = max(0, min(cleanWins, self.gamesWon))
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        let decodedSchemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? Self.currentSchemaVersion
+        let decodedGamesPlayed = max(0, try container.decodeIfPresent(Int.self, forKey: .gamesPlayed) ?? 0)
+        let decodedGamesWon = max(
+            0,
+            min(
+                try container.decodeIfPresent(Int.self, forKey: .gamesWon) ?? 0,
+                decodedGamesPlayed
+            )
+        )
+
+        schemaVersion = decodedSchemaVersion
+        gamesPlayed = decodedGamesPlayed
+        gamesWon = decodedGamesWon
+        totalTimeSeconds = max(0, try container.decodeIfPresent(Int.self, forKey: .totalTimeSeconds) ?? 0)
+        bestTimeSeconds = try container.decodeIfPresent(Int.self, forKey: .bestTimeSeconds).map { max(0, $0) }
+        highScoreDrawThree = try container.decodeIfPresent(Int.self, forKey: .highScoreDrawThree).map { max(0, $0) }
+        highScoreDrawOne = try container.decodeIfPresent(Int.self, forKey: .highScoreDrawOne).map { max(0, $0) }
+        cleanWins = max(
+            0,
+            min(
+                try container.decodeIfPresent(Int.self, forKey: .cleanWins) ?? 0,
+                decodedGamesWon
+            )
+        )
     }
 
     var winRate: Double {
@@ -259,14 +329,24 @@ struct GameStatistics: Codable, Equatable {
         return totalTimeSeconds / gamesPlayed
     }
 
+    var cleanWinRate: Double {
+        guard gamesWon > 0 else { return 0 }
+        return Double(cleanWins) / Double(gamesWon)
+    }
+
     mutating func recordCompletedGame(
         didWin: Bool,
         elapsedSeconds: Int,
         finalScore: Int,
-        drawCount: Int
+        drawCount: Int,
+        hintsUsedInGame: Int,
+        undosUsedInGame: Int,
+        usedRedealInGame: Bool
     ) {
         let sanitizedElapsed = max(0, elapsedSeconds)
         let sanitizedScore = max(0, finalScore)
+        let sanitizedHintsUsedInGame = max(0, hintsUsedInGame)
+        let sanitizedUndosUsedInGame = max(0, undosUsedInGame)
 
         gamesPlayed = addingSafely(gamesPlayed, 1)
         totalTimeSeconds = addingSafely(totalTimeSeconds, sanitizedElapsed)
@@ -284,6 +364,13 @@ struct GameStatistics: Codable, Equatable {
             highScoreDrawOne = max(highScoreDrawOne ?? 0, sanitizedScore)
         } else {
             highScoreDrawThree = max(highScoreDrawThree ?? 0, sanitizedScore)
+        }
+
+        let isCleanWin = sanitizedHintsUsedInGame == 0
+            && sanitizedUndosUsedInGame == 0
+            && !usedRedealInGame
+        if isCleanWin {
+            cleanWins = min(gamesWon, addingSafely(cleanWins, 1))
         }
     }
 
