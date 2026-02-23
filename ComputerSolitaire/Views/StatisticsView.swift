@@ -7,6 +7,7 @@ struct StatisticsView: View {
     @State private var stats = GameStatistics()
     @State private var barHoverState: (label: String, x: CGFloat)?
     @State private var isShowingCleanWinsInfo = false
+    @State private var isShowingResetConfirmation = false
     private let durationFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.day, .hour, .minute, .second]
@@ -45,7 +46,7 @@ struct StatisticsView: View {
                     Text("Highlights")
                 }
 
-                Section("Games") {
+                Section {
                     keyValueRow("Games Played", "\(stats.gamesPlayed)")
                     keyValueRow("Wins", "\(stats.gamesWon)")
                     VStack(spacing: 6) {
@@ -55,14 +56,18 @@ struct StatisticsView: View {
                         }
                     }
                     cleanWinsRow
+                } header: {
+                    Text("Games")
                 }
 
-                Section("Performance") {
+                Section {
                     keyValueRow("Total Time", durationLabel(displayTotalTimeSeconds(at: context.date)))
                     keyValueRow("Avg Time", durationLabel(stats.averageTimeSeconds))
                     keyValueRow("Best Time", bestTimeLabel)
                     keyValueRow("High Score (3-card)", stats.highScoreDrawThree.map { "\($0)" } ?? "-")
                     keyValueRow("High Score (1-card)", stats.highScoreDrawOne.map { "\($0)" } ?? "-")
+                } header: {
+                    Text("Performance")
                 }
             }
         }
@@ -75,6 +80,19 @@ struct StatisticsView: View {
         .frame(minWidth: 420, minHeight: 320)
 #endif
         .toolbar {
+#if os(macOS)
+            ToolbarItem(placement: .automatic) {
+                Button("Reset Stats") {
+                    isShowingResetConfirmation = true
+                }
+            }
+#else
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Reset Stats") {
+                    isShowingResetConfirmation = true
+                }
+            }
+#endif
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") {
                     dismiss()
@@ -84,6 +102,18 @@ struct StatisticsView: View {
         }
         .onAppear {
             stats = GameStatisticsStore.load()
+        }
+        .confirmationDialog(
+            "Reset statistics?",
+            isPresented: $isShowingResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Reset Statistics", role: .destructive) {
+                resetStatistics()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All games, times, win rates, and high scores will be reset.")
         }
     }
 
@@ -143,6 +173,11 @@ struct StatisticsView: View {
 
     private var cleanWinRateLabel: String {
         return String(format: "%.1f%%", stats.cleanWinRate * 100)
+    }
+
+    private var trackedSinceLabel: String {
+        guard let trackedSince = stats.trackedSince else { return "-" }
+        return trackedSince.formatted(date: .abbreviated, time: .omitted)
     }
 
     private func displayTotalTimeSeconds(at date: Date) -> Int {
@@ -212,5 +247,11 @@ struct StatisticsView: View {
     private func durationLabel(_ seconds: Int) -> String {
         let total = max(0, seconds)
         return durationFormatter.string(from: TimeInterval(total)) ?? "0s"
+    }
+
+    private func resetStatistics() {
+        GameStatisticsStore.reset()
+        stats = GameStatisticsStore.load()
+        barHoverState = nil
     }
 }

@@ -251,6 +251,7 @@ struct GameStatistics: Codable, Equatable {
     static let currentSchemaVersion = 1
 
     let schemaVersion: Int
+    var trackedSince: Date?
     var gamesPlayed: Int
     var gamesWon: Int
     var totalTimeSeconds: Int
@@ -261,6 +262,7 @@ struct GameStatistics: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion
+        case trackedSince
         case gamesPlayed
         case gamesWon
         case totalTimeSeconds
@@ -272,6 +274,7 @@ struct GameStatistics: Codable, Equatable {
 
     init(
         schemaVersion: Int = currentSchemaVersion,
+        trackedSince: Date? = nil,
         gamesPlayed: Int = 0,
         gamesWon: Int = 0,
         totalTimeSeconds: Int = 0,
@@ -281,6 +284,7 @@ struct GameStatistics: Codable, Equatable {
         cleanWins: Int = 0
     ) {
         self.schemaVersion = schemaVersion
+        self.trackedSince = trackedSince
         self.gamesPlayed = max(0, gamesPlayed)
         self.gamesWon = max(0, min(gamesWon, gamesPlayed))
         self.totalTimeSeconds = max(0, totalTimeSeconds)
@@ -304,6 +308,7 @@ struct GameStatistics: Codable, Equatable {
         )
 
         schemaVersion = decodedSchemaVersion
+        trackedSince = try container.decodeIfPresent(Date.self, forKey: .trackedSince)
         gamesPlayed = decodedGamesPlayed
         gamesWon = decodedGamesWon
         totalTimeSeconds = max(0, try container.decodeIfPresent(Int.self, forKey: .totalTimeSeconds) ?? 0)
@@ -374,6 +379,16 @@ struct GameStatistics: Codable, Equatable {
         }
     }
 
+    mutating func markTrackingStarted(at date: Date = .now) {
+        if trackedSince == nil {
+            trackedSince = date
+        }
+    }
+
+    mutating func reset(at date: Date = .now) {
+        self = GameStatistics(trackedSince: date)
+    }
+
     private func addingSafely(_ lhs: Int, _ rhs: Int) -> Int {
         let (sum, overflow) = lhs.addingReportingOverflow(rhs)
         return overflow ? Int.max : sum
@@ -404,6 +419,22 @@ enum GameStatisticsStore {
         var stats = load(userDefaults: userDefaults)
         mutate(&stats)
         save(stats, userDefaults: userDefaults)
+    }
+
+    static func markTrackingStarted(
+        userDefaults: UserDefaults = .standard,
+        at date: Date = .now
+    ) {
+        update(userDefaults: userDefaults) { stats in
+            stats.markTrackingStarted(at: date)
+        }
+    }
+
+    static func reset(
+        userDefaults: UserDefaults = .standard,
+        at date: Date = .now
+    ) {
+        save(GameStatistics(trackedSince: date), userDefaults: userDefaults)
     }
 }
 

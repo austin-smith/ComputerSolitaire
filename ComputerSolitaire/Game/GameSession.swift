@@ -44,6 +44,7 @@ final class SolitaireViewModel {
     }
 
     init() {
+        let startedAt = Date()
         let initialState = GameState.newGame()
         state = initialState
         isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: initialState)
@@ -52,6 +53,9 @@ final class SolitaireViewModel {
             stockDrawCount: DrawMode.three.rawValue
         ) != nil
         redealState = initialState
+        gameStartedAt = startedAt
+        hasStartedTrackedGame = true
+        GameStatisticsStore.markTrackingStarted(at: startedAt)
     }
 
     var isWin: Bool {
