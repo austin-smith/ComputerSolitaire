@@ -306,7 +306,7 @@ struct ContentView: View {
     }
 
     private func applyObservers(to view: AnyView) -> AnyView {
-        AnyView(
+        let commandObservedView = AnyView(
             view
                 .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
                 isShowingSettings = true
@@ -317,6 +317,14 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openStatistics)) { _ in
                 isShowingStats = true
             }
+            .onReceive(NotificationCenter.default.publisher(for: .gameCommand)) { notification in
+                guard let command = notification.object as? GameCommand else { return }
+                handleGameCommand(command)
+            }
+        )
+
+        let gameStateObservedView = AnyView(
+            commandObservedView
             .onChange(of: drawModeRawValue) { (_, newValue: Int) in
                 let mode = DrawMode(rawValue: newValue) ?? .three
                 viewModel.updateDrawMode(mode)
@@ -362,6 +370,10 @@ struct ContentView: View {
                 processPendingAutoMoveIfPossible()
                 queueAutoFinishStepIfPossible()
             }
+        )
+
+        return AnyView(
+            gameStateObservedView
             .onChange(of: scenePhase) { _, _ in
                 syncLifecyclePauseState()
             }
@@ -654,6 +666,26 @@ struct ContentView: View {
             || viewModel.pendingAutoMove != nil
             || !viewModel.isHintAvailable
             || isWinCascadeAnimating
+    }
+
+    private func handleGameCommand(_ command: GameCommand) {
+        switch command {
+        case .newGame:
+            startNewGameFromUI()
+        case .redeal:
+            redealFromUI()
+        case .undo:
+            stopAutoFinish()
+            beginUndoAnimationIfNeeded()
+        case .autoFinish:
+            if isAutoFinishing {
+                stopAutoFinish()
+            } else {
+                startAutoFinish()
+            }
+        case .hint:
+            triggerHint()
+        }
     }
 
     private func triggerHint() {
