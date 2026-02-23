@@ -113,3 +113,4 @@ enum TestAssertions {
         XCTAssertEqual(visible.first?.id, expected.id, file: file, line: line)
     }
 }
+
