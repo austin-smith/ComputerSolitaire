@@ -691,6 +691,7 @@ struct ContentView: View {
             canUndo: !isUndoDisabled,
             canAutoFinish: isAutoFinishing || !isAutoFinishDisabled,
             canHint: !isHintDisabled,
+            isHintVisible: isHintButtonVisible,
             isAutoFinishing: isAutoFinishing
         )
     }

@@ -14,6 +14,7 @@ struct GameMenuState {
     var canUndo: Bool
     var canAutoFinish: Bool
     var canHint: Bool
+    var isHintVisible: Bool
     var isAutoFinishing: Bool
 }
 
@@ -75,13 +76,15 @@ struct GameMenuCommands: Commands {
             }
             .disabled(!(state?.canAutoFinish ?? false))
 
-            Button {
-                actions?.hint()
-            } label: {
-                Label("Hint", systemImage: "lightbulb")
+            if state?.isHintVisible ?? false {
+                Button {
+                    actions?.hint()
+                } label: {
+                    Label("Hint", systemImage: "lightbulb")
+                }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
+                .disabled(!(state?.canHint ?? false))
             }
-            .keyboardShortcut("h", modifiers: [.command, .shift])
-            .disabled(!(state?.canHint ?? false))
 
             Divider()
 
