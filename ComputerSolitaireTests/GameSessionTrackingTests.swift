@@ -119,6 +119,29 @@ final class GameSessionTrackingTests: XCTestCase {
         }
     }
 
+    // Verifies resetting statistics untracks the active session so pre-reset progress is not counted.
+    func testResetStatisticsUntracksCurrentSessionUntilNextNewGame() {
+        withIsolatedStatsStore {
+            let viewModel = makeViewModel()
+
+            viewModel.newGame(drawMode: .three)
+            let activeProbeDate = viewModel.gameStartedAt.addingTimeInterval(120)
+            XCTAssertGreaterThan(viewModel.unfinalizedElapsedSecondsForStats(at: activeProbeDate), 0)
+
+            GameStatisticsStore.reset()
+            viewModel.resetStatisticsTracking()
+            XCTAssertEqual(viewModel.unfinalizedElapsedSecondsForStats(at: activeProbeDate), 0)
+
+            viewModel.newGame(drawMode: .three)
+            var stats = GameStatisticsStore.load()
+            XCTAssertEqual(stats.gamesPlayed, 0)
+
+            viewModel.newGame(drawMode: .three)
+            stats = GameStatisticsStore.load()
+            XCTAssertEqual(stats.gamesPlayed, 1)
+        }
+    }
+
     private func withIsolatedStatsStore(_ body: () -> Void) {
         let defaults = UserDefaults.standard
         let previousStatsData = defaults.data(forKey: statsKey)

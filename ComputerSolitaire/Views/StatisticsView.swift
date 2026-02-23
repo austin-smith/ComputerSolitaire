@@ -258,6 +258,7 @@ struct StatisticsView: View {
 
     private func resetStatistics() {
         GameStatisticsStore.reset()
+        viewModel?.resetStatisticsTracking()
         stats = GameStatisticsStore.load()
         barHoverState = nil
     }

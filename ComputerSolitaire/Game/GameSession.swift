@@ -144,6 +144,14 @@ final class SolitaireViewModel {
         return elapsedActiveSeconds(at: date)
     }
 
+    func resetStatisticsTracking() {
+        hasStartedTrackedGame = false
+        isCurrentGameFinalized = true
+        hintRequestsInCurrentGame = 0
+        undosUsedInCurrentGame = 0
+        usedRedealInCurrentGame = false
+    }
+
     func displayScore(at date: Date = .now) -> Int {
         guard !hasAppliedTimeBonus else { return score }
         let elapsedSeconds = elapsedActiveSeconds(at: date)
