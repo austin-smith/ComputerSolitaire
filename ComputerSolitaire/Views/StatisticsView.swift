@@ -69,6 +69,13 @@ struct StatisticsView: View {
                 } header: {
                     Text("Performance")
                 }
+
+                Text("Tracked since \(trackedSinceLabel)")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
         }
         .navigationTitle("Statistics")

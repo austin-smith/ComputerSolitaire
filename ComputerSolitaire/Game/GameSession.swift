@@ -54,7 +54,7 @@ final class SolitaireViewModel {
         ) != nil
         redealState = initialState
         gameStartedAt = startedAt
-        hasStartedTrackedGame = true
+        hasStartedTrackedGame = false
         GameStatisticsStore.markTrackingStarted(at: startedAt)
     }
 
