@@ -1,8 +1,10 @@
 import Foundation
 import SwiftUI
+import SwiftData
 
 struct StatisticsView: View {
     let viewModel: SolitaireViewModel?
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var stats = GameStatistics()
     @State private var barHoverState: (label: String, x: CGFloat)?
@@ -259,7 +261,19 @@ struct StatisticsView: View {
     private func resetStatistics() {
         GameStatisticsStore.reset()
         viewModel?.resetStatisticsTracking()
+        persistTrackingResetIfNeeded()
         stats = GameStatisticsStore.load()
         barHoverState = nil
+    }
+
+    private func persistTrackingResetIfNeeded() {
+        guard let viewModel else { return }
+        do {
+            try GamePersistence.save(viewModel.persistencePayload(), in: modelContext)
+        } catch {
+#if DEBUG
+            print("Failed to persist reset tracking state: \(error)")
+#endif
+        }
     }
 }

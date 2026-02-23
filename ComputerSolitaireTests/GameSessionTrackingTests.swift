@@ -131,6 +131,9 @@ final class GameSessionTrackingTests: XCTestCase {
             GameStatisticsStore.reset()
             viewModel.resetStatisticsTracking()
             XCTAssertEqual(viewModel.unfinalizedElapsedSecondsForStats(at: activeProbeDate), 0)
+            let resetPayload = viewModel.persistencePayload()
+            XCTAssertFalse(resetPayload.hasStartedTrackedGame)
+            XCTAssertTrue(resetPayload.isCurrentGameFinalized)
 
             viewModel.newGame(drawMode: .three)
             var stats = GameStatisticsStore.load()
