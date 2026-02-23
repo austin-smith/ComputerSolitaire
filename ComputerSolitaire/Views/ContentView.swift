@@ -172,7 +172,8 @@ struct ContentView: View {
 
     private func applyToolbar(to view: AnyView) -> AnyView {
         AnyView(
-            view.toolbar {
+            view
+            .toolbar {
 #if os(iOS)
                 ToolbarItemGroup(placement: .bottomBar) {
                     Menu {
@@ -216,15 +217,23 @@ struct ContentView: View {
                 }
 #endif
 #if os(macOS)
-                ToolbarItemGroup(placement: .automatic) {
-                    Button("New Game") {
+                ToolbarSpacer(.flexible)
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
                         startNewGameFromUI()
+                    } label: {
+                        Label("New Game", systemImage: "plus")
+                            .labelStyle(.titleAndIcon)
                     }
-                    Button("Redeal") {
+                    Button {
                         redealFromUI()
+                    } label: {
+                        Label("Redeal", systemImage: "arrow.clockwise")
+                            .labelStyle(.titleAndIcon)
                     }
                 }
-                ToolbarItem(placement: .automatic) {
+                ToolbarSpacer(.fixed)
+                ToolbarItemGroup(placement: .primaryAction) {
                     Button {
                         stopAutoFinish()
                         beginUndoAnimationIfNeeded()
@@ -234,8 +243,6 @@ struct ContentView: View {
                     .labelStyle(.iconOnly)
                     .help("Undo")
                     .disabled(isUndoDisabled)
-                }
-                ToolbarItem(placement: .automatic) {
                     Button {
                         startAutoFinish()
                     } label: {
@@ -243,28 +250,21 @@ struct ContentView: View {
                     }
                     .help("Auto Finish")
                     .disabled(isAutoFinishDisabled)
-                }
-                if isHintButtonVisible {
-                    ToolbarItem(placement: .automatic) {
+                    if isHintButtonVisible {
                         Button {
                             triggerHint()
                         } label: {
                             Label("Hint", systemImage: "lightbulb")
                         }
                         .help("Hint")
-                        .keyboardShortcut("h", modifiers: [])
                         .disabled(isHintDisabled)
                     }
-                }
-                ToolbarItem(placement: .primaryAction) {
                     Button {
                         isShowingStats = true
                     } label: {
                         Label("Statistics", systemImage: "chart.bar")
                     }
                     .help("Statistics")
-                }
-                ToolbarItem(placement: .primaryAction) {
                     Button {
                         isShowingSettings = true
                     } label: {
@@ -306,7 +306,7 @@ struct ContentView: View {
     }
 
     private func applyObservers(to view: AnyView) -> AnyView {
-        AnyView(
+        let commandObservedView = AnyView(
             view
                 .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
                 isShowingSettings = true
@@ -314,9 +314,10 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
                 presentRulesAndScoring(initialSection: .rules)
             }
-            .onReceive(NotificationCenter.default.publisher(for: .openStatistics)) { _ in
-                isShowingStats = true
-            }
+        )
+
+        let gameStateObservedView = AnyView(
+            commandObservedView
             .onChange(of: drawModeRawValue) { (_, newValue: Int) in
                 let mode = DrawMode(rawValue: newValue) ?? .three
                 viewModel.updateDrawMode(mode)
@@ -362,6 +363,10 @@ struct ContentView: View {
                 processPendingAutoMoveIfPossible()
                 queueAutoFinishStepIfPossible()
             }
+        )
+
+        return AnyView(
+            gameStateObservedView
             .onChange(of: scenePhase) { _, _ in
                 syncLifecyclePauseState()
             }
@@ -377,6 +382,10 @@ struct ContentView: View {
                 winCelebration.cancelTask()
                 persistGameNow()
             }
+#if os(macOS)
+            .focusedSceneValue(\.gameMenuActions, gameMenuActions)
+            .focusedSceneValue(\.gameMenuState, gameMenuState)
+#endif
         )
     }
 
@@ -655,6 +664,38 @@ struct ContentView: View {
             || !viewModel.isHintAvailable
             || isWinCascadeAnimating
     }
+
+#if os(macOS)
+    private var gameMenuActions: GameMenuActions {
+        GameMenuActions(
+            newGame: startNewGameFromUI,
+            redeal: redealFromUI,
+            undo: {
+                stopAutoFinish()
+                beginUndoAnimationIfNeeded()
+            },
+            autoFinish: {
+                if isAutoFinishing {
+                    stopAutoFinish()
+                } else {
+                    startAutoFinish()
+                }
+            },
+            hint: triggerHint,
+            showStatistics: { isShowingStats = true }
+        )
+    }
+
+    private var gameMenuState: GameMenuState {
+        GameMenuState(
+            canUndo: !isUndoDisabled,
+            canAutoFinish: isAutoFinishing || !isAutoFinishDisabled,
+            canHint: !isHintDisabled,
+            isHintVisible: isHintButtonVisible,
+            isAutoFinishing: isAutoFinishing
+        )
+    }
+#endif
 
     private func triggerHint() {
         guard !isHintDisabled else { return }

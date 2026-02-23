@@ -59,6 +59,7 @@ struct ComputerSolitaireApp: App {
                 Label("Rules & Scoring", systemImage: "book")
             }
         }
+        GameMenuCommands()
 #endif
         CommandGroup(replacing: .appSettings) {
             Button {
