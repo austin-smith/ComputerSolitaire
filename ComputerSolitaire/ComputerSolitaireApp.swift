@@ -59,42 +59,7 @@ struct ComputerSolitaireApp: App {
                 Label("Rules & Scoring", systemImage: "book")
             }
         }
-        CommandMenu("Game") {
-            Button {
-                NotificationCenter.default.post(name: .gameCommand, object: GameCommand.newGame)
-            } label: {
-                Label("New Game", systemImage: "plus")
-            }
-            .keyboardShortcut("n", modifiers: [.command, .shift])
-            Button {
-                NotificationCenter.default.post(name: .gameCommand, object: GameCommand.redeal)
-            } label: {
-                Label("Redeal", systemImage: "arrow.clockwise")
-            }
-            Divider()
-            Button {
-                NotificationCenter.default.post(name: .gameCommand, object: GameCommand.undo)
-            } label: {
-                Label("Undo", systemImage: "arrow.uturn.backward")
-            }
-            .keyboardShortcut("z", modifiers: .command)
-            Button {
-                NotificationCenter.default.post(name: .gameCommand, object: GameCommand.autoFinish)
-            } label: {
-                Label("Auto Finish", systemImage: "bolt")
-            }
-            Button {
-                NotificationCenter.default.post(name: .gameCommand, object: GameCommand.hint)
-            } label: {
-                Label("Hint", systemImage: "lightbulb")
-            }
-            Divider()
-            Button {
-                NotificationCenter.default.post(name: .openStatistics, object: nil)
-            } label: {
-                Label("Statistics…", systemImage: "chart.bar")
-            }
-        }
+        GameMenuCommands()
 #endif
         CommandGroup(replacing: .appSettings) {
             Button {

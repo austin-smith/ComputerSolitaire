@@ -252,7 +252,6 @@ struct ContentView: View {
                             Label("Hint", systemImage: "lightbulb")
                         }
                         .help("Hint")
-                        .keyboardShortcut("h", modifiers: [])
                         .disabled(isHintDisabled)
                     }
                 }
@@ -313,13 +312,6 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
                 presentRulesAndScoring(initialSection: .rules)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .openStatistics)) { _ in
-                isShowingStats = true
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .gameCommand)) { notification in
-                guard let command = notification.object as? GameCommand else { return }
-                handleGameCommand(command)
             }
         )
 
@@ -389,6 +381,10 @@ struct ContentView: View {
                 winCelebration.cancelTask()
                 persistGameNow()
             }
+#if os(macOS)
+            .focusedSceneValue(\.gameMenuActions, gameMenuActions)
+            .focusedSceneValue(\.gameMenuState, gameMenuState)
+#endif
         )
     }
 
@@ -668,25 +664,36 @@ struct ContentView: View {
             || isWinCascadeAnimating
     }
 
-    private func handleGameCommand(_ command: GameCommand) {
-        switch command {
-        case .newGame:
-            startNewGameFromUI()
-        case .redeal:
-            redealFromUI()
-        case .undo:
-            stopAutoFinish()
-            beginUndoAnimationIfNeeded()
-        case .autoFinish:
-            if isAutoFinishing {
+#if os(macOS)
+    private var gameMenuActions: GameMenuActions {
+        GameMenuActions(
+            newGame: startNewGameFromUI,
+            redeal: redealFromUI,
+            undo: {
                 stopAutoFinish()
-            } else {
-                startAutoFinish()
-            }
-        case .hint:
-            triggerHint()
-        }
+                beginUndoAnimationIfNeeded()
+            },
+            autoFinish: {
+                if isAutoFinishing {
+                    stopAutoFinish()
+                } else {
+                    startAutoFinish()
+                }
+            },
+            hint: triggerHint,
+            showStatistics: { isShowingStats = true }
+        )
     }
+
+    private var gameMenuState: GameMenuState {
+        GameMenuState(
+            canUndo: !isUndoDisabled,
+            canAutoFinish: isAutoFinishing || !isAutoFinishDisabled,
+            canHint: !isHintDisabled,
+            isAutoFinishing: isAutoFinishing
+        )
+    }
+#endif
 
     private func triggerHint() {
         guard !isHintDisabled else { return }
