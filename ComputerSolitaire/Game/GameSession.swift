@@ -1,6 +1,16 @@
 import Foundation
 import Observation
 
+protocol DateProviding {
+    var now: Date { get }
+}
+
+struct SystemDateProvider: DateProviding {
+    var now: Date {
+        Date()
+    }
+}
+
 @Observable
 final class SolitaireViewModel {
     static let maxUndoHistoryCount = 200
@@ -34,6 +44,7 @@ final class SolitaireViewModel {
     private var hintRequestsInCurrentGame: Int = 0
     private var undosUsedInCurrentGame: Int = 0
     private var usedRedealInCurrentGame = false
+    private let dateProvider: any DateProviding
 
     private var history: [GameSnapshot] = []
 
@@ -43,8 +54,9 @@ final class SolitaireViewModel {
         let destination: Destination
     }
 
-    init() {
-        let startedAt = Date()
+    init(dateProvider: any DateProviding = SystemDateProvider()) {
+        self.dateProvider = dateProvider
+        let startedAt = dateProvider.now
         let initialState = GameState.newGame()
         state = initialState
         isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: initialState)
@@ -191,7 +203,7 @@ final class SolitaireViewModel {
     }
 
     func newGame(drawMode: DrawMode = .three) {
-        finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: .now)
+        finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: dateProvider.now)
         clearHint()
         let initialState = GameState.newGame()
         state = initialState
@@ -201,7 +213,7 @@ final class SolitaireViewModel {
         pendingAutoMove = nil
         movesCount = 0
         score = 0
-        gameStartedAt = .now
+        gameStartedAt = dateProvider.now
         hasAppliedTimeBonus = false
         finalElapsedSeconds = nil
         pauseStartedAt = nil
@@ -218,7 +230,7 @@ final class SolitaireViewModel {
     }
 
     func redeal() {
-        finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: .now)
+        finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: dateProvider.now)
         clearHint()
         state = redealState
         selection = nil
@@ -226,7 +238,7 @@ final class SolitaireViewModel {
         pendingAutoMove = nil
         movesCount = 0
         score = 0
-        gameStartedAt = .now
+        gameStartedAt = dateProvider.now
         hasAppliedTimeBonus = false
         finalElapsedSeconds = nil
         pauseStartedAt = nil
@@ -304,9 +316,10 @@ final class SolitaireViewModel {
 
     @discardableResult
     func restore(from payload: SavedGamePayload) -> Bool {
-        guard let sanitizedPayload = payload.sanitizedForRestore() else { return false }
+        let now = dateProvider.now
+        guard let sanitizedPayload = payload.sanitizedForRestore(at: now) else { return false }
         clearHint()
-        let offlineDurationSinceSave = max(0, Date().timeIntervalSince(sanitizedPayload.savedAt))
+        let offlineDurationSinceSave = max(0, now.timeIntervalSince(sanitizedPayload.savedAt))
         state = sanitizedPayload.state
         movesCount = sanitizedPayload.movesCount
         score = sanitizedPayload.score
@@ -714,7 +727,7 @@ private extension SolitaireViewModel {
 
     func applyTimeBonusIfWon() {
         guard isWin, !hasAppliedTimeBonus else { return }
-        let endedAt = Date()
+        let endedAt = dateProvider.now
         let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
         let maxBonus = Scoring.timedMaxBonus(for: scoringDrawCount)
         let bonus = Scoring.timeBonus(

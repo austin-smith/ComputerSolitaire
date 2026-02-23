@@ -113,3 +113,12 @@ enum TestAssertions {
         XCTAssertEqual(visible.first?.id, expected.id, file: file, line: line)
     }
 }
+
+@MainActor
+final class TestDateProvider: DateProviding {
+    var now: Date
+
+    init(now: Date) {
+        self.now = now
+    }
+}

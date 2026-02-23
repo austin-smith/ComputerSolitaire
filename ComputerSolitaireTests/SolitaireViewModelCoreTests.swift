@@ -112,28 +112,31 @@ final class SolitaireViewModelCoreTests: XCTestCase {
     }
 
     func testPauseResumeAndElapsedTimeAccounting() {
-        let viewModel = makeViewModel()
+        let clock = TestDateProvider(now: DateFixtures.reference)
+        let viewModel = makeViewModel(dateProvider: clock)
         viewModel.newGame(drawMode: .three)
 
-        let start = DateFixtures.reference
+        let start = DateFixtures.plus(-600)
+        clock.now = DateFixtures.plus(120)
         let restore = payload(
             state: viewModel.state,
-            savedAt: DateFixtures.plus(260),
+            savedAt: DateFixtures.plus(100),
             stockDrawCount: DrawMode.three.rawValue,
             gameStartedAt: start,
             pauseStartedAt: nil
         )
         XCTAssertTrue(viewModel.restore(from: restore))
 
-        let firstElapsed = viewModel.elapsedActiveSeconds(at: DateFixtures.plus(50))
-        XCTAssertTrue(viewModel.pauseTimeScoring(at: DateFixtures.plus(100)))
-        let pausedElapsed = viewModel.elapsedActiveSeconds(at: DateFixtures.plus(180))
+        // elapsed at restore should match active play time at save.
+        // start=-600, savedAt=100 => 700 seconds of active time.
+        XCTAssertEqual(viewModel.elapsedActiveSeconds(at: clock.now), 700)
+
+        XCTAssertTrue(viewModel.pauseTimeScoring(at: DateFixtures.plus(130)))
+        XCTAssertEqual(viewModel.elapsedActiveSeconds(at: DateFixtures.plus(180)), 710)
+
         XCTAssertTrue(viewModel.resumeTimeScoring(at: DateFixtures.plus(200)))
-        let resumedElapsed = viewModel.elapsedActiveSeconds(at: DateFixtures.plus(260))
-        XCTAssertGreaterThanOrEqual(firstElapsed, 0)
-        XCTAssertEqual(pausedElapsed, viewModel.elapsedActiveSeconds(at: DateFixtures.plus(190)))
-        XCTAssertGreaterThanOrEqual(resumedElapsed, pausedElapsed)
-        XCTAssertGreaterThanOrEqual(viewModel.displayScore(at: DateFixtures.plus(260)), 0)
+        XCTAssertEqual(viewModel.elapsedActiveSeconds(at: DateFixtures.plus(260)), 770)
+        XCTAssertEqual(viewModel.displayScore(at: DateFixtures.plus(260)), Scoring.timedMaxBonusDrawThree - 770)
     }
 
     func testQueueNextAutoFinishMoveSetsPendingMove() {
@@ -149,8 +152,11 @@ final class SolitaireViewModelCoreTests: XCTestCase {
         XCTAssertNotNil(viewModel.pendingAutoMove)
     }
 
-    private func makeViewModel(restoring payload: SavedGamePayload? = nil) -> SolitaireViewModel {
-        let viewModel = SolitaireViewModel()
+    private func makeViewModel(
+        dateProvider: any DateProviding = SystemDateProvider(),
+        restoring payload: SavedGamePayload? = nil
+    ) -> SolitaireViewModel {
+        let viewModel = SolitaireViewModel(dateProvider: dateProvider)
         if let payload {
             XCTAssertTrue(viewModel.restore(from: payload))
         }
