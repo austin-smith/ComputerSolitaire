@@ -172,7 +172,8 @@ struct ContentView: View {
 
     private func applyToolbar(to view: AnyView) -> AnyView {
         AnyView(
-            view.toolbar {
+            view
+            .toolbar {
 #if os(iOS)
                 ToolbarItemGroup(placement: .bottomBar) {
                     Menu {
@@ -216,15 +217,23 @@ struct ContentView: View {
                 }
 #endif
 #if os(macOS)
-                ToolbarItemGroup(placement: .automatic) {
-                    Button("New Game") {
+                ToolbarSpacer(.flexible)
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
                         startNewGameFromUI()
+                    } label: {
+                        Label("New Game", systemImage: "plus")
+                            .labelStyle(.titleAndIcon)
                     }
-                    Button("Redeal") {
+                    Button {
                         redealFromUI()
+                    } label: {
+                        Label("Redeal", systemImage: "arrow.clockwise")
+                            .labelStyle(.titleAndIcon)
                     }
                 }
-                ToolbarItem(placement: .automatic) {
+                ToolbarSpacer(.fixed)
+                ToolbarItemGroup(placement: .primaryAction) {
                     Button {
                         stopAutoFinish()
                         beginUndoAnimationIfNeeded()
@@ -234,8 +243,6 @@ struct ContentView: View {
                     .labelStyle(.iconOnly)
                     .help("Undo")
                     .disabled(isUndoDisabled)
-                }
-                ToolbarItem(placement: .automatic) {
                     Button {
                         startAutoFinish()
                     } label: {
@@ -243,9 +250,7 @@ struct ContentView: View {
                     }
                     .help("Auto Finish")
                     .disabled(isAutoFinishDisabled)
-                }
-                if isHintButtonVisible {
-                    ToolbarItem(placement: .automatic) {
+                    if isHintButtonVisible {
                         Button {
                             triggerHint()
                         } label: {
@@ -254,16 +259,12 @@ struct ContentView: View {
                         .help("Hint")
                         .disabled(isHintDisabled)
                     }
-                }
-                ToolbarItem(placement: .primaryAction) {
                     Button {
                         isShowingStats = true
                     } label: {
                         Label("Statistics", systemImage: "chart.bar")
                     }
                     .help("Statistics")
-                }
-                ToolbarItem(placement: .primaryAction) {
                     Button {
                         isShowingSettings = true
                     } label: {
