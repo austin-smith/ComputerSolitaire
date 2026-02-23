@@ -132,17 +132,21 @@ struct SavedGamePayload: Codable {
     }
 
     func sanitizedForRestore() -> SavedGamePayload? {
+        sanitizedForRestore(at: .now)
+    }
+
+    func sanitizedForRestore(at now: Date) -> SavedGamePayload? {
         guard schemaVersion == Self.currentSchemaVersion else { return nil }
         guard state.isValidForPersistence else { return nil }
 
         let sanitizedStockDrawCount = DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
         let sanitizedMovesCount = max(0, movesCount)
         let sanitizedScore = Scoring.clamped(score)
-        let sanitizedSavedAt = min(savedAt, .now)
-        let sanitizedStartedAt = min(gameStartedAt, .now)
+        let sanitizedSavedAt = min(savedAt, now)
+        let sanitizedStartedAt = min(gameStartedAt, now)
         let sanitizedScoringDrawCount = DrawMode(rawValue: scoringDrawCount)?.rawValue ?? sanitizedStockDrawCount
         let sanitizedPauseStartedAt = pauseStartedAt
-            .map { min($0, .now) }
+            .map { min($0, now) }
             .flatMap { $0 >= sanitizedStartedAt ? $0 : nil }
         let sanitizedFinalElapsedSeconds: Int? = {
             guard hasAppliedTimeBonus else { return nil }
@@ -209,27 +213,27 @@ enum GamePersistenceError: Error {
 }
 
 enum GamePersistence {
-    static func load(from modelContext: ModelContext) -> SavedGamePayload? {
+    static func load(from modelContext: ModelContext, now: Date = .now) -> SavedGamePayload? {
         do {
             guard let record = try fetchCurrentRecord(in: modelContext) else { return nil }
             let payload = try JSONDecoder().decode(SavedGamePayload.self, from: record.snapshotData)
-            return payload.sanitizedForRestore()
+            return payload.sanitizedForRestore(at: now)
         } catch {
             return nil
         }
     }
 
-    static func save(_ payload: SavedGamePayload, in modelContext: ModelContext) throws {
-        guard let sanitizedPayload = payload.sanitizedForRestore() else {
+    static func save(_ payload: SavedGamePayload, in modelContext: ModelContext, now: Date = .now) throws {
+        guard let sanitizedPayload = payload.sanitizedForRestore(at: now) else {
             throw GamePersistenceError.invalidPayload
         }
 
         let data = try JSONEncoder().encode(sanitizedPayload)
         if let record = try fetchCurrentRecord(in: modelContext) {
             record.snapshotData = data
-            record.updatedAt = .now
+            record.updatedAt = now
         } else {
-            modelContext.insert(SavedGameRecord(snapshotData: data))
+            modelContext.insert(SavedGameRecord(snapshotData: data, updatedAt: now))
         }
         try modelContext.save()
     }
