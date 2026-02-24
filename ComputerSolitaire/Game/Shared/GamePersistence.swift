@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 
+
 @Model
 final class SavedGameRecord {
     static let currentRecordKey = "current"
@@ -139,12 +140,22 @@ struct SavedGamePayload: Codable {
         guard schemaVersion == Self.currentSchemaVersion else { return nil }
         guard state.isValidForPersistence else { return nil }
 
-        let sanitizedStockDrawCount = DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
+        let sanitizedStockDrawCount: Int = {
+            if state.variant == .klondike {
+                return DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
+            }
+            return DrawMode.three.rawValue
+        }()
         let sanitizedMovesCount = max(0, movesCount)
         let sanitizedScore = Scoring.clamped(score)
         let sanitizedSavedAt = min(savedAt, now)
         let sanitizedStartedAt = min(gameStartedAt, now)
-        let sanitizedScoringDrawCount = DrawMode(rawValue: scoringDrawCount)?.rawValue ?? sanitizedStockDrawCount
+        let sanitizedScoringDrawCount: Int = {
+            if state.variant == .klondike {
+                return DrawMode(rawValue: scoringDrawCount)?.rawValue ?? sanitizedStockDrawCount
+            }
+            return DrawMode.three.rawValue
+        }()
         let sanitizedPauseStartedAt = pauseStartedAt
             .map { min($0, now) }
             .flatMap { $0 >= sanitizedStartedAt ? $0 : nil }
@@ -171,17 +182,25 @@ struct SavedGamePayload: Codable {
             .suffix(SolitaireViewModel.maxUndoHistoryCount)
 
         var sanitizedState = state
-        sanitizedState.wasteDrawCount = min(
-            max(0, sanitizedState.wasteDrawCount),
-            min(sanitizedStockDrawCount, sanitizedState.waste.count)
-        )
+        if sanitizedState.variant == .klondike {
+            sanitizedState.wasteDrawCount = min(
+                max(0, sanitizedState.wasteDrawCount),
+                min(sanitizedStockDrawCount, sanitizedState.waste.count)
+            )
+        } else {
+            sanitizedState.wasteDrawCount = 0
+        }
 
         let sanitizedRedealState: GameState? = {
             guard var baseState = redealState, baseState.isValidForPersistence else { return nil }
-            baseState.wasteDrawCount = min(
-                max(0, baseState.wasteDrawCount),
-                min(sanitizedStockDrawCount, baseState.waste.count)
-            )
+            if baseState.variant == .klondike {
+                baseState.wasteDrawCount = min(
+                    max(0, baseState.wasteDrawCount),
+                    min(sanitizedStockDrawCount, baseState.waste.count)
+                )
+            } else {
+                baseState.wasteDrawCount = 0
+            }
             return baseState
         }()
 
@@ -207,6 +226,7 @@ struct SavedGamePayload: Codable {
         )
     }
 }
+
 
 enum GamePersistenceError: Error {
     case invalidPayload
@@ -371,7 +391,7 @@ struct GameStatistics: Codable, Equatable {
 
         if drawCount == DrawMode.one.rawValue {
             highScoreDrawOne = max(highScoreDrawOne ?? 0, sanitizedScore)
-        } else {
+        } else if drawCount == DrawMode.three.rawValue {
             highScoreDrawThree = max(highScoreDrawThree ?? 0, sanitizedScore)
         }
 
@@ -449,17 +469,27 @@ private struct CardIdentity: Hashable {
 
 private extension GameState {
     var allCards: [Card] {
-        stock + waste + foundations.flatMap { $0 } + tableau.flatMap { $0 }
+        stock + waste + freeCells.compactMap { $0 } + foundations.flatMap { $0 } + tableau.flatMap { $0 }
     }
 
     var isValidForPersistence: Bool {
-        guard foundations.count == 4, tableau.count == 7 else { return false }
-        guard wasteDrawCount >= 0, wasteDrawCount <= waste.count else { return false }
+        guard foundations.count == 4 else { return false }
+        guard freeCells.count == 4 else { return false }
+        guard hasValidVariantPersistenceLayout else { return false }
 
         let allCards = allCards
         guard allCards.count == 52 else { return false }
         guard Set(allCards.map(\.id)).count == 52 else { return false }
         guard Set(allCards.map { CardIdentity(suit: $0.suit, rank: $0.rank) }).count == 52 else { return false }
         return true
+    }
+
+    private var hasValidVariantPersistenceLayout: Bool {
+        switch variant {
+        case .klondike:
+            return KlondikePersistenceRules.hasValidLayout(state: self)
+        case .freecell:
+            return FreeCellPersistenceRules.hasValidLayout(state: self)
+        }
     }
 }

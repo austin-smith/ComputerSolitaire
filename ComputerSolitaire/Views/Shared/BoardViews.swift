@@ -13,7 +13,12 @@ enum Layout {
         let wasteFanSpacing: CGFloat
     }
 
-    static func metrics(for boardSize: CGSize, isRegularWidth: Bool = false) -> Metrics {
+    static func metrics(
+        for boardSize: CGSize,
+        isRegularWidth: Bool = false,
+        tableauColumnCount: Int = 7
+    ) -> Metrics {
+        let columnCount = max(1, tableauColumnCount)
         let boardWidth = boardSize.width
 #if os(iOS)
         let isCompactBoard = boardWidth <= 430
@@ -26,7 +31,7 @@ enum Layout {
         let columnSpacing: CGFloat = isCompactBoard ? 8 : (isMediumBoard ? 10 : 18)
 
         let usableWidth = max(0, boardWidth - (horizontalPadding * 2))
-        let fittedCardWidth = floor((usableWidth - (columnSpacing * 6)) / 7)
+        let fittedCardWidth = floor((usableWidth - (columnSpacing * CGFloat(columnCount - 1))) / CGFloat(columnCount))
         let maxCardWidth: CGFloat = isPadLandscape ? 112 : (boardWidth < 760 ? 96 : 120)
         let cardWidth = max(32, min(maxCardWidth, fittedCardWidth))
         let cardSize = CGSize(width: cardWidth, height: cardWidth * 1.45)
@@ -64,7 +69,7 @@ enum Layout {
         let rowSpacing = min(22, max(14, columnSpacing + 4))
 
         let usableWidth = max(0, boardWidth - (horizontalPadding * 2))
-        let fittedCardWidth = floor((usableWidth - (columnSpacing * 6)) / 7)
+        let fittedCardWidth = floor((usableWidth - (columnSpacing * CGFloat(columnCount - 1))) / CGFloat(columnCount))
         let maxCardWidth = min(124, max(88, boardWidth * 0.095))
         let cardWidth = max(52, min(maxCardWidth, fittedCardWidth))
         let cardSize = CGSize(width: cardWidth, height: cardWidth * 1.45)
@@ -188,6 +193,7 @@ struct StatTileView: View {
 
 struct TopRowView: View {
     @Bindable var viewModel: SolitaireViewModel
+    let variant: GameVariant
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let wasteFanSpacing: CGFloat
@@ -206,44 +212,35 @@ struct TopRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
-            StockView(
-                viewModel: viewModel,
-                cardSize: cardSize,
-                isHintTargeted: isStockHinted,
-                hintHighlightOpacity: hintHighlightOpacity,
-                hintWiggleToken: hintWiggleToken
-            )
-                .frame(width: cardSize.width, alignment: .leading)
-            WasteView(
-                viewModel: viewModel,
-                cardSize: cardSize,
-                fanSpacing: wasteFanSpacing,
-                isHintTargeted: isWasteHinted,
-                isCardTiltEnabled: isCardTiltEnabled,
-                cardTilts: $cardTilts,
-                hiddenCardIDs: hiddenCardIDs,
-                hintedCardIDs: hintedCardIDs,
-                hintWiggleToken: hintWiggleToken,
-                drawingCardIDs: drawingCardIDs,
-                fanProgress: fanProgress,
-                dragGesture: dragGesture
-            )
-            // Keep top-row columns aligned with tableau; waste fan can overflow visually
-            // without changing foundation positions.
-            .frame(width: cardSize.width, alignment: .leading)
-
-            Color.clear
-                .frame(width: cardSize.width, height: cardSize.height)
-                .accessibilityHidden(true)
-
-            ForEach(0..<4, id: \.self) { index in
-                FoundationView(
+        Group {
+            switch variant {
+            case .klondike:
+                KlondikeTopRowView(
                     viewModel: viewModel,
-                    index: index,
                     cardSize: cardSize,
-                    isTargeted: activeTarget == .foundation(index),
-                    isHintTargeted: hintedTarget == .foundation(index),
+                    columnSpacing: columnSpacing,
+                    wasteFanSpacing: wasteFanSpacing,
+                    activeTarget: activeTarget,
+                    hintedTarget: hintedTarget,
+                    isStockHinted: isStockHinted,
+                    isWasteHinted: isWasteHinted,
+                    hintHighlightOpacity: hintHighlightOpacity,
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
+                    hiddenCardIDs: hiddenCardIDs,
+                    hintedCardIDs: hintedCardIDs,
+                    hintWiggleToken: hintWiggleToken,
+                    drawingCardIDs: drawingCardIDs,
+                    fanProgress: fanProgress,
+                    dragGesture: dragGesture
+                )
+            case .freecell:
+                FreeCellTopRowView(
+                    viewModel: viewModel,
+                    cardSize: cardSize,
+                    columnSpacing: columnSpacing,
+                    activeTarget: activeTarget,
+                    hintedTarget: hintedTarget,
                     hintHighlightOpacity: hintHighlightOpacity,
                     isCardTiltEnabled: isCardTiltEnabled,
                     cardTilts: $cardTilts,
@@ -252,12 +249,8 @@ struct TopRowView: View {
                     hintWiggleToken: hintWiggleToken,
                     dragGesture: dragGesture
                 )
-                .frame(width: cardSize.width, alignment: .leading)
             }
         }
-#if os(iOS)
-        .frame(maxWidth: .infinity, alignment: .leading)
-#endif
     }
 }
 
@@ -279,7 +272,7 @@ struct TableauRowView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: columnSpacing) {
-            ForEach(0..<7, id: \.self) { index in
+            ForEach(Array(viewModel.state.tableau.indices), id: \.self) { index in
                 TableauPileView(
                     viewModel: viewModel,
                     pileIndex: index,
@@ -301,124 +294,6 @@ struct TableauRowView: View {
 #if os(iOS)
         .frame(maxWidth: .infinity, alignment: .leading)
 #endif
-    }
-}
-
-struct StockView: View {
-    @Bindable var viewModel: SolitaireViewModel
-    let cardSize: CGSize
-    let isHintTargeted: Bool
-    let hintHighlightOpacity: Double
-    let hintWiggleToken: UUID
-
-    var body: some View {
-        ZStack {
-            PilePlaceholderView(cardSize: cardSize)
-                .allowsHitTesting(false)
-            if viewModel.state.stock.isEmpty {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.7))
-            } else {
-                CardBackView(cardSize: cardSize)
-            }
-            Text("\(viewModel.state.stock.count)")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.8))
-                .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
-
-            DropHighlightView(
-                cardSize: cardSize,
-                isTargeted: false,
-                isHintTargeted: isHintTargeted,
-                hintOpacity: hintHighlightOpacity
-            )
-            .allowsHitTesting(false)
-        }
-        .hintWiggle(token: isHintTargeted ? hintWiggleToken : nil)
-        .background(
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(key: StockFrameKey.self, value: proxy.frame(in: .named("board")))
-            }
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            viewModel.handleStockTap()
-        }
-        .accessibilityLabel("Stock")
-    }
-}
-
-struct WasteView: View {
-    @Bindable var viewModel: SolitaireViewModel
-    let cardSize: CGSize
-    let fanSpacing: CGFloat
-    let isHintTargeted: Bool
-    let isCardTiltEnabled: Bool
-    @Binding var cardTilts: [UUID: Double]
-    let hiddenCardIDs: Set<UUID>
-    let hintedCardIDs: Set<UUID>
-    let hintWiggleToken: UUID
-    let drawingCardIDs: Set<UUID>
-    let fanProgress: [UUID: Double]
-    let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
-
-    var body: some View {
-        let isDragSource: Bool = {
-            guard viewModel.isDragging, let selection = viewModel.selection else { return false }
-            if case .waste = selection.source {
-                return true
-            }
-            return false
-        }()
-        let visibleWaste = viewModel.visibleWasteCards()
-        let isSelected = visibleWaste.contains(where: { viewModel.isSelected(card: $0) })
-        let fanWidth = fanSpacing * CGFloat(max(0, visibleWaste.count - 1))
-
-        ZStack(alignment: .topLeading) {
-            PilePlaceholderView(cardSize: cardSize)
-                .hintWiggle(token: isHintTargeted ? hintWiggleToken : nil)
-            ForEach(Array(visibleWaste.enumerated()), id: \.element.id) { index, card in
-                let isTopCard = index == visibleWaste.count - 1
-                let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
-                let isDrawing = drawingCardIDs.contains(card.id)
-                let isHidden = hiddenCardIDs.contains(card.id)
-                let progress = fanProgress[card.id] ?? 1
-                let xOffset = CGFloat(index) * fanSpacing * progress
-                let cardView = CardView(
-                    card: card,
-                    isSelected: viewModel.isSelected(card: card),
-                    cardSize: cardSize,
-                    isCardTiltEnabled: isCardTiltEnabled,
-                    cardTilts: $cardTilts,
-                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
-                )
-                .opacity(isDragged || isDrawing || isHidden ? 0 : 1)
-                .offset(x: xOffset, y: 0)
-                .zIndex(isTopCard ? 2 : Double(index))
-                .allowsHitTesting(isTopCard && !isDrawing && !isHidden)
-                .cardFramePreference(card.id, xOffset: xOffset)
-
-                if isTopCard {
-                    cardView.gesture(dragGesture(.waste))
-                } else {
-                    cardView
-                }
-            }
-        }
-        .frame(width: cardSize.width + fanWidth, height: cardSize.height, alignment: .leading)
-        .background(
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(key: WasteFrameKey.self, value: proxy.frame(in: .named("board")))
-            }
-        )
-        .onTapGesture {
-            viewModel.handleWasteTap()
-        }
-        .zIndex(isDragSource || isSelected ? 10 : 0)
-        .accessibilityLabel("Waste")
     }
 }
 
@@ -657,13 +532,13 @@ struct TableauPileView: View {
     }
 }
 
-private enum HintWiggleStyle {
+enum HintWiggleStyle {
     static let angles: [Double] = [-1.4, 1.4, -0.8, 0.8, 0]
     static let stepDuration: Double = 0.13
     static let stepSleepNanoseconds: UInt64 = 200_000_000
 }
 
-private struct HintWiggleModifier: ViewModifier {
+struct HintWiggleModifier: ViewModifier {
     let token: UUID?
     @State private var wiggleAngle: Double = 0
     @State private var wiggleTask: Task<Void, Never>?
@@ -705,7 +580,7 @@ private struct HintWiggleModifier: ViewModifier {
     }
 }
 
-private extension View {
+extension View {
     func hintWiggle(token: UUID?) -> some View {
         modifier(HintWiggleModifier(token: token))
     }

@@ -48,6 +48,8 @@ enum MoveEvaluationRanking {
             return index
         case .tableau(let index):
             return 100 + index
+        case .freeCell(let index):
+            return 200 + index
         }
     }
 }

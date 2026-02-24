@@ -43,6 +43,7 @@ enum TableBackgroundColor: String, CaseIterable, Identifiable {
 
 enum SettingsKey {
     static let cardTiltEnabled = "settings.cardTiltEnabled"
+    static let gameVariant = "settings.gameVariant"
     static let drawMode = "settings.drawMode"
     static let tableBackgroundColor = "settings.tableBackgroundColor"
     static let feltEffectEnabled = "settings.feltEffectEnabled"
@@ -54,6 +55,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingRulesAndScoring = false
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
+    @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
     @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
@@ -124,20 +126,39 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                 }
 
-                SettingsCard(title: "Draw Mode") {
+                SettingsCard(title: "Game Type") {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Stock draw")
+                        Text("Variant")
                             .font(.subheadline.weight(.semibold))
-                        Picker("Stock draw", selection: $drawModeRawValue) {
-                            ForEach(DrawMode.allCases, id: \.rawValue) { mode in
-                                Text(mode.title).tag(mode.rawValue)
+                        Picker("Variant", selection: $gameVariantRawValue) {
+                            ForEach(GameVariant.allCases, id: \.rawValue) { variant in
+                                Text(variant.title).tag(variant.rawValue)
                             }
                         }
                         .labelsHidden()
                         .pickerStyle(.segmented)
-                        Text("Choose how many cards to draw from the stock.")
+                        Text("Switch between Klondike and FreeCell.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                if gameVariantRawValue == GameVariant.klondike.rawValue {
+                    SettingsCard(title: "Draw Mode") {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Stock draw")
+                                .font(.subheadline.weight(.semibold))
+                            Picker("Stock draw", selection: $drawModeRawValue) {
+                                ForEach(DrawMode.allCases, id: \.rawValue) { mode in
+                                    Text(mode.title).tag(mode.rawValue)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            Text("Choose how many cards to draw from the stock.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -179,6 +200,10 @@ struct SettingsView: View {
             }
         }
         .onChange(of: drawModeRawValue) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HapticManager.shared.play(.settingsSelection)
+        }
+        .onChange(of: gameVariantRawValue) { oldValue, newValue in
             guard oldValue != newValue else { return }
             HapticManager.shared.play(.settingsSelection)
         }

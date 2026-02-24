@@ -16,7 +16,7 @@ final class SolitaireViewModel {
     static let maxUndoHistoryCount = 200
     private static let hintVisibilityDuration: TimeInterval = 1.5
 
-    private(set) var state: GameState
+    var state: GameState
     private(set) var isAutoFinishAvailable: Bool
     private(set) var isHintAvailable: Bool
     private var redealState: GameState
@@ -54,10 +54,13 @@ final class SolitaireViewModel {
         let destination: Destination
     }
 
-    init(dateProvider: any DateProviding = SystemDateProvider()) {
+    init(
+        dateProvider: any DateProviding = SystemDateProvider(),
+        variant: GameVariant = .klondike
+    ) {
         self.dateProvider = dateProvider
         let startedAt = dateProvider.now
-        let initialState = GameState.newGame()
+        let initialState = GameState.newGame(variant: variant)
         state = initialState
         isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: initialState)
         isHintAvailable = HintAdvisor.bestHint(
@@ -68,6 +71,10 @@ final class SolitaireViewModel {
         gameStartedAt = startedAt
         hasStartedTrackedGame = false
         GameStatisticsStore.markTrackingStarted(at: startedAt)
+    }
+
+    var gameVariant: GameVariant {
+        state.variant
     }
 
     var isWin: Bool {
@@ -202,10 +209,11 @@ final class SolitaireViewModel {
         return true
     }
 
-    func newGame(drawMode: DrawMode = .three) {
+    func newGame(variant: GameVariant? = nil, drawMode: DrawMode = .three) {
         finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: dateProvider.now)
         clearHint()
-        let initialState = GameState.newGame()
+        let nextVariant = variant ?? state.variant
+        let initialState = GameState.newGame(variant: nextVariant)
         state = initialState
         redealState = initialState
         selection = nil
@@ -217,14 +225,12 @@ final class SolitaireViewModel {
         hasAppliedTimeBonus = false
         finalElapsedSeconds = nil
         pauseStartedAt = nil
-        stockDrawCount = drawMode.rawValue
-        scoringDrawCount = drawMode.rawValue
+        applyNewGameVariantConfiguration(variant: nextVariant, drawMode: drawMode)
         hasStartedTrackedGame = true
         isCurrentGameFinalized = false
         hintRequestsInCurrentGame = 0
         undosUsedInCurrentGame = 0
         usedRedealInCurrentGame = false
-        state.wasteDrawCount = 0
         history.removeAll()
         refreshAutoFinishAvailability()
     }
@@ -242,34 +248,14 @@ final class SolitaireViewModel {
         hasAppliedTimeBonus = false
         finalElapsedSeconds = nil
         pauseStartedAt = nil
-        scoringDrawCount = stockDrawCount
+        applyRedealVariantConfiguration()
         hasStartedTrackedGame = true
         isCurrentGameFinalized = false
         hintRequestsInCurrentGame = 0
         undosUsedInCurrentGame = 0
         usedRedealInCurrentGame = true
-        state.wasteDrawCount = min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         history.removeAll()
         refreshAutoFinishAvailability()
-    }
-
-    func updateDrawMode(_ drawMode: DrawMode) {
-        clearHint()
-        stockDrawCount = drawMode.rawValue
-        if drawMode == .one {
-            state.wasteDrawCount = min(1, state.waste.count)
-        } else {
-            state.wasteDrawCount = min(state.wasteDrawCount, drawMode.rawValue)
-        }
-        selection = nil
-        isDragging = false
-        pendingAutoMove = nil
-        refreshAutoFinishAvailability()
-    }
-
-    func visibleWasteCards() -> [Card] {
-        let count = min(state.wasteDrawCount, stockDrawCount)
-        return Array(state.waste.suffix(count))
     }
 
     func undo() {
@@ -339,9 +325,9 @@ final class SolitaireViewModel {
         usedRedealInCurrentGame = sanitizedPayload.usedRedealInCurrentGame
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
         var restoredRedealState = sanitizedPayload.redealState ?? history.first?.state ?? state
-        restoredRedealState.wasteDrawCount = min(
-            max(0, restoredRedealState.wasteDrawCount),
-            min(stockDrawCount, restoredRedealState.waste.count)
+        restoredRedealState = normalizedRedealStateForCurrentVariant(
+            from: restoredRedealState,
+            stockDrawCount: stockDrawCount
         )
         redealState = restoredRedealState
         selection = nil
@@ -349,33 +335,6 @@ final class SolitaireViewModel {
         pendingAutoMove = nil
         refreshAutoFinishAvailability()
         return true
-    }
-
-    func handleStockTap() {
-        clearHint()
-        selection = nil
-        isDragging = false
-        pendingAutoMove = nil
-        if state.stock.isEmpty {
-            recycleWaste()
-        } else {
-            drawFromStock()
-        }
-    }
-
-    func handleWasteTap() {
-        guard let top = state.waste.last, state.wasteDrawCount > 0 else { return }
-        HapticManager.shared.play(.cardPickUp)
-        let wasteSelection = Selection(source: .waste, cards: [top])
-        if queueBestAutoMove(for: wasteSelection) {
-            return
-        }
-        if selection?.source == .waste {
-            selection = nil
-            return
-        }
-        isDragging = false
-        selection = wasteSelection
     }
 
     func handleFoundationTap(index: Int) {
@@ -405,30 +364,25 @@ final class SolitaireViewModel {
             guard cardIndex < pile.count else { return }
             let card = pile[cardIndex]
 
-            if !card.isFaceUp {
-                if cardIndex == pile.count - 1 {
-                    clearHint()
-                    pushHistory(
-                        undoContext: UndoAnimationContext(
-                            action: .flipTableauTop,
-                            cardIDs: [card.id]
-                        )
-                    )
-                    state.tableau[pileIndex][cardIndex].isFaceUp = true
-                    movesCount += 1
-                    applyScore(.turnOverTableauCard)
-                    SoundManager.shared.play(.cardFlipFaceUp)
-                    HapticManager.shared.play(.cardFlipFaceUp)
-                    refreshAutoFinishAvailability()
-                }
-                selection = nil
+            if handleVariantTableauTapIfNeeded(
+                pile: pile,
+                pileIndex: pileIndex,
+                cardIndex: cardIndex,
+                card: card
+            ) {
                 return
             }
 
             HapticManager.shared.play(.cardPickUp)
+            let selectedCards = Array(pile[cardIndex...])
+            guard canSelectTableauCards(selectedCards) else {
+                selection = nil
+                HapticManager.shared.play(.invalidDrop)
+                return
+            }
             let tappedSelection = Selection(
                 source: .tableau(pile: pileIndex, index: cardIndex),
-                cards: Array(pile[cardIndex...])
+                cards: selectedCards
             )
             if selection?.source == tappedSelection.source {
                 self.selection = nil
@@ -458,52 +412,12 @@ final class SolitaireViewModel {
     }
 
     @discardableResult
-    func startDragFromWaste() -> Bool {
-        guard let top = state.waste.last, state.wasteDrawCount > 0 else { return false }
-        clearHint()
-        selection = Selection(source: .waste, cards: [top])
-        isDragging = true
-        return true
-    }
-
-    @discardableResult
     func startDragFromFoundation(index: Int) -> Bool {
         guard let top = state.foundations[index].last else { return false }
         clearHint()
         selection = Selection(source: .foundation(pile: index), cards: [top])
         isDragging = true
         return true
-    }
-
-    @discardableResult
-    func startDragFromTableau(pileIndex: Int, cardIndex: Int) -> Bool {
-        let pile = state.tableau[pileIndex]
-        guard cardIndex < pile.count else { return false }
-        let card = pile[cardIndex]
-        guard card.isFaceUp else { return false }
-        clearHint()
-        let cards = Array(pile[cardIndex...])
-        selection = Selection(source: .tableau(pile: pileIndex, index: cardIndex), cards: cards)
-        isDragging = true
-        return true
-    }
-
-    func canDrop(to destination: Destination) -> Bool {
-        guard let selection, let movingCard = selection.cards.first else { return false }
-
-        switch destination {
-        case .foundation(let index):
-            guard selection.cards.count == 1 else { return false }
-            return GameRules.canMoveToFoundation(
-                card: movingCard,
-                foundation: state.foundations[index]
-            )
-        case .tableau(let index):
-            return GameRules.canMoveToTableau(
-                card: movingCard,
-                destinationPile: state.tableau[index]
-            )
-        }
     }
 
     @discardableResult
@@ -525,19 +439,87 @@ final class SolitaireViewModel {
         pendingAutoMove = nil
     }
 
-    @discardableResult
-    func queueNextAutoFinishMove() -> Bool {
-        isDragging = false
-        guard let move = AutoFinishPlanner.nextAutoFinishMove(in: state) else {
+    func setStockDrawCount(_ count: Int) {
+        stockDrawCount = count
+    }
+
+    func setScoringDrawCount(_ count: Int) {
+        scoringDrawCount = count
+    }
+
+    func setWasteDrawCount(_ count: Int) {
+        state.wasteDrawCount = max(0, count)
+    }
+
+    func incrementMovesCount() {
+        movesCount += 1
+    }
+
+    private func applyNewGameVariantConfiguration(variant: GameVariant, drawMode: DrawMode) {
+        switch variant {
+        case .klondike:
+            configureKlondikeNewGame(drawMode: drawMode)
+        case .freecell:
+            configureFreeCellNewGame()
+        }
+    }
+
+    private func applyRedealVariantConfiguration() {
+        switch state.variant {
+        case .klondike:
+            configureKlondikeRedeal()
+        case .freecell:
+            configureFreeCellRedeal()
+        }
+    }
+
+    private func normalizedRedealStateForCurrentVariant(
+        from state: GameState,
+        stockDrawCount: Int
+    ) -> GameState {
+        switch state.variant {
+        case .klondike:
+            return sanitizeKlondikeRedealState(state, stockDrawCount: stockDrawCount)
+        case .freecell:
+            return sanitizeFreeCellRedealState(state)
+        }
+    }
+
+    private func handleVariantTableauTapIfNeeded(
+        pile: [Card],
+        pileIndex: Int,
+        cardIndex: Int,
+        card: Card
+    ) -> Bool {
+        switch state.variant {
+        case .klondike:
+            return handleKlondikeTableauFaceDownTap(
+                pile: pile,
+                pileIndex: pileIndex,
+                cardIndex: cardIndex,
+                card: card
+            )
+        case .freecell:
             return false
         }
+    }
 
-        pendingAutoMove = PendingAutoMove(
-            id: UUID(),
-            selection: move.selection,
-            destination: move.destination
-        )
-        return true
+    private func canSelectTableauCards(_ cards: [Card]) -> Bool {
+        switch state.variant {
+        case .klondike:
+            return true
+        case .freecell:
+            return canSelectFreeCellTableauCards(cards)
+        }
+    }
+
+    private func statisticsDrawCountForCurrentVariant() -> Int {
+        switch state.variant {
+        case .klondike:
+            return scoringDrawCount
+        case .freecell:
+            return 0
+        }
     }
 
     func refreshAutoFinishAvailability() {
@@ -546,63 +528,7 @@ final class SolitaireViewModel {
     }
 }
 
-private extension SolitaireViewModel {
-    func drawFromStock() {
-        guard !state.stock.isEmpty else { return }
-        clearHint()
-        let drawCount = min(stockDrawCount, state.stock.count)
-        let drawnCardIDs = (0..<drawCount).map { offset in
-            state.stock[state.stock.count - 1 - offset].id
-        }
-        pushHistory(
-            undoContext: UndoAnimationContext(
-                action: .drawFromStock,
-                cardIDs: drawnCardIDs
-            )
-        )
-        for _ in 0..<drawCount {
-            var card = state.stock.removeLast()
-            card.isFaceUp = true
-            state.waste.append(card)
-        }
-        state.wasteDrawCount = drawCount
-        movesCount += 1
-        SoundManager.shared.play(.cardDrawFromStock)
-        HapticManager.shared.play(.stockDraw)
-        refreshAutoFinishAvailability()
-    }
-
-    func recycleWaste() {
-        guard state.stock.isEmpty, !state.waste.isEmpty else { return }
-        clearHint()
-        let visibleWasteIDs = visibleWasteCards().map(\.id)
-        let animatedWasteIDs = visibleWasteIDs.isEmpty
-            ? [state.waste.last?.id].compactMap { $0 }
-            : visibleWasteIDs
-        pushHistory(
-            undoContext: UndoAnimationContext(
-                action: .recycleWaste,
-                cardIDs: animatedWasteIDs
-            )
-        )
-        var newStock: [Card] = []
-        for card in state.waste.reversed() {
-            var newCard = card
-            newCard.isFaceUp = false
-            newStock.append(newCard)
-        }
-        state.stock = newStock
-        state.waste.removeAll()
-        state.wasteDrawCount = 0
-        movesCount += 1
-        if stockDrawCount == DrawMode.one.rawValue {
-            applyScore(.recycleWasteInDrawOne)
-        }
-        SoundManager.shared.play(.wasteRecycleToStock)
-        HapticManager.shared.play(.wasteRecycle)
-        refreshAutoFinishAvailability()
-    }
-
+extension SolitaireViewModel {
     func selectFromTableau(pileIndex: Int, cardIndex: Int) {
         let pile = state.tableau[pileIndex]
         guard cardIndex < pile.count else { return }
@@ -615,6 +541,11 @@ private extension SolitaireViewModel {
     func selectFromFoundation(index: Int) {
         guard let top = state.foundations[index].last else { return }
         selection = Selection(source: .foundation(pile: index), cards: [top])
+    }
+
+    func selectFromFreeCell(index: Int) {
+        guard state.freeCells.indices.contains(index), let card = state.freeCells[index] else { return }
+        selection = Selection(source: .freeCell(slot: index), cards: [card])
     }
 
     func tryMoveSelection(to destination: Destination) -> Bool {
@@ -642,7 +573,7 @@ private extension SolitaireViewModel {
             return true
 
         case .tableau(let index):
-            guard GameRules.canMoveToTableau(card: movingCard, destinationPile: state.tableau[index]) else { return false }
+            guard canDrop(to: destination) else { return false }
             clearHint()
             pushHistory(
                 undoContext: UndoAnimationContext(
@@ -654,6 +585,25 @@ private extension SolitaireViewModel {
             state.tableau[index].append(contentsOf: selection.cards)
             movesCount += 1
             applyScore(for: selection.source, destination: .tableau(index))
+            applyTimeBonusIfWon()
+            self.selection = nil
+            SoundManager.shared.play(.cardPlaced)
+            refreshAutoFinishAvailability()
+            return true
+
+        case .freeCell(let index):
+            guard canDrop(to: destination) else { return false }
+            clearHint()
+            pushHistory(
+                undoContext: UndoAnimationContext(
+                    action: .moveSelection,
+                    cardIDs: selection.cards.map(\.id)
+                )
+            )
+            removeSelection(selection)
+            state.freeCells[index] = movingCard
+            movesCount += 1
+            applyScore(for: selection.source, destination: .freeCell(index))
             applyTimeBonusIfWon()
             self.selection = nil
             SoundManager.shared.play(.cardPlaced)
@@ -673,6 +623,8 @@ private extension SolitaireViewModel {
             }
         case .foundation(let pile):
             _ = state.foundations[pile].popLast()
+        case .freeCell(let slot):
+            state.freeCells[slot] = nil
         case .tableau(let pile, let index):
             var cards = state.tableau[pile]
             cards.removeSubrange(index..<cards.count)
@@ -682,12 +634,11 @@ private extension SolitaireViewModel {
     }
 
     func flipTopCardIfNeeded(in pileIndex: Int) {
-        guard let lastIndex = state.tableau[pileIndex].indices.last else { return }
-        if !state.tableau[pileIndex][lastIndex].isFaceUp {
-            state.tableau[pileIndex][lastIndex].isFaceUp = true
-            applyScore(.turnOverTableauCard)
-            SoundManager.shared.play(.cardFlipFaceUp)
-            HapticManager.shared.play(.cardFlipFaceUp)
+        switch state.variant {
+        case .klondike:
+            flipKlondikeTopCardIfNeeded(in: pileIndex)
+        case .freecell:
+            break
         }
     }
 
@@ -707,16 +658,10 @@ private extension SolitaireViewModel {
     }
 
     func applyScore(for source: Selection.Source, destination: Destination) {
-        switch (source, destination) {
-        case (.waste, .tableau):
-            applyScore(.wasteToTableau)
-        case (.waste, .foundation):
-            applyScore(.wasteToFoundation)
-        case (.tableau, .foundation):
-            applyScore(.tableauToFoundation)
-        case (.foundation, .tableau):
-            applyScore(.foundationToTableau)
-        default:
+        switch state.variant {
+        case .klondike:
+            applyKlondikeMoveScore(for: source, destination: destination)
+        case .freecell:
             break
         }
     }
@@ -750,7 +695,7 @@ private extension SolitaireViewModel {
                 didWin: didWin,
                 elapsedSeconds: elapsedSeconds,
                 finalScore: score,
-                drawCount: scoringDrawCount,
+                drawCount: statisticsDrawCountForCurrentVariant(),
                 hintsUsedInGame: hintRequestsInCurrentGame,
                 undosUsedInGame: undosUsedInCurrentGame,
                 usedRedealInGame: usedRedealInCurrentGame

@@ -34,6 +34,7 @@ enum AutoFinishPlanner {
 
 private extension AutoFinishPlanner {
     static func isAutoFinishCandidateState(_ state: GameState) -> Bool {
+        guard state.variant == .klondike else { return false }
         guard !isWin(state) else { return false }
         guard state.stock.isEmpty, state.waste.isEmpty else { return false }
         return !state.tableau.joined().contains(where: { !$0.isFaceUp })

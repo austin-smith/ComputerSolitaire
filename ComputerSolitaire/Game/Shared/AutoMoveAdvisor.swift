@@ -83,8 +83,19 @@ enum AutoMoveAdvisor {
                 continue
             }
             let tableauPile = state.tableau[tableauIndex]
-            if GameRules.canMoveToTableau(card: movingCard, destinationPile: tableauPile) {
-                if isRedundantEmptyColumnTransfer(
+            if GameRules.canMoveToTableau(
+                card: movingCard,
+                destinationPile: tableauPile,
+                variant: state.variant
+            ) {
+                guard variantAllowsTableauTransfer(
+                    selection: selection,
+                    destinationTableauIndex: tableauIndex,
+                    in: state
+                ) else {
+                    continue
+                }
+                if isVariantRedundantEmptyColumnTransfer(
                     selection: selection,
                     destinationTableauIndex: tableauIndex,
                     in: state
@@ -94,6 +105,8 @@ enum AutoMoveAdvisor {
                 destinations.append(.tableau(tableauIndex))
             }
         }
+
+        appendVariantAuxiliaryDestinations(for: selection, in: state, destinations: &destinations)
 
         return destinations
     }
@@ -109,6 +122,13 @@ enum AutoMoveAdvisor {
             guard let topFoundationCard = state.foundations[foundationIndex].last else { continue }
             selections.append(
                 Selection(source: .foundation(pile: foundationIndex), cards: [topFoundationCard])
+            )
+        }
+
+        for freeCellIndex in state.freeCells.indices {
+            guard let freeCellCard = state.freeCells[freeCellIndex] else { continue }
+            selections.append(
+                Selection(source: .freeCell(slot: freeCellIndex), cards: [freeCellCard])
             )
         }
 
@@ -227,6 +247,9 @@ private extension AutoMoveAdvisor {
         case .waste:
             // Waste moves are resource-limited and usually unblock future draws.
             return true
+
+        case .freeCell:
+            return evaluation.mobilityDelta >= 0 || hasImmediateForwardGain(evaluation)
 
         case .foundation(let sourceFoundationIndex):
             guard case .tableau(let destinationTableauIndex) = evaluation.destination else {
@@ -395,6 +418,8 @@ private extension AutoMoveAdvisor {
             if pile == rollbackPolicy.sourceFoundationIndex {
                 return true
             }
+        case .freeCell:
+            break
         case .tableau(let pile, _):
             if pile == rollbackPolicy.destinationTableauIndex {
                 return true
@@ -408,6 +433,8 @@ private extension AutoMoveAdvisor {
             return pile == rollbackPolicy.sourceFoundationIndex
         case .tableau(let pile):
             return pile == rollbackPolicy.destinationTableauIndex
+        case .freeCell:
+            return false
         }
     }
 
@@ -485,6 +512,8 @@ private extension AutoMoveAdvisor {
             switch source {
             case .waste:
                 return 0
+            case .freeCell(let slot):
+                return 50 + slot
             case .foundation(let pile):
                 return 100 + pile
             case .tableau(let pile, let index):
@@ -498,6 +527,8 @@ private extension AutoMoveAdvisor {
                 return index
             case .tableau(let index):
                 return 100 + index
+            case .freeCell(let index):
+                return 200 + index
             }
         }
     }
@@ -515,18 +546,21 @@ private extension AutoMoveAdvisor {
     }
 
     static func destinationPriority(for destination: Destination, in state: GameState) -> Int {
-        switch destination {
-        case .tableau(let index):
-            return state.tableau[index].isEmpty ? 0 : 2
-        case .foundation:
-            return 1
+        switch state.variant {
+        case .klondike:
+            return KlondikeAutoMoveAdvisor.destinationPriority(for: destination, in: state)
+        case .freecell:
+            return FreeCellAutoMoveAdvisor.destinationPriority(for: destination, in: state)
         }
     }
 
     static func revealsFaceDownCard(selection: Selection, in state: GameState) -> Bool {
-        guard case .tableau(let pile, let index) = selection.source else { return false }
-        guard index > 0 else { return false }
-        return !state.tableau[pile][index - 1].isFaceUp
+        switch state.variant {
+        case .klondike:
+            return KlondikeAutoMoveAdvisor.revealsFaceDownCard(selection: selection, in: state)
+        case .freecell:
+            return false
+        }
     }
 
     static func clearsSourcePile(selection: Selection, in state: GameState) -> Bool {
@@ -540,20 +574,11 @@ private extension AutoMoveAdvisor {
         destinationTableauIndex: Int,
         in state: GameState
     ) -> Bool {
-        guard case .tableau(let sourcePile, let sourceIndex) = selection.source else { return false }
-        guard sourcePile != destinationTableauIndex else { return false }
-        guard state.tableau.indices.contains(sourcePile),
-              state.tableau.indices.contains(destinationTableauIndex) else { return false }
-        guard state.tableau[destinationTableauIndex].isEmpty else { return false }
-        guard sourceIndex == 0 else { return false }
-
-        let sourceCards = state.tableau[sourcePile]
-        guard selection.cards.count == sourceCards.count else { return false }
-        guard let movingCard = selection.cards.first else { return false }
-
-        // Moving an entire king-led tableau stack to another empty column is a no-op
-        // for advisor quality purposes (manual play can still do this).
-        return movingCard.rank == .king
+        isVariantRedundantEmptyColumnTransfer(
+            selection: selection,
+            destinationTableauIndex: destinationTableauIndex,
+            in: state
+        )
     }
 
     static func mobilityScore(in state: GameState, stockDrawCount: Int) -> Int {
@@ -567,14 +592,7 @@ private extension AutoMoveAdvisor {
     }
 
     static func isValidTableauSequence(_ cards: [Card]) -> Bool {
-        guard cards.count > 1 else { return true }
-        for index in 0..<(cards.count - 1) {
-            let upper = cards[index]
-            let lower = cards[index + 1]
-            guard upper.suit.isRed != lower.suit.isRed else { return false }
-            guard upper.rank.rawValue == lower.rank.rawValue + 1 else { return false }
-        }
-        return true
+        GameRules.isValidDescendingAlternatingSequence(cards)
     }
 
     static func simulatedState(
@@ -596,14 +614,13 @@ private extension AutoMoveAdvisor {
             } else {
                 nextState.wasteDrawCount = max(0, nextState.wasteDrawCount - 1)
             }
+        case .freeCell(let slot):
+            nextState.freeCells[slot] = nil
         case .foundation(let pile):
             _ = nextState.foundations[pile].popLast()
         case .tableau(let pile, let index):
             nextState.tableau[pile].removeSubrange(index..<nextState.tableau[pile].count)
-            if let topIndex = nextState.tableau[pile].indices.last,
-               !nextState.tableau[pile][topIndex].isFaceUp {
-                nextState.tableau[pile][topIndex].isFaceUp = true
-            }
+            applyVariantTableauSourceRemovalEffects(on: &nextState, pileIndex: pile)
         }
 
         switch destination {
@@ -612,6 +629,9 @@ private extension AutoMoveAdvisor {
             nextState.foundations[index].append(card)
         case .tableau(let index):
             nextState.tableau[index].append(contentsOf: selection.cards)
+        case .freeCell(let index):
+            guard selection.cards.count == 1, let card = selection.cards.first else { return nil }
+            nextState.freeCells[index] = card
         }
 
         return nextState
@@ -624,6 +644,11 @@ private extension AutoMoveAdvisor {
         case .waste:
             guard selection.cards.count == 1, let topWaste = state.waste.last else { return false }
             return topWaste.id == selection.cards[0].id
+
+        case .freeCell(let slot):
+            guard selection.cards.count == 1 else { return false }
+            guard state.freeCells.indices.contains(slot), let freeCellCard = state.freeCells[slot] else { return false }
+            return freeCellCard.id == selection.cards[0].id
 
         case .foundation(let pile):
             guard selection.cards.count == 1 else { return false }
@@ -638,6 +663,74 @@ private extension AutoMoveAdvisor {
             let selectedCards = Array(sourcePile[index...])
             guard selectedCards.count == selection.cards.count else { return false }
             return zip(selectedCards, selection.cards).allSatisfy { $0.id == $1.id }
+        }
+    }
+
+    static func variantAllowsTableauTransfer(
+        selection: Selection,
+        destinationTableauIndex: Int,
+        in state: GameState
+    ) -> Bool {
+        switch state.variant {
+        case .klondike:
+            return KlondikeAutoMoveAdvisor.allowsTableauTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
+        case .freecell:
+            return FreeCellAutoMoveAdvisor.allowsTableauTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
+        }
+    }
+
+    static func isVariantRedundantEmptyColumnTransfer(
+        selection: Selection,
+        destinationTableauIndex: Int,
+        in state: GameState
+    ) -> Bool {
+        switch state.variant {
+        case .klondike:
+            return KlondikeAutoMoveAdvisor.isRedundantEmptyColumnTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
+        case .freecell:
+            return false
+        }
+    }
+
+    static func appendVariantAuxiliaryDestinations(
+        for selection: Selection,
+        in state: GameState,
+        destinations: inout [Destination]
+    ) {
+        switch state.variant {
+        case .klondike:
+            KlondikeAutoMoveAdvisor.appendAuxiliaryDestinations(
+                for: selection,
+                in: state,
+                destinations: &destinations
+            )
+        case .freecell:
+            FreeCellAutoMoveAdvisor.appendAuxiliaryDestinations(
+                for: selection,
+                in: state,
+                destinations: &destinations
+            )
+        }
+    }
+
+    static func applyVariantTableauSourceRemovalEffects(on state: inout GameState, pileIndex: Int) {
+        switch state.variant {
+        case .klondike:
+            KlondikeAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
+        case .freecell:
+            FreeCellAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         }
     }
 }

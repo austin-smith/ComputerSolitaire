@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RulesAndScoringView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
 
     enum Section: String, CaseIterable, Identifiable {
         case rules = "Rules"
@@ -37,6 +38,10 @@ struct RulesAndScoringView: View {
         TermRow(term: "Waste", definition: "Face-up cards drawn from the stock; only the top card is playable."),
         TermRow(term: "Draw mode", definition: "How many cards are drawn from stock each time: 1-card or 3-card.")
     ]
+
+    private var gameVariant: GameVariant {
+        GameVariant(rawValue: gameVariantRawValue) ?? .klondike
+    }
 
     private let scoringRows: [ScoringRow] = [
         ScoringRow(move: "Waste to Tableau", points: Scoring.delta(for: .wasteToTableau), note: nil),
@@ -129,7 +134,7 @@ struct RulesAndScoringView: View {
     private var termsCard: some View {
         sectionCard(title: "Terms") {
             VStack(alignment: .leading, spacing: 10) {
-                ForEach(terms) { row in
+                ForEach(termsForCurrentVariant) { row in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(row.term)
                             .font(.subheadline.weight(.semibold))
@@ -145,12 +150,9 @@ struct RulesAndScoringView: View {
     private var rulesCard: some View {
         sectionCard(title: "Rules") {
             VStack(alignment: .leading, spacing: 8) {
-                rulesRow("Build tableau piles down by alternating colors.")
-                rulesRow("Move Aces to foundations first, then build each suit up to King.")
-                rulesRow("Only Kings can fill an empty tableau pile.")
-                rulesRow("In 1-card draw, flip one stock card at a time. In 3-card draw, flip three.")
-                rulesRow("When stock is empty, recycle waste to stock and continue.")
-                rulesRow("You win by moving all 52 cards to foundations.")
+                ForEach(rulesForCurrentVariant, id: \.self) { rule in
+                    rulesRow(rule)
+                }
             }
         }
     }
@@ -168,7 +170,7 @@ struct RulesAndScoringView: View {
                     GridRow {
                         Divider().gridCellColumns(2)
                     }
-                    ForEach(scoringRows) { row in
+                    ForEach(scoringRowsForCurrentVariant) { row in
                         GridRow(alignment: .top) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(row.move)
@@ -210,6 +212,55 @@ struct RulesAndScoringView: View {
             return "+\(points)"
         }
         return "\(points)"
+    }
+
+    private var termsForCurrentVariant: [TermRow] {
+        switch gameVariant {
+        case .klondike:
+            return terms
+        case .freecell:
+            return [
+                TermRow(term: "Cascade", definition: "One of eight tableau columns where all cards are face up."),
+                TermRow(term: "Free Cell", definition: "A temporary single-card holding slot (four total)."),
+                TermRow(term: "Foundation", definition: "Four suit piles built from Ace to King."),
+                TermRow(term: "Supermove", definition: "A multi-card move enabled by available free cells and empty cascades.")
+            ]
+        }
+    }
+
+    private var rulesForCurrentVariant: [String] {
+        switch gameVariant {
+        case .klondike:
+            return [
+                "Build tableau piles down by alternating colors.",
+                "Move Aces to foundations first, then build each suit up to King.",
+                "Only Kings can fill an empty tableau pile.",
+                "In 1-card draw, flip one stock card at a time. In 3-card draw, flip three.",
+                "When stock is empty, recycle waste to stock and continue.",
+                "You win by moving all 52 cards to foundations."
+            ]
+        case .freecell:
+            return [
+                "Deal all 52 cards face up into eight cascades (four with 7 cards, four with 6 cards).",
+                "Build cascades down by alternating colors.",
+                "Use the four free cells as temporary storage for one card each.",
+                "Build foundations by suit from Ace to King.",
+                "Any card may move to an empty cascade.",
+                "You win by moving all 52 cards to foundations."
+            ]
+        }
+    }
+
+    private var scoringRowsForCurrentVariant: [ScoringRow] {
+        switch gameVariant {
+        case .klondike:
+            return scoringRows
+        case .freecell:
+            return [
+                ScoringRow(move: "Move cards", points: 0, note: "FreeCell currently tracks time and completion."),
+                ScoringRow(move: "Win time bonus", points: Scoring.timedMaxBonusDrawThree, note: "Reduced by elapsed time.")
+            ]
+        }
     }
 }
 
