@@ -363,6 +363,61 @@ struct GameStatistics: Codable, Equatable {
         return Double(cleanWins) / Double(gamesWon)
     }
 
+    static func aggregated(_ statsByVariant: [GameStatistics]) -> GameStatistics {
+        var gamesPlayed = 0
+        var gamesWon = 0
+        var totalTimeSeconds = 0
+        var cleanWins = 0
+        var trackedSince: Date?
+        var bestTimeSeconds: Int?
+        var highScoreDrawThree: Int?
+        var highScoreDrawOne: Int?
+
+        for stats in statsByVariant {
+            gamesPlayed = addingSafely(gamesPlayed, stats.gamesPlayed)
+            gamesWon = addingSafely(gamesWon, stats.gamesWon)
+            totalTimeSeconds = addingSafely(totalTimeSeconds, stats.totalTimeSeconds)
+            cleanWins = addingSafely(cleanWins, stats.cleanWins)
+
+            if let candidate = stats.trackedSince {
+                if let existing = trackedSince {
+                    trackedSince = min(existing, candidate)
+                } else {
+                    trackedSince = candidate
+                }
+            }
+
+            if let candidate = stats.bestTimeSeconds {
+                if let existing = bestTimeSeconds {
+                    bestTimeSeconds = min(existing, candidate)
+                } else {
+                    bestTimeSeconds = candidate
+                }
+            }
+
+            if let candidate = stats.highScoreDrawThree {
+                highScoreDrawThree = max(highScoreDrawThree ?? 0, candidate)
+            }
+            if let candidate = stats.highScoreDrawOne {
+                highScoreDrawOne = max(highScoreDrawOne ?? 0, candidate)
+            }
+        }
+
+        gamesWon = min(gamesWon, gamesPlayed)
+        cleanWins = min(cleanWins, gamesWon)
+
+        return GameStatistics(
+            trackedSince: trackedSince,
+            gamesPlayed: gamesPlayed,
+            gamesWon: gamesWon,
+            totalTimeSeconds: totalTimeSeconds,
+            bestTimeSeconds: bestTimeSeconds,
+            highScoreDrawThree: highScoreDrawThree,
+            highScoreDrawOne: highScoreDrawOne,
+            cleanWins: cleanWins
+        )
+    }
+
     mutating func recordCompletedGame(
         didWin: Bool,
         elapsedSeconds: Int,
@@ -417,13 +472,23 @@ struct GameStatistics: Codable, Equatable {
         let (sum, overflow) = lhs.addingReportingOverflow(rhs)
         return overflow ? Int.max : sum
     }
+
+    private static func addingSafely(_ lhs: Int, _ rhs: Int) -> Int {
+        let (sum, overflow) = lhs.addingReportingOverflow(rhs)
+        return overflow ? Int.max : sum
+    }
 }
 
 enum GameStatisticsStore {
-    static let defaultsKey = "stats.gameStatistics"
+    static func defaultsKey(for variant: GameVariant) -> String {
+        "stats.gameStatistics.\(variant.rawValue)"
+    }
 
-    static func load(userDefaults: UserDefaults = .standard) -> GameStatistics {
-        guard let data = userDefaults.data(forKey: defaultsKey),
+    static func load(
+        for variant: GameVariant,
+        userDefaults: UserDefaults = .standard
+    ) -> GameStatistics {
+        guard let data = userDefaults.data(forKey: defaultsKey(for: variant)),
               let stats = try? JSONDecoder().decode(GameStatistics.self, from: data),
               stats.schemaVersion == GameStatistics.currentSchemaVersion else {
             return GameStatistics()
@@ -431,34 +496,41 @@ enum GameStatisticsStore {
         return stats
     }
 
-    static func save(_ stats: GameStatistics, userDefaults: UserDefaults = .standard) {
+    static func save(
+        _ stats: GameStatistics,
+        for variant: GameVariant,
+        userDefaults: UserDefaults = .standard
+    ) {
         guard let data = try? JSONEncoder().encode(stats) else { return }
-        userDefaults.set(data, forKey: defaultsKey)
+        userDefaults.set(data, forKey: defaultsKey(for: variant))
     }
 
     static func update(
+        for variant: GameVariant,
         userDefaults: UserDefaults = .standard,
         _ mutate: (inout GameStatistics) -> Void
     ) {
-        var stats = load(userDefaults: userDefaults)
+        var stats = load(for: variant, userDefaults: userDefaults)
         mutate(&stats)
-        save(stats, userDefaults: userDefaults)
+        save(stats, for: variant, userDefaults: userDefaults)
     }
 
     static func markTrackingStarted(
+        for variant: GameVariant,
         userDefaults: UserDefaults = .standard,
         at date: Date = .now
     ) {
-        update(userDefaults: userDefaults) { stats in
+        update(for: variant, userDefaults: userDefaults) { stats in
             stats.markTrackingStarted(at: date)
         }
     }
 
     static func reset(
+        for variant: GameVariant,
         userDefaults: UserDefaults = .standard,
         at date: Date = .now
     ) {
-        save(GameStatistics(trackedSince: date), userDefaults: userDefaults)
+        save(GameStatistics(trackedSince: date), for: variant, userDefaults: userDefaults)
     }
 }
 

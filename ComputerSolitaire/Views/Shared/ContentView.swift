@@ -186,12 +186,6 @@ struct ContentView: View {
                         Button("New Game", systemImage: "plus") {
                             startNewGameFromUI()
                         }
-                        Button("New Klondike Game", systemImage: "suit.heart.fill") {
-                            gameVariantRawValue = GameVariant.klondike.rawValue
-                        }
-                        Button("New FreeCell Game", systemImage: "square.grid.2x2") {
-                            gameVariantRawValue = GameVariant.freecell.rawValue
-                        }
                         Button("Redeal", systemImage: "arrow.clockwise") {
                             redealFromUI()
                         }
@@ -314,10 +308,10 @@ struct ContentView: View {
             .sheet(isPresented: $isShowingStats) {
 #if os(iOS)
                 NavigationStack {
-                    StatisticsView(viewModel: viewModel)
+                    StatisticsView(viewModel: viewModel, initialVariant: viewModel.gameVariant)
                 }
 #else
-                StatisticsView(viewModel: viewModel)
+                StatisticsView(viewModel: viewModel, initialVariant: viewModel.gameVariant)
 #endif
             }
         )
@@ -703,20 +697,6 @@ struct ContentView: View {
     private var gameMenuActions: GameMenuActions {
         GameMenuActions(
             newGame: { startNewGameFromUI() },
-            newKlondikeGame: {
-                if gameVariantRawValue == GameVariant.klondike.rawValue {
-                    startNewGameFromUI(variant: .klondike)
-                } else {
-                    gameVariantRawValue = GameVariant.klondike.rawValue
-                }
-            },
-            newFreeCellGame: {
-                if gameVariantRawValue == GameVariant.freecell.rawValue {
-                    startNewGameFromUI(variant: .freecell)
-                } else {
-                    gameVariantRawValue = GameVariant.freecell.rawValue
-                }
-            },
             redeal: redealFromUI,
             undo: {
                 stopAutoFinish()

@@ -3,8 +3,6 @@ import SwiftUI
 #if os(macOS)
 struct GameMenuActions {
     var newGame: () -> Void
-    var newKlondikeGame: () -> Void
-    var newFreeCellGame: () -> Void
     var redeal: () -> Void
     var undo: () -> Void
     var autoFinish: () -> Void
@@ -52,20 +50,6 @@ struct GameMenuCommands: Commands {
                 Label("New Game", systemImage: "plus")
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
-            .disabled(actions == nil)
-
-            Button {
-                actions?.newKlondikeGame()
-            } label: {
-                Label("New Klondike Game", systemImage: "suit.heart.fill")
-            }
-            .disabled(actions == nil)
-
-            Button {
-                actions?.newFreeCellGame()
-            } label: {
-                Label("New FreeCell Game", systemImage: "square.grid.2x2")
-            }
             .disabled(actions == nil)
 
             Button {

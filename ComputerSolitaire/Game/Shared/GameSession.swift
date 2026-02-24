@@ -70,7 +70,7 @@ final class SolitaireViewModel {
         redealState = initialState
         gameStartedAt = startedAt
         hasStartedTrackedGame = false
-        GameStatisticsStore.markTrackingStarted(at: startedAt)
+        GameStatisticsStore.markTrackingStarted(for: variant, at: startedAt)
     }
 
     var gameVariant: GameVariant {
@@ -226,6 +226,7 @@ final class SolitaireViewModel {
         finalElapsedSeconds = nil
         pauseStartedAt = nil
         applyNewGameVariantConfiguration(variant: nextVariant, drawMode: drawMode)
+        GameStatisticsStore.markTrackingStarted(for: nextVariant, at: gameStartedAt)
         hasStartedTrackedGame = true
         isCurrentGameFinalized = false
         hintRequestsInCurrentGame = 0
@@ -249,6 +250,7 @@ final class SolitaireViewModel {
         finalElapsedSeconds = nil
         pauseStartedAt = nil
         applyRedealVariantConfiguration()
+        GameStatisticsStore.markTrackingStarted(for: state.variant, at: gameStartedAt)
         hasStartedTrackedGame = true
         isCurrentGameFinalized = false
         hintRequestsInCurrentGame = 0
@@ -318,6 +320,7 @@ final class SolitaireViewModel {
         }
         stockDrawCount = sanitizedPayload.stockDrawCount
         scoringDrawCount = sanitizedPayload.scoringDrawCount
+        GameStatisticsStore.markTrackingStarted(for: state.variant, at: gameStartedAt)
         hasStartedTrackedGame = sanitizedPayload.hasStartedTrackedGame
         isCurrentGameFinalized = sanitizedPayload.isCurrentGameFinalized
         hintRequestsInCurrentGame = sanitizedPayload.hintRequestsInCurrentGame
@@ -690,7 +693,7 @@ extension SolitaireViewModel {
     func finalizeCurrentGameIfNeeded(didWin: Bool, endedAt: Date) {
         guard hasStartedTrackedGame, !isCurrentGameFinalized else { return }
         let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
-        GameStatisticsStore.update { stats in
+        GameStatisticsStore.update(for: state.variant) { stats in
             stats.recordCompletedGame(
                 didWin: didWin,
                 elapsedSeconds: elapsedSeconds,
