@@ -187,12 +187,9 @@ extension SolitaireViewModel {
     }
 
     func flipKlondikeTopCardIfNeeded(in pileIndex: Int) {
-        var didFlip = false
         guard let lastIndex = state.tableau[pileIndex].indices.last else { return }
         guard !state.tableau[pileIndex][lastIndex].isFaceUp else { return }
         state.tableau[pileIndex][lastIndex].isFaceUp = true
-        didFlip = true
-        guard didFlip else { return }
         applyScore(.turnOverTableauCard)
         SoundManager.shared.play(.cardFlipFaceUp)
         HapticManager.shared.play(.cardFlipFaceUp)
