@@ -325,6 +325,12 @@ struct FoundationView: View {
         let highlightZ: Double = 1
         ZStack {
             PilePlaceholderView(cardSize: cardSize)
+            if foundation.isEmpty {
+                Image(systemName: "a")
+                    .font(.system(size: cardSize.width * 0.22, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.28))
+                    .allowsHitTesting(false)
+            }
             DropHighlightView(
                 cardSize: cardSize,
                 isTargeted: isTargeted,
