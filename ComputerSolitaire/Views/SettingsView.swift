@@ -67,11 +67,19 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 SettingsCard(title: "Table") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Background color")
-                            .font(.subheadline.weight(.semibold))
-                        VStack(spacing: 8) {
+                        HStack {
+                            Text("Background color")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            if let selected = TableBackgroundColor(rawValue: tableBackgroundColorRawValue) {
+                                Text(selected.label)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        HStack(spacing: 8) {
                             ForEach(TableBackgroundColor.allCases) { option in
-                                backgroundColorRow(option)
+                                colorSwatch(option)
                             }
                         }
                         Toggle(isOn: $isFeltEffectEnabled) {
@@ -256,7 +264,7 @@ struct SettingsView: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private func backgroundColorRow(_ option: TableBackgroundColor) -> some View {
+    private func colorSwatch(_ option: TableBackgroundColor) -> some View {
         let isSelected = tableBackgroundColorRawValue == option.rawValue
 
         return Button {
@@ -264,23 +272,28 @@ struct SettingsView: View {
             HapticManager.shared.play(.settingsSelection)
             tableBackgroundColorRawValue = option.rawValue
         } label: {
-            HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(option.color)
-                    .frame(width: 36, height: 24)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-                    )
-                Text(option.label)
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-            }
-            .contentShape(Rectangle())
+            Circle()
+                .fill(option.color)
+                .overlay {
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .overlay {
+                    Circle()
+                        .stroke(
+                            isSelected ? Color.accentColor : Color.primary.opacity(0.18),
+                            lineWidth: isSelected ? 2.5 : 1
+                        )
+                }
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1, contentMode: .fit)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(option.label)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
