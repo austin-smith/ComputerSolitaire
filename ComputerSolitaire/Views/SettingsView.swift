@@ -126,17 +126,15 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                 }
 
-                SettingsCard(title: "Game Type") {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Variant")
-                            .font(.subheadline.weight(.semibold))
-                        Picker("Variant", selection: $gameVariantRawValue) {
-                            ForEach(GameVariant.allCases, id: \.rawValue) { variant in
-                                Text(variant.title).tag(variant.rawValue)
-                            }
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Game Type")
+                        .font(.headline)
+                        .padding(.leading, 4)
+
+                    HStack(spacing: 12) {
+                        ForEach(GameVariant.allCases, id: \.rawValue) { variant in
+                            variantCard(variant)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
                     }
                 }
 
@@ -204,6 +202,58 @@ struct SettingsView: View {
             guard oldValue != newValue else { return }
             HapticManager.shared.play(.settingsSelection)
         }
+    }
+
+    private func variantCard(_ variant: GameVariant) -> some View {
+        let isSelected = gameVariantRawValue == variant.rawValue
+
+        return Button {
+            guard !isSelected else { return }
+            HapticManager.shared.play(.settingsSelection)
+            withAnimation(.smooth(duration: 0.3)) {
+                gameVariantRawValue = variant.rawValue
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Text(variant.title)
+                    .font(.subheadline.weight(.bold))
+
+                Text(variant.subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? .thickMaterial : .thinMaterial)
+                    .shadow(
+                        color: .black.opacity(isSelected ? 0.12 : 0.04),
+                        radius: isSelected ? 8 : 2,
+                        y: isSelected ? 4 : 1
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        Color.accentColor.opacity(isSelected ? 1 : 0),
+                        lineWidth: 2.5
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        Color.primary.opacity(isSelected ? 0 : 0.1),
+                        lineWidth: 1
+                    )
+            }
+            .opacity(isSelected ? 1 : 0.7)
+            .scaleEffect(isSelected ? 1.0 : 0.96)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func backgroundColorRow(_ option: TableBackgroundColor) -> some View {

@@ -12,6 +12,15 @@ enum GameVariant: String, CaseIterable, Codable {
             return "FreeCell"
         }
     }
+
+    var subtitle: String {
+        switch self {
+        case .klondike:
+            return "Classic Solitaire"
+        case .freecell:
+            return "Strategic open layout"
+        }
+    }
 }
 
 enum DrawMode: Int, CaseIterable, Codable {
