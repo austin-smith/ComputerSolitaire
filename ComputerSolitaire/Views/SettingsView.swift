@@ -137,9 +137,6 @@ struct SettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.segmented)
-                        Text("Switch between Klondike and FreeCell.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
 

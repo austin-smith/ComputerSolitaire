@@ -403,111 +403,118 @@ struct TableauPileView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        let isDragSource: Bool = {
-            guard viewModel.isDragging, let selection = viewModel.selection else { return false }
-            if case .tableau(let pile, _) = selection.source {
-                return pile == pileIndex
-            }
-            return false
-        }()
+        if viewModel.state.tableau.indices.contains(pileIndex) {
+            let isDragSource: Bool = {
+                guard viewModel.isDragging, let selection = viewModel.selection else { return false }
+                if case .tableau(let pile, _) = selection.source {
+                    return pile == pileIndex
+                }
+                return false
+            }()
 
-        let pile = viewModel.state.tableau[pileIndex]
-        let yOffsets = tableauYOffsets(for: pile)
-        let topCardYOffset = yOffsets.last ?? 0
-        let stackDropYOffset = dropYOffset(for: pile, yOffsets: yOffsets)
-        let height = max(cardSize.height, cardSize.height + topCardYOffset)
-        let highlightYOffset: CGFloat = {
-            guard viewModel.isDragging, let selection = viewModel.selection else {
+            let pile = viewModel.state.tableau[pileIndex]
+            let yOffsets = tableauYOffsets(for: pile)
+            let topCardYOffset = yOffsets.last ?? 0
+            let stackDropYOffset = dropYOffset(for: pile, yOffsets: yOffsets)
+            let height = max(cardSize.height, cardSize.height + topCardYOffset)
+            let highlightYOffset: CGFloat = {
+                guard viewModel.isDragging, let selection = viewModel.selection else {
+                    return stackDropYOffset
+                }
+                if case .tableau(let sourcePile, let sourceIndex) = selection.source,
+                   sourcePile == pileIndex,
+                   sourceIndex < yOffsets.count {
+                    return yOffsets[sourceIndex]
+                }
                 return stackDropYOffset
-            }
-            if case .tableau(let sourcePile, let sourceIndex) = selection.source,
-               sourcePile == pileIndex,
-               sourceIndex < yOffsets.count {
-                return yOffsets[sourceIndex]
-            }
-            return stackDropYOffset
-        }()
-        let highlightZ: Double = Double(pile.count) + 0.5
+            }()
+            let highlightZ: Double = Double(pile.count) + 0.5
 
-        ZStack(alignment: .top) {
-            Color.clear
-                .frame(width: cardSize.width, height: height)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: nil)
-                }
-
-            PilePlaceholderView(cardSize: cardSize)
-            DropHighlightView(
-                cardSize: cardSize,
-                isTargeted: isTargeted,
-                isHintTargeted: isHintTargeted,
-                hintOpacity: hintHighlightOpacity
-            )
-                .offset(y: highlightYOffset)
-                .zIndex(highlightZ)
-
-            ForEach(Array(pile.enumerated()), id: \.element.id) { index, card in
-                let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
-                let isHidden = hiddenCardIDs.contains(card.id)
-                let yOffset = yOffsets[index]
-                let cardView = CardView(
-                    card: card,
-                    isSelected: viewModel.isSelected(card: card),
-                    cardSize: cardSize,
-                    isCardTiltEnabled: isCardTiltEnabled,
-                    cardTilts: $cardTilts,
-                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
-                )
-                .opacity(isDragged || isHidden ? 0 : 1)
-                .offset(x: 0, y: yOffset)
-                .zIndex(isDragged ? 20 + Double(index) : Double(index))
-                .allowsHitTesting(!isHidden)
-                .onTapGesture {
-                    viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
-                }
-                .cardFramePreference(card.id, yOffset: yOffset)
-
-                cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
-            }
-        }
-        .frame(width: cardSize.width, height: height, alignment: .top)
-        .background(
-            GeometryReader { proxy in
-                let boardFrame = proxy.frame(in: .named("board"))
-                let snapFrame = CGRect(
-                    x: boardFrame.minX,
-                    y: boardFrame.minY + highlightYOffset,
-                    width: cardSize.width,
-                    height: cardSize.height
-                )
-                let topCardFrame = CGRect(
-                    x: boardFrame.minX,
-                    y: boardFrame.minY + topCardYOffset,
-                    width: cardSize.width,
-                    height: cardSize.height
-                )
-                let hitFrame = snapFrame
-                    .union(topCardFrame)
-                    .expanded(
-                        horizontal: DropTargetHitArea.tableauHorizontalGrace,
-                        top: DropTargetHitArea.tableauTopGrace,
-                        bottom: DropTargetHitArea.tableauBottomGrace
-                    )
+            ZStack(alignment: .top) {
                 Color.clear
-                    .preference(
-                        key: DropTargetFrameKey.self,
-                        value: [
-                            .tableau(pileIndex): DropTargetGeometry(
-                                snapFrame: snapFrame,
-                                hitFrame: hitFrame
-                            )
-                        ]
+                    .frame(width: cardSize.width, height: height)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: nil)
+                    }
+
+                PilePlaceholderView(cardSize: cardSize)
+                DropHighlightView(
+                    cardSize: cardSize,
+                    isTargeted: isTargeted,
+                    isHintTargeted: isHintTargeted,
+                    hintOpacity: hintHighlightOpacity
+                )
+                    .offset(y: highlightYOffset)
+                    .zIndex(highlightZ)
+
+                ForEach(Array(pile.enumerated()), id: \.element.id) { index, card in
+                    let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+                    let isHidden = hiddenCardIDs.contains(card.id)
+                    let yOffset = yOffsets[index]
+                    let cardView = CardView(
+                        card: card,
+                        isSelected: viewModel.isSelected(card: card),
+                        cardSize: cardSize,
+                        isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts,
+                        hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
                     )
+                    .opacity(isDragged || isHidden ? 0 : 1)
+                    .offset(x: 0, y: yOffset)
+                    .zIndex(isDragged ? 20 + Double(index) : Double(index))
+                    .allowsHitTesting(!isHidden)
+                    .onTapGesture {
+                        viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
+                    }
+                    .cardFramePreference(card.id, yOffset: yOffset)
+
+                    cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
+                }
             }
-        )
-        .zIndex(isDragSource ? 10 : 0)
-        .accessibilityLabel("Tableau \(pileIndex + 1)")
+            .frame(width: cardSize.width, height: height, alignment: .top)
+            .background(
+                GeometryReader { proxy in
+                    let boardFrame = proxy.frame(in: .named("board"))
+                    let snapFrame = CGRect(
+                        x: boardFrame.minX,
+                        y: boardFrame.minY + highlightYOffset,
+                        width: cardSize.width,
+                        height: cardSize.height
+                    )
+                    let topCardFrame = CGRect(
+                        x: boardFrame.minX,
+                        y: boardFrame.minY + topCardYOffset,
+                        width: cardSize.width,
+                        height: cardSize.height
+                    )
+                    let hitFrame = snapFrame
+                        .union(topCardFrame)
+                        .expanded(
+                            horizontal: DropTargetHitArea.tableauHorizontalGrace,
+                            top: DropTargetHitArea.tableauTopGrace,
+                            bottom: DropTargetHitArea.tableauBottomGrace
+                        )
+                    Color.clear
+                        .preference(
+                            key: DropTargetFrameKey.self,
+                            value: [
+                                .tableau(pileIndex): DropTargetGeometry(
+                                    snapFrame: snapFrame,
+                                    hitFrame: hitFrame
+                                )
+                            ]
+                        )
+                }
+            )
+            .zIndex(isDragSource ? 10 : 0)
+            .accessibilityLabel("Tableau \(pileIndex + 1)")
+        } else {
+            Color.clear
+                .frame(width: cardSize.width, height: cardSize.height)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 
     private func tableauYOffsets(for pile: [Card]) -> [CGFloat] {
