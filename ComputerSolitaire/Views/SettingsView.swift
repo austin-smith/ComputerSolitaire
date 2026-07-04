@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 enum TableBackgroundColor: String, CaseIterable, Identifiable {
     case ocean = "#0671b7"
@@ -84,6 +87,10 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
     @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.classic.rawValue
+#if os(iOS)
+    @State private var selectedAppIcon = AppIcon.current()
+    @State private var isShowingAppIconPicker = false
+#endif
 
     var body: some View {
         ScrollView {
@@ -197,6 +204,28 @@ struct SettingsView: View {
                     }
                 }
 
+#if os(iOS)
+                if UIApplication.shared.supportsAlternateIcons {
+                    SettingsCard(title: "App Icon") {
+                        Button {
+                            isShowingAppIconPicker = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                AppIconPreviewView(icon: selectedAppIcon, size: 30)
+                                Text(selectedAppIcon.name)
+                                    .font(.subheadline.weight(.semibold))
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+#endif
+
                 SettingsCard(title: "Help") {
                     Button {
                         isShowingRulesAndScoring = true
@@ -234,6 +263,14 @@ struct SettingsView: View {
                 RulesAndScoringView()
             }
         }
+#if os(iOS)
+        .sheet(isPresented: $isShowingAppIconPicker) {
+            NavigationStack {
+                AppIconPickerView(selection: $selectedAppIcon)
+            }
+            .presentationDetents([.medium, .large])
+        }
+#endif
         .onChange(of: drawModeRawValue) { oldValue, newValue in
             guard oldValue != newValue else { return }
             HapticManager.shared.play(.settingsSelection)
