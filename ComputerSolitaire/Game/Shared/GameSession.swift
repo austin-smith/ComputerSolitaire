@@ -40,7 +40,7 @@ final class SolitaireViewModel {
     private(set) var finalElapsedSeconds: Int?
     private var pauseStartedAt: Date?
     private(set) var stockDrawCount: Int = 3
-    private var scoringDrawCount: Int = DrawMode.three.rawValue
+    private(set) var scoringDrawCount: Int = DrawMode.three.rawValue
     private var hasStartedTrackedGame = false
     private var isCurrentGameFinalized = false
     private var hintRequestsInCurrentGame: Int = 0

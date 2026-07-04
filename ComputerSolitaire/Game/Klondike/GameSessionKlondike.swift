@@ -162,7 +162,7 @@ extension SolitaireViewModel {
         state.waste.removeAll()
         setWasteDrawCount(0)
         incrementMovesCount()
-        if stockDrawCount == DrawMode.one.rawValue {
+        if scoringDrawCount == DrawMode.one.rawValue {
             applyScore(.recycleWasteInDrawOne)
         }
         SoundManager.shared.play(.wasteRecycleToStock)
