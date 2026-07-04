@@ -18,6 +18,8 @@ final class SolitaireViewModel {
 
     var state: GameState
     private(set) var isAutoFinishAvailable: Bool
+    // Optimistic: true when any legal action exists (cheap check after every move);
+    // set false when a full hint search comes back empty for the current position.
     private(set) var isHintAvailable: Bool
     private var redealState: GameState
     var selection: Selection? {
@@ -45,6 +47,7 @@ final class SolitaireViewModel {
     private var undosUsedInCurrentGame: Int = 0
     private var usedRedealInCurrentGame = false
     private let dateProvider: any DateProviding
+    @ObservationIgnored private let hintPlanner = HintPlanner()
 
     private var history: [GameSnapshot] = []
 
@@ -63,10 +66,7 @@ final class SolitaireViewModel {
         let initialState = GameState.newGame(variant: variant)
         state = initialState
         isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: initialState)
-        isHintAvailable = HintAdvisor.bestHint(
-            in: initialState,
-            stockDrawCount: DrawMode.three.rawValue
-        ) != nil
+        isHintAvailable = HintAdvisor.anyPlayerMoveExists(in: initialState)
         redealState = initialState
         gameStartedAt = startedAt
         hasStartedTrackedGame = false
@@ -129,8 +129,12 @@ final class SolitaireViewModel {
             return
         }
 
-        guard let hint = HintAdvisor.bestHint(in: state, stockDrawCount: stockDrawCount) else {
+        guard let hint = hintPlanner.bestHint(in: state, stockDrawCount: stockDrawCount) else {
             clearHint()
+            // The cheap availability check can't know the planner would come up empty
+            // (e.g. a dead stock cycle); now that the full search has, keep the button
+            // honest until the next state change re-evaluates it.
+            isHintAvailable = false
             HapticManager.shared.play(.invalidDrop)
             return
         }
@@ -392,11 +396,13 @@ final class SolitaireViewModel {
                 return
             }
 
-            if queueBestAutoMove(for: tappedSelection) {
+            // An active selection dropping onto this pile wins over auto-moving the
+            // tapped card, so tap-select-then-tap-destination behaves as expected.
+            if selection != nil, tryMoveSelection(to: .tableau(pileIndex)) {
                 return
             }
 
-            if selection != nil, tryMoveSelection(to: .tableau(pileIndex)) {
+            if queueBestAutoMove(for: tappedSelection) {
                 return
             }
 
@@ -527,7 +533,7 @@ final class SolitaireViewModel {
 
     func refreshAutoFinishAvailability() {
         isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: state)
-        isHintAvailable = !isWin && HintAdvisor.bestHint(in: state, stockDrawCount: stockDrawCount) != nil
+        isHintAvailable = !isWin && HintAdvisor.anyPlayerMoveExists(in: state)
     }
 }
 
@@ -708,15 +714,29 @@ extension SolitaireViewModel {
     }
 
     @discardableResult
+    func queueNextAutoFinishMove() -> Bool {
+        isDragging = false
+        guard let move = AutoFinishPlanner.nextAutoFinishMove(in: state) else {
+            return false
+        }
+
+        pendingAutoMove = PendingAutoMove(
+            id: UUID(),
+            selection: move.selection,
+            destination: move.destination
+        )
+        return true
+    }
+
+    @discardableResult
     func queueBestAutoMove(
         for sourceSelection: Selection,
         playFailureFeedback: Bool = true
     ) -> Bool {
         isDragging = false
-        guard let destination = AutoMoveAdvisor.bestAdvisableDestination(
+        guard let destination = TapMovePolicy.bestDestination(
             for: sourceSelection,
-            in: state,
-            stockDrawCount: stockDrawCount
+            in: state
         ) else {
             if playFailureFeedback {
                 HapticManager.shared.play(.invalidDrop)

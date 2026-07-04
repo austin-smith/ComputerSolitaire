@@ -1,6 +1,19 @@
 import SwiftUI
 import Observation
 
+// MARK: - CardStyle Environment Key
+
+private struct CardStyleKey: EnvironmentKey {
+    static let defaultValue: CardStyle = .classic
+}
+
+extension EnvironmentValues {
+    var cardStyle: CardStyle {
+        get { self[CardStyleKey.self] }
+        set { self[CardStyleKey.self] = newValue }
+    }
+}
+
 enum Layout {
     struct Metrics {
         let horizontalPadding: CGFloat
@@ -610,6 +623,7 @@ struct CardView: View {
     let flipDelay: Double
     @State private var flipRotation: Double
     @State private var tiltAngle: Double = 0
+    @Environment(\.cardStyle) private var cardStyle
 
     init(
         card: Card,
@@ -646,7 +660,7 @@ struct CardView: View {
         let backOpacity = flipRotation < 90 ? 0.0 : 1.0
 
         ZStack {
-            cardFront(
+            cardFrontView(
                 cornerRadius: cornerRadius,
                 borderColor: borderColor,
                 borderWidth: borderWidth,
@@ -657,7 +671,7 @@ struct CardView: View {
             .opacity(frontOpacity)
             .rotation3DEffect(.degrees(frontAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.7)
 
-            cardBack(
+            cardBackView(
                 cornerRadius: cornerRadius,
                 borderColor: borderColor,
                 borderWidth: borderWidth,
@@ -709,7 +723,55 @@ struct CardView: View {
         }
     }
 
-    private func cardFront(
+    @ViewBuilder
+    private func cardFrontView(
+        cornerRadius: CGFloat,
+        borderColor: Color,
+        borderWidth: CGFloat,
+        shadowColor: Color,
+        shadowRadius: CGFloat,
+        shadowYOffset: CGFloat
+    ) -> some View {
+        switch cardStyle {
+        case .pixel:
+            PixelCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
+        case .classic:
+            classicCardFront(
+                cornerRadius: cornerRadius,
+                borderColor: borderColor,
+                borderWidth: borderWidth,
+                shadowColor: shadowColor,
+                shadowRadius: shadowRadius,
+                shadowYOffset: shadowYOffset
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func cardBackView(
+        cornerRadius: CGFloat,
+        borderColor: Color,
+        borderWidth: CGFloat,
+        shadowColor: Color,
+        shadowRadius: CGFloat,
+        shadowYOffset: CGFloat
+    ) -> some View {
+        switch cardStyle {
+        case .pixel:
+            PixelCardBackView(cardSize: cardSize, isSelected: isSelected)
+        case .classic:
+            classicCardBack(
+                cornerRadius: cornerRadius,
+                borderColor: borderColor,
+                borderWidth: borderWidth,
+                shadowColor: shadowColor,
+                shadowRadius: shadowRadius,
+                shadowYOffset: shadowYOffset
+            )
+        }
+    }
+
+    private func classicCardFront(
         cornerRadius: CGFloat,
         borderColor: Color,
         borderWidth: CGFloat,
@@ -781,7 +843,7 @@ struct CardView: View {
         }
     }
 
-    private func cardBack(
+    private func classicCardBack(
         cornerRadius: CGFloat,
         borderColor: Color,
         borderWidth: CGFloat,
@@ -872,13 +934,23 @@ struct CardBackPattern: View {
 
 struct CardBackView: View {
     let cardSize: CGSize
+    @Environment(\.cardStyle) private var cardStyle
 
     var body: some View {
+        switch cardStyle {
+        case .pixel:
+            PixelStandaloneCardBackView(cardSize: cardSize)
+        case .classic:
+            classicCardBack
+        }
+    }
+
+    private var classicCardBack: some View {
         let cornerRadius = cardSize.width * 0.12
         let lacquer = Color(red: 0.18, green: 0.26, blue: 0.52)
         let trim = Color(red: 0.78, green: 0.85, blue: 0.95)
 
-        ZStack {
+        return ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(lacquer)
                 .overlay(

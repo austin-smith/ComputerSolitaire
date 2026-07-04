@@ -41,6 +41,27 @@ enum TableBackgroundColor: String, CaseIterable, Identifiable {
     }
 }
 
+enum CardStyle: String, CaseIterable, Identifiable {
+    case classic
+    case pixel
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .classic: return "Classic"
+        case .pixel: return "Pixel"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .classic: return "Parchment"
+        case .pixel: return "8-bit Retro"
+        }
+    }
+}
+
 enum SettingsKey {
     static let cardTiltEnabled = "settings.cardTiltEnabled"
     static let gameVariant = "settings.gameVariant"
@@ -49,6 +70,7 @@ enum SettingsKey {
     static let feltEffectEnabled = "settings.feltEffectEnabled"
     static let soundEffectsEnabled = "settings.soundEffectsEnabled"
     static let showHintButton = "settings.showHintButton"
+    static let cardStyle = "settings.cardStyle"
 }
 
 struct SettingsView: View {
@@ -61,6 +83,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
     @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
+    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.classic.rawValue
 
     var body: some View {
         ScrollView {
@@ -96,16 +119,25 @@ struct SettingsView: View {
                 }
 
                 SettingsCard(title: "Cards") {
-                    Toggle(isOn: $isCardTiltEnabled) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Natural card tilt")
-                                .font(.subheadline.weight(.semibold))
-                            Text("Adds a subtle organic angle to each card.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Card style")
+                            .font(.subheadline.weight(.semibold))
+                        HStack(spacing: 12) {
+                            ForEach(CardStyle.allCases) { style in
+                                cardStyleCard(style)
+                            }
                         }
+                        Toggle(isOn: $isCardTiltEnabled) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Natural card tilt")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("Adds a subtle organic angle to each card.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.switch)
                     }
-                    .toggleStyle(.switch)
                 }
 
                 SettingsCard(title: "Audio") {
@@ -210,6 +242,10 @@ struct SettingsView: View {
             guard oldValue != newValue else { return }
             HapticManager.shared.play(.settingsSelection)
         }
+        .onChange(of: cardStyleRawValue) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HapticManager.shared.play(.settingsSelection)
+        }
     }
 
     private func variantCard(_ variant: GameVariant) -> some View {
@@ -262,6 +298,92 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func cardStyleCard(_ style: CardStyle) -> some View {
+        let isSelected = cardStyleRawValue == style.rawValue
+
+        return Button {
+            guard !isSelected else { return }
+            HapticManager.shared.play(.settingsSelection)
+            withAnimation(.smooth(duration: 0.3)) {
+                cardStyleRawValue = style.rawValue
+            }
+        } label: {
+            VStack(spacing: 6) {
+                cardStylePreview(style)
+                    .frame(width: 44, height: 64)
+
+                VStack(spacing: 1) {
+                    Text(style.title)
+                        .font(.caption.weight(.bold))
+                    Text(style.subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? .thickMaterial : .thinMaterial)
+                    .shadow(
+                        color: .black.opacity(isSelected ? 0.12 : 0.04),
+                        radius: isSelected ? 8 : 2,
+                        y: isSelected ? 4 : 1
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        Color.accentColor.opacity(isSelected ? 1 : 0),
+                        lineWidth: 2.5
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        Color.primary.opacity(isSelected ? 0 : 0.1),
+                        lineWidth: 1
+                    )
+            }
+            .opacity(isSelected ? 1 : 0.7)
+            .scaleEffect(isSelected ? 1.0 : 0.96)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func cardStylePreview(_ style: CardStyle) -> some View {
+        switch style {
+        case .classic:
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color(red: 0.98, green: 0.96, blue: 0.91))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(Color.black.opacity(0.2), lineWidth: 0.5)
+                )
+                .overlay(
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("A")
+                            .font(.system(size: 11, weight: .bold, design: .serif))
+                        Image(systemName: "suit.spade.fill")
+                            .font(.system(size: 8))
+                    }
+                    .foregroundStyle(Color(red: 0.12, green: 0.12, blue: 0.12))
+                    .padding(4),
+                    alignment: .topLeading
+                )
+        case .pixel:
+            PixelCardFrontView(
+                card: Card(suit: .hearts, rank: .king, isFaceUp: true),
+                cardSize: CGSize(width: 44, height: 64),
+                isSelected: false
+            )
+        }
     }
 
     private func colorSwatch(_ option: TableBackgroundColor) -> some View {

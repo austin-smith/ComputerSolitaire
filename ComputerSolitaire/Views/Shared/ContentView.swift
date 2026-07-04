@@ -131,6 +131,7 @@ struct ContentView: View {
     @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
+    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.classic.rawValue
 
     private var gameVariant: GameVariant {
         GameVariant(rawValue: gameVariantRawValue) ?? .klondike
@@ -160,12 +161,17 @@ struct ContentView: View {
 #endif
     }
 
+    private var currentCardStyle: CardStyle {
+        CardStyle(rawValue: cardStyleRawValue) ?? .classic
+    }
+
     var body: some View {
         sceneDecorations(
             for: AnyView(
                 GeometryReader { geometry in
                     boardRoot(for: geometry)
                 }
+                .environment(\.cardStyle, currentCardStyle)
             )
         )
     }

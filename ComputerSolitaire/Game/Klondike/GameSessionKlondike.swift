@@ -115,22 +115,6 @@ extension SolitaireViewModel {
         return true
     }
 
-    @discardableResult
-    func queueNextAutoFinishMove() -> Bool {
-        isDragging = false
-        guard state.variant == .klondike else { return false }
-        guard let move = AutoFinishPlanner.nextAutoFinishMove(in: state) else {
-            return false
-        }
-
-        pendingAutoMove = PendingAutoMove(
-            id: UUID(),
-            selection: move.selection,
-            destination: move.destination
-        )
-        return true
-    }
-
     func drawFromStock() {
         guard !state.stock.isEmpty else { return }
         clearHint()

@@ -46,20 +46,4 @@ enum KlondikeAutoMoveAdvisor {
         state.tableau[pileIndex][topIndex].isFaceUp = true
     }
 
-    static func revealsFaceDownCard(selection: Selection, in state: GameState) -> Bool {
-        guard case .tableau(let pile, let index) = selection.source else { return false }
-        guard index > 0 else { return false }
-        return !state.tableau[pile][index - 1].isFaceUp
-    }
-
-    static func destinationPriority(for destination: Destination, in state: GameState) -> Int {
-        switch destination {
-        case .tableau(let index):
-            return state.tableau[index].isEmpty ? 0 : 2
-        case .foundation:
-            return 1
-        case .freeCell:
-            return -1
-        }
-    }
 }

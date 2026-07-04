@@ -37,15 +37,4 @@ enum FreeCellAutoMoveAdvisor {
     static func applyTableauSourceRemovalEffects(on state: inout GameState, pileIndex: Int) {
         // FreeCell has no hidden cards to reveal.
     }
-
-    static func destinationPriority(for destination: Destination, in state: GameState) -> Int {
-        switch destination {
-        case .tableau(let index):
-            return state.tableau[index].isEmpty ? 0 : 2
-        case .foundation:
-            return 1
-        case .freeCell:
-            return 0
-        }
-    }
 }

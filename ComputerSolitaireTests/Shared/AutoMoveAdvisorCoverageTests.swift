@@ -49,28 +49,7 @@ final class AutoMoveAdvisorCoverageTests: XCTestCase {
         XCTAssertFalse(destinations.contains(.tableau(1)))
     }
 
-    func testBestDestinationMovesWasteAceToFoundation() {
-        let aceSpades = TestCards.make(.spades, .ace, isFaceUp: true)
-        let state = GameState(
-            stock: [],
-            waste: [aceSpades],
-            wasteDrawCount: 1,
-            foundations: Array(repeating: [], count: 4),
-            tableau: Array(repeating: [], count: 7)
-        )
-        let selection = Selection(source: .waste, cards: [aceSpades])
-
-        XCTAssertEqual(
-            AutoMoveAdvisor.bestDestination(
-                for: selection,
-                in: state,
-                stockDrawCount: DrawMode.three.rawValue
-            ),
-            .foundation(0)
-        )
-    }
-
-    func testBestAdvisableDestinationRejectsFoundationToFoundationAndNonMatchingSelections() {
+    func testSelectionMatchingRejectsStaleSelections() {
         let aceSpades = TestCards.make(.spades, .ace, isFaceUp: true)
         let twoSpades = TestCards.make(.spades, .two, isFaceUp: true)
         let state = GameState(
@@ -80,18 +59,13 @@ final class AutoMoveAdvisorCoverageTests: XCTestCase {
             foundations: [[aceSpades], [twoSpades], [], []],
             tableau: Array(repeating: [], count: 7)
         )
-        let badSelection = Selection(source: .foundation(pile: 0), cards: [twoSpades])
+        let staleSelection = Selection(source: .foundation(pile: 0), cards: [twoSpades])
 
-        XCTAssertNil(
-            AutoMoveAdvisor.bestAdvisableDestination(
-                for: badSelection,
-                in: state,
-                stockDrawCount: DrawMode.three.rawValue
-            )
-        )
+        XCTAssertFalse(AutoMoveAdvisor.selectionMatchesState(staleSelection, in: state))
+        XCTAssertTrue(AutoMoveAdvisor.legalDestinations(for: staleSelection, in: state).isEmpty)
     }
 
-    func testBestMoveEvaluationProvidesPositiveMobilityForUsefulMove() {
+    func testSimulatedStateMovesWasteCardAndUpdatesWasteDrawCount() {
         let sixClubs = TestCards.make(.clubs, .six, isFaceUp: true)
         let fiveHearts = TestCards.make(.hearts, .five, isFaceUp: true)
         let state = GameState(
@@ -103,13 +77,15 @@ final class AutoMoveAdvisorCoverageTests: XCTestCase {
         )
         let selection = Selection(source: .waste, cards: [fiveHearts])
 
-        let evaluation = AutoMoveAdvisor.bestMoveEvaluation(
-            for: selection,
+        let nextState = AutoMoveAdvisor.simulatedState(
+            afterMoving: selection,
+            to: .tableau(0),
             in: state,
             stockDrawCount: DrawMode.three.rawValue
         )
-        XCTAssertNotNil(evaluation)
-        XCTAssertEqual(evaluation?.destination, .tableau(0))
-        XCTAssertGreaterThanOrEqual(evaluation?.resultingMobility ?? -1, 0)
+        XCTAssertNotNil(nextState)
+        XCTAssertEqual(nextState?.waste.count, 0)
+        XCTAssertEqual(nextState?.wasteDrawCount, 0)
+        XCTAssertEqual(nextState?.tableau[0].last?.id, fiveHearts.id)
     }
 }
