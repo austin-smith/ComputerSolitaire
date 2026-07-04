@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 
+
 @Model
 final class SavedGameRecord {
     static let currentRecordKey = "current"
@@ -139,12 +140,22 @@ struct SavedGamePayload: Codable {
         guard schemaVersion == Self.currentSchemaVersion else { return nil }
         guard state.isValidForPersistence else { return nil }
 
-        let sanitizedStockDrawCount = DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
+        let sanitizedStockDrawCount: Int = {
+            if state.variant == .klondike {
+                return DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
+            }
+            return DrawMode.three.rawValue
+        }()
         let sanitizedMovesCount = max(0, movesCount)
         let sanitizedScore = Scoring.clamped(score)
         let sanitizedSavedAt = min(savedAt, now)
         let sanitizedStartedAt = min(gameStartedAt, now)
-        let sanitizedScoringDrawCount = DrawMode(rawValue: scoringDrawCount)?.rawValue ?? sanitizedStockDrawCount
+        let sanitizedScoringDrawCount: Int = {
+            if state.variant == .klondike {
+                return DrawMode(rawValue: scoringDrawCount)?.rawValue ?? sanitizedStockDrawCount
+            }
+            return DrawMode.three.rawValue
+        }()
         let sanitizedPauseStartedAt = pauseStartedAt
             .map { min($0, now) }
             .flatMap { $0 >= sanitizedStartedAt ? $0 : nil }
@@ -171,17 +182,25 @@ struct SavedGamePayload: Codable {
             .suffix(SolitaireViewModel.maxUndoHistoryCount)
 
         var sanitizedState = state
-        sanitizedState.wasteDrawCount = min(
-            max(0, sanitizedState.wasteDrawCount),
-            min(sanitizedStockDrawCount, sanitizedState.waste.count)
-        )
+        if sanitizedState.variant == .klondike {
+            sanitizedState.wasteDrawCount = min(
+                max(0, sanitizedState.wasteDrawCount),
+                min(sanitizedStockDrawCount, sanitizedState.waste.count)
+            )
+        } else {
+            sanitizedState.wasteDrawCount = 0
+        }
 
         let sanitizedRedealState: GameState? = {
             guard var baseState = redealState, baseState.isValidForPersistence else { return nil }
-            baseState.wasteDrawCount = min(
-                max(0, baseState.wasteDrawCount),
-                min(sanitizedStockDrawCount, baseState.waste.count)
-            )
+            if baseState.variant == .klondike {
+                baseState.wasteDrawCount = min(
+                    max(0, baseState.wasteDrawCount),
+                    min(sanitizedStockDrawCount, baseState.waste.count)
+                )
+            } else {
+                baseState.wasteDrawCount = 0
+            }
             return baseState
         }()
 
@@ -207,6 +226,7 @@ struct SavedGamePayload: Codable {
         )
     }
 }
+
 
 enum GamePersistenceError: Error {
     case invalidPayload
@@ -343,6 +363,61 @@ struct GameStatistics: Codable, Equatable {
         return Double(cleanWins) / Double(gamesWon)
     }
 
+    static func aggregated(_ statsByVariant: [GameStatistics]) -> GameStatistics {
+        var gamesPlayed = 0
+        var gamesWon = 0
+        var totalTimeSeconds = 0
+        var cleanWins = 0
+        var trackedSince: Date?
+        var bestTimeSeconds: Int?
+        var highScoreDrawThree: Int?
+        var highScoreDrawOne: Int?
+
+        for stats in statsByVariant {
+            gamesPlayed = addingSafely(gamesPlayed, stats.gamesPlayed)
+            gamesWon = addingSafely(gamesWon, stats.gamesWon)
+            totalTimeSeconds = addingSafely(totalTimeSeconds, stats.totalTimeSeconds)
+            cleanWins = addingSafely(cleanWins, stats.cleanWins)
+
+            if let candidate = stats.trackedSince {
+                if let existing = trackedSince {
+                    trackedSince = min(existing, candidate)
+                } else {
+                    trackedSince = candidate
+                }
+            }
+
+            if let candidate = stats.bestTimeSeconds {
+                if let existing = bestTimeSeconds {
+                    bestTimeSeconds = min(existing, candidate)
+                } else {
+                    bestTimeSeconds = candidate
+                }
+            }
+
+            if let candidate = stats.highScoreDrawThree {
+                highScoreDrawThree = max(highScoreDrawThree ?? 0, candidate)
+            }
+            if let candidate = stats.highScoreDrawOne {
+                highScoreDrawOne = max(highScoreDrawOne ?? 0, candidate)
+            }
+        }
+
+        gamesWon = min(gamesWon, gamesPlayed)
+        cleanWins = min(cleanWins, gamesWon)
+
+        return GameStatistics(
+            trackedSince: trackedSince,
+            gamesPlayed: gamesPlayed,
+            gamesWon: gamesWon,
+            totalTimeSeconds: totalTimeSeconds,
+            bestTimeSeconds: bestTimeSeconds,
+            highScoreDrawThree: highScoreDrawThree,
+            highScoreDrawOne: highScoreDrawOne,
+            cleanWins: cleanWins
+        )
+    }
+
     mutating func recordCompletedGame(
         didWin: Bool,
         elapsedSeconds: Int,
@@ -371,7 +446,7 @@ struct GameStatistics: Codable, Equatable {
 
         if drawCount == DrawMode.one.rawValue {
             highScoreDrawOne = max(highScoreDrawOne ?? 0, sanitizedScore)
-        } else {
+        } else if drawCount == DrawMode.three.rawValue {
             highScoreDrawThree = max(highScoreDrawThree ?? 0, sanitizedScore)
         }
 
@@ -397,13 +472,23 @@ struct GameStatistics: Codable, Equatable {
         let (sum, overflow) = lhs.addingReportingOverflow(rhs)
         return overflow ? Int.max : sum
     }
+
+    private static func addingSafely(_ lhs: Int, _ rhs: Int) -> Int {
+        let (sum, overflow) = lhs.addingReportingOverflow(rhs)
+        return overflow ? Int.max : sum
+    }
 }
 
 enum GameStatisticsStore {
-    static let defaultsKey = "stats.gameStatistics"
+    static func defaultsKey(for variant: GameVariant) -> String {
+        "stats.gameStatistics.\(variant.rawValue)"
+    }
 
-    static func load(userDefaults: UserDefaults = .standard) -> GameStatistics {
-        guard let data = userDefaults.data(forKey: defaultsKey),
+    static func load(
+        for variant: GameVariant,
+        userDefaults: UserDefaults = .standard
+    ) -> GameStatistics {
+        guard let data = userDefaults.data(forKey: defaultsKey(for: variant)),
               let stats = try? JSONDecoder().decode(GameStatistics.self, from: data),
               stats.schemaVersion == GameStatistics.currentSchemaVersion else {
             return GameStatistics()
@@ -411,34 +496,41 @@ enum GameStatisticsStore {
         return stats
     }
 
-    static func save(_ stats: GameStatistics, userDefaults: UserDefaults = .standard) {
+    static func save(
+        _ stats: GameStatistics,
+        for variant: GameVariant,
+        userDefaults: UserDefaults = .standard
+    ) {
         guard let data = try? JSONEncoder().encode(stats) else { return }
-        userDefaults.set(data, forKey: defaultsKey)
+        userDefaults.set(data, forKey: defaultsKey(for: variant))
     }
 
     static func update(
+        for variant: GameVariant,
         userDefaults: UserDefaults = .standard,
         _ mutate: (inout GameStatistics) -> Void
     ) {
-        var stats = load(userDefaults: userDefaults)
+        var stats = load(for: variant, userDefaults: userDefaults)
         mutate(&stats)
-        save(stats, userDefaults: userDefaults)
+        save(stats, for: variant, userDefaults: userDefaults)
     }
 
     static func markTrackingStarted(
+        for variant: GameVariant,
         userDefaults: UserDefaults = .standard,
         at date: Date = .now
     ) {
-        update(userDefaults: userDefaults) { stats in
+        update(for: variant, userDefaults: userDefaults) { stats in
             stats.markTrackingStarted(at: date)
         }
     }
 
     static func reset(
+        for variant: GameVariant,
         userDefaults: UserDefaults = .standard,
         at date: Date = .now
     ) {
-        save(GameStatistics(trackedSince: date), userDefaults: userDefaults)
+        save(GameStatistics(trackedSince: date), for: variant, userDefaults: userDefaults)
     }
 }
 
@@ -449,17 +541,27 @@ private struct CardIdentity: Hashable {
 
 private extension GameState {
     var allCards: [Card] {
-        stock + waste + foundations.flatMap { $0 } + tableau.flatMap { $0 }
+        stock + waste + freeCells.compactMap { $0 } + foundations.flatMap { $0 } + tableau.flatMap { $0 }
     }
 
     var isValidForPersistence: Bool {
-        guard foundations.count == 4, tableau.count == 7 else { return false }
-        guard wasteDrawCount >= 0, wasteDrawCount <= waste.count else { return false }
+        guard foundations.count == 4 else { return false }
+        guard freeCells.count == 4 else { return false }
+        guard hasValidVariantPersistenceLayout else { return false }
 
         let allCards = allCards
         guard allCards.count == 52 else { return false }
         guard Set(allCards.map(\.id)).count == 52 else { return false }
         guard Set(allCards.map { CardIdentity(suit: $0.suit, rank: $0.rank) }).count == 52 else { return false }
         return true
+    }
+
+    private var hasValidVariantPersistenceLayout: Bool {
+        switch variant {
+        case .klondike:
+            return KlondikePersistenceRules.hasValidLayout(state: self)
+        case .freecell:
+            return FreeCellPersistenceRules.hasValidLayout(state: self)
+        }
     }
 }

@@ -41,35 +41,68 @@ enum TableBackgroundColor: String, CaseIterable, Identifiable {
     }
 }
 
+enum CardStyle: String, CaseIterable, Identifiable {
+    case classic
+    case pixel
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .classic: return "Classic"
+        case .pixel: return "Pixel"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .classic: return "Parchment"
+        case .pixel: return "8-bit Retro"
+        }
+    }
+}
+
 enum SettingsKey {
     static let cardTiltEnabled = "settings.cardTiltEnabled"
+    static let gameVariant = "settings.gameVariant"
     static let drawMode = "settings.drawMode"
     static let tableBackgroundColor = "settings.tableBackgroundColor"
     static let feltEffectEnabled = "settings.feltEffectEnabled"
     static let soundEffectsEnabled = "settings.soundEffectsEnabled"
     static let showHintButton = "settings.showHintButton"
+    static let cardStyle = "settings.cardStyle"
 }
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingRulesAndScoring = false
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
+    @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
     @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
     @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
+    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.classic.rawValue
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 SettingsCard(title: "Table") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Background color")
-                            .font(.subheadline.weight(.semibold))
-                        VStack(spacing: 8) {
+                        HStack {
+                            Text("Background color")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            if let selected = TableBackgroundColor(rawValue: tableBackgroundColorRawValue) {
+                                Text(selected.label)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        HStack(spacing: 8) {
                             ForEach(TableBackgroundColor.allCases) { option in
-                                backgroundColorRow(option)
+                                colorSwatch(option)
                             }
                         }
                         Toggle(isOn: $isFeltEffectEnabled) {
@@ -86,16 +119,25 @@ struct SettingsView: View {
                 }
 
                 SettingsCard(title: "Cards") {
-                    Toggle(isOn: $isCardTiltEnabled) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Natural card tilt")
-                                .font(.subheadline.weight(.semibold))
-                            Text("Adds a subtle organic angle to each card.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Card style")
+                            .font(.subheadline.weight(.semibold))
+                        HStack(spacing: 12) {
+                            ForEach(CardStyle.allCases) { style in
+                                cardStyleCard(style)
+                            }
                         }
+                        Toggle(isOn: $isCardTiltEnabled) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Natural card tilt")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("Adds a subtle organic angle to each card.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.switch)
                     }
-                    .toggleStyle(.switch)
                 }
 
                 SettingsCard(title: "Audio") {
@@ -124,20 +166,34 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                 }
 
-                SettingsCard(title: "Draw Mode") {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Stock draw")
-                            .font(.subheadline.weight(.semibold))
-                        Picker("Stock draw", selection: $drawModeRawValue) {
-                            ForEach(DrawMode.allCases, id: \.rawValue) { mode in
-                                Text(mode.title).tag(mode.rawValue)
-                            }
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Game Type")
+                        .font(.headline)
+                        .padding(.leading, 4)
+
+                    HStack(spacing: 12) {
+                        ForEach(GameVariant.allCases, id: \.rawValue) { variant in
+                            variantCard(variant)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        Text("Choose how many cards to draw from the stock.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if gameVariantRawValue == GameVariant.klondike.rawValue {
+                    SettingsCard(title: "Draw Mode") {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Stock draw")
+                                .font(.subheadline.weight(.semibold))
+                            Picker("Stock draw", selection: $drawModeRawValue) {
+                                ForEach(DrawMode.allCases, id: \.rawValue) { mode in
+                                    Text(mode.title).tag(mode.rawValue)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            Text("Choose how many cards to draw from the stock.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -182,9 +238,155 @@ struct SettingsView: View {
             guard oldValue != newValue else { return }
             HapticManager.shared.play(.settingsSelection)
         }
+        .onChange(of: gameVariantRawValue) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HapticManager.shared.play(.settingsSelection)
+        }
+        .onChange(of: cardStyleRawValue) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HapticManager.shared.play(.settingsSelection)
+        }
     }
 
-    private func backgroundColorRow(_ option: TableBackgroundColor) -> some View {
+    private func variantCard(_ variant: GameVariant) -> some View {
+        let isSelected = gameVariantRawValue == variant.rawValue
+
+        return Button {
+            guard !isSelected else { return }
+            HapticManager.shared.play(.settingsSelection)
+            withAnimation(.smooth(duration: 0.3)) {
+                gameVariantRawValue = variant.rawValue
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Text(variant.title)
+                    .font(.subheadline.weight(.bold))
+
+                Text(variant.subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? .thickMaterial : .thinMaterial)
+                    .shadow(
+                        color: .black.opacity(isSelected ? 0.12 : 0.04),
+                        radius: isSelected ? 8 : 2,
+                        y: isSelected ? 4 : 1
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        Color.accentColor.opacity(isSelected ? 1 : 0),
+                        lineWidth: 2.5
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        Color.primary.opacity(isSelected ? 0 : 0.1),
+                        lineWidth: 1
+                    )
+            }
+            .opacity(isSelected ? 1 : 0.7)
+            .scaleEffect(isSelected ? 1.0 : 0.96)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func cardStyleCard(_ style: CardStyle) -> some View {
+        let isSelected = cardStyleRawValue == style.rawValue
+
+        return Button {
+            guard !isSelected else { return }
+            HapticManager.shared.play(.settingsSelection)
+            withAnimation(.smooth(duration: 0.3)) {
+                cardStyleRawValue = style.rawValue
+            }
+        } label: {
+            VStack(spacing: 6) {
+                cardStylePreview(style)
+                    .frame(width: 44, height: 64)
+
+                VStack(spacing: 1) {
+                    Text(style.title)
+                        .font(.caption.weight(.bold))
+                    Text(style.subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? .thickMaterial : .thinMaterial)
+                    .shadow(
+                        color: .black.opacity(isSelected ? 0.12 : 0.04),
+                        radius: isSelected ? 8 : 2,
+                        y: isSelected ? 4 : 1
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        Color.accentColor.opacity(isSelected ? 1 : 0),
+                        lineWidth: 2.5
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        Color.primary.opacity(isSelected ? 0 : 0.1),
+                        lineWidth: 1
+                    )
+            }
+            .opacity(isSelected ? 1 : 0.7)
+            .scaleEffect(isSelected ? 1.0 : 0.96)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func cardStylePreview(_ style: CardStyle) -> some View {
+        switch style {
+        case .classic:
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color(red: 0.98, green: 0.96, blue: 0.91))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(Color.black.opacity(0.2), lineWidth: 0.5)
+                )
+                .overlay(
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("A")
+                            .font(.system(size: 11, weight: .bold, design: .serif))
+                        Image(systemName: "suit.spade.fill")
+                            .font(.system(size: 8))
+                    }
+                    .foregroundStyle(Color(red: 0.12, green: 0.12, blue: 0.12))
+                    .padding(4),
+                    alignment: .topLeading
+                )
+        case .pixel:
+            PixelCardFrontView(
+                card: Card(suit: .hearts, rank: .king, isFaceUp: true),
+                cardSize: CGSize(width: 44, height: 64),
+                isSelected: false
+            )
+        }
+    }
+
+    private func colorSwatch(_ option: TableBackgroundColor) -> some View {
         let isSelected = tableBackgroundColorRawValue == option.rawValue
 
         return Button {
@@ -192,23 +394,28 @@ struct SettingsView: View {
             HapticManager.shared.play(.settingsSelection)
             tableBackgroundColorRawValue = option.rawValue
         } label: {
-            HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(option.color)
-                    .frame(width: 36, height: 24)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-                    )
-                Text(option.label)
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-            }
-            .contentShape(Rectangle())
+            Circle()
+                .fill(option.color)
+                .overlay {
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .overlay {
+                    Circle()
+                        .stroke(
+                            isSelected ? Color.accentColor : Color.primary.opacity(0.18),
+                            lineWidth: isSelected ? 2.5 : 1
+                        )
+                }
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1, contentMode: .fit)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(option.label)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

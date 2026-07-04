@@ -6,6 +6,7 @@ struct StatisticsView: View {
     let viewModel: SolitaireViewModel?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedScope: Scope
     @State private var stats = GameStatistics()
     @State private var barHoverState: (label: String, x: CGFloat)?
     @State private var isShowingCleanWinsInfo = false
@@ -18,9 +19,43 @@ struct StatisticsView: View {
         return formatter
     }()
 
+    private enum Scope: String, CaseIterable, Identifiable {
+        case klondike
+        case freecell
+        case all
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .klondike:
+                return GameVariant.klondike.title
+            case .freecell:
+                return GameVariant.freecell.title
+            case .all:
+                return "All"
+            }
+        }
+    }
+
+    init(viewModel: SolitaireViewModel?, initialVariant: GameVariant = .klondike) {
+        self.viewModel = viewModel
+        _selectedScope = State(initialValue: initialVariant == .freecell ? .freecell : .klondike)
+    }
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             Form {
+                Section {
+                    Picker("Statistics Scope", selection: $selectedScope) {
+                        ForEach(Scope.allCases) { scope in
+                            Text(scope.title).tag(scope)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
                 Section {
                     HStack(spacing: 0) {
                         highlightCard(
@@ -31,9 +66,9 @@ struct StatisticsView: View {
                         Divider()
                             .frame(height: 32)
                         highlightCard(
-                            icon: "timer",
-                            label: "Best Time",
-                            value: bestTimeLabel
+                            icon: secondaryHighlightIcon,
+                            label: secondaryHighlightLabel,
+                            value: secondaryHighlightValue
                         )
                         Divider()
                             .frame(height: 32)
@@ -62,14 +97,16 @@ struct StatisticsView: View {
                     Text("Games")
                 }
 
-                Section {
-                    keyValueRow("Total Time", durationLabel(displayTotalTimeSeconds(at: context.date)))
-                    keyValueRow("Avg Time", durationLabel(stats.averageTimeSeconds))
-                    keyValueRow("Best Time", bestTimeLabel)
-                    keyValueRow("High Score (3-card)", stats.highScoreDrawThree.map { "\($0)" } ?? "-")
-                    keyValueRow("High Score (1-card)", stats.highScoreDrawOne.map { "\($0)" } ?? "-")
-                } header: {
-                    Text("Performance")
+                if selectedScope != .all {
+                    Section {
+                        keyValueRow("Total Time", durationLabel(displayTotalTimeSeconds(at: context.date)))
+                        keyValueRow("Avg Time", durationLabel(stats.averageTimeSeconds))
+                        keyValueRow("Best Time", bestTimeLabel)
+                        keyValueRow("High Score (3-card)", stats.highScoreDrawThree.map { "\($0)" } ?? "-")
+                        keyValueRow("High Score (1-card)", stats.highScoreDrawOne.map { "\($0)" } ?? "-")
+                    } header: {
+                        Text("Performance")
+                    }
                 }
 
                 Text("Tracked since \(trackedSinceLabel)")
@@ -110,19 +147,23 @@ struct StatisticsView: View {
             }
         }
         .onAppear {
-            stats = GameStatisticsStore.load()
+            loadStats()
+        }
+        .onChange(of: selectedScope) { _, _ in
+            loadStats()
+            barHoverState = nil
         }
         .confirmationDialog(
-            "Reset statistics?",
+            resetDialogTitle,
             isPresented: $isShowingResetConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Reset Statistics", role: .destructive) {
+            Button(resetActionTitle, role: .destructive) {
                 resetStatistics()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("All games, times, win rates, and high scores will be reset.")
+            Text(resetMessage)
         }
     }
 
@@ -180,6 +221,27 @@ struct StatisticsView: View {
         return durationLabel(bestTimeSeconds)
     }
 
+    private var secondaryHighlightIcon: String {
+        if selectedScope == .all {
+            return "number"
+        }
+        return "timer"
+    }
+
+    private var secondaryHighlightLabel: String {
+        if selectedScope == .all {
+            return "Games Played"
+        }
+        return "Best Time"
+    }
+
+    private var secondaryHighlightValue: String {
+        if selectedScope == .all {
+            return "\(stats.gamesPlayed)"
+        }
+        return bestTimeLabel
+    }
+
     private var cleanWinRateLabel: String {
         return String(format: "%.1f%%", stats.cleanWinRate * 100)
     }
@@ -190,7 +252,23 @@ struct StatisticsView: View {
     }
 
     private func displayTotalTimeSeconds(at date: Date) -> Int {
-        let liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
+        let liveElapsed: Int
+        switch selectedScope {
+        case .all:
+            liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
+        case .klondike:
+            if viewModel?.gameVariant == .klondike {
+                liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
+            } else {
+                liveElapsed = 0
+            }
+        case .freecell:
+            if viewModel?.gameVariant == .freecell {
+                liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
+            } else {
+                liveElapsed = 0
+            }
+        }
         let (sum, overflow) = stats.totalTimeSeconds.addingReportingOverflow(liveElapsed)
         return overflow ? Int.max : max(0, sum)
     }
@@ -259,11 +337,79 @@ struct StatisticsView: View {
     }
 
     private func resetStatistics() {
-        GameStatisticsStore.reset()
-        viewModel?.resetStatisticsTracking()
-        persistTrackingResetIfNeeded()
-        stats = GameStatisticsStore.load()
+        switch selectedScope {
+        case .klondike:
+            GameStatisticsStore.reset(for: .klondike)
+        case .freecell:
+            GameStatisticsStore.reset(for: .freecell)
+        case .all:
+            GameStatisticsStore.reset(for: .klondike)
+            GameStatisticsStore.reset(for: .freecell)
+        }
+
+        if selectedScope == .all || activeVariantMatchesSelectedScope {
+            viewModel?.resetStatisticsTracking()
+            persistTrackingResetIfNeeded()
+        }
+        loadStats()
         barHoverState = nil
+    }
+
+    private var activeVariantMatchesSelectedScope: Bool {
+        switch selectedScope {
+        case .klondike:
+            return viewModel?.gameVariant == .klondike
+        case .freecell:
+            return viewModel?.gameVariant == .freecell
+        case .all:
+            return true
+        }
+    }
+
+    private var resetDialogTitle: String {
+        switch selectedScope {
+        case .klondike:
+            return "Reset Klondike statistics?"
+        case .freecell:
+            return "Reset FreeCell statistics?"
+        case .all:
+            return "Reset all statistics?"
+        }
+    }
+
+    private var resetActionTitle: String {
+        switch selectedScope {
+        case .klondike:
+            return "Reset Klondike Statistics"
+        case .freecell:
+            return "Reset FreeCell Statistics"
+        case .all:
+            return "Reset All Statistics"
+        }
+    }
+
+    private var resetMessage: String {
+        switch selectedScope {
+        case .klondike:
+            return "This will reset only Klondike games, times, win rates, and high scores."
+        case .freecell:
+            return "This will reset only FreeCell games, times, win rates, and high scores."
+        case .all:
+            return "This will reset both Klondike and FreeCell statistics."
+        }
+    }
+
+    private func loadStats() {
+        switch selectedScope {
+        case .klondike:
+            stats = GameStatisticsStore.load(for: .klondike)
+        case .freecell:
+            stats = GameStatisticsStore.load(for: .freecell)
+        case .all:
+            let klondikeStats = GameStatisticsStore.load(for: .klondike)
+            let freeCellStats = GameStatisticsStore.load(for: .freecell)
+            stats = GameStatistics.aggregated([klondikeStats, freeCellStats])
+        }
     }
 
     private func persistTrackingResetIfNeeded() {

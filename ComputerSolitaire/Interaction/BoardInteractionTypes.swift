@@ -3,11 +3,13 @@ import SwiftUI
 enum DropTarget: Hashable {
     case foundation(Int)
     case tableau(Int)
+    case freeCell(Int)
 }
 
 enum DragOrigin: Hashable {
     case waste
     case foundation(Int)
+    case freeCell(Int)
     case tableau(pile: Int, index: Int)
 }
 
@@ -17,6 +19,10 @@ struct DropTargetGeometry: Equatable {
 }
 
 enum DropTargetHitArea {
+    static let freeCellHorizontalGrace: CGFloat = 16
+    static let freeCellTopGrace: CGFloat = 14
+    static let freeCellBottomGrace: CGFloat = 18
+
     static let foundationHorizontalGrace: CGFloat = 16
     static let foundationTopGrace: CGFloat = 14
     static let foundationBottomGrace: CGFloat = 18

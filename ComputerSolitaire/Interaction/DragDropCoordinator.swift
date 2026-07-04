@@ -42,10 +42,12 @@ enum DragDropCoordinator {
 
     static func dropTargetSortKey(_ target: DropTarget) -> Int {
         switch target {
-        case .foundation(let index):
+        case .freeCell(let index):
             return index
-        case .tableau(let index):
+        case .foundation(let index):
             return 100 + index
+        case .tableau(let index):
+            return 200 + index
         }
     }
 }

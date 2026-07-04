@@ -22,8 +22,73 @@ enum TestCards {
     }
 }
 
+/// Deterministic RNG (SplitMix64) so test deals are reproducible across runs and machines.
+struct SeededRandomNumberGenerator: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E3779B97F4A7C15
+        var mixed = state
+        mixed = (mixed ^ (mixed >> 30)) &* 0xBF58476D1CE4E5B9
+        mixed = (mixed ^ (mixed >> 27)) &* 0x94D049BB133111EB
+        return mixed ^ (mixed >> 31)
+    }
+}
+
 @MainActor
 enum GameStateFixtures {
+    /// A reproducible FreeCell deal. Uses a hand-rolled Fisher–Yates so the layout for a
+    /// given seed never shifts underneath the tests.
+    static func seededFreeCellDeal(seed: UInt64) -> GameState {
+        let deck = seededDeck(seed: seed, faceUp: true)
+        var tableau = Array(repeating: [Card](), count: 8)
+        for index in 0..<deck.count {
+            tableau[index % 8].append(deck[index])
+        }
+        return GameState(
+            variant: .freecell,
+            stock: [],
+            waste: [],
+            wasteDrawCount: 0,
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: Array(repeating: [], count: 4),
+            tableau: tableau
+        )
+    }
+
+    /// A reproducible Klondike deal matching the shape of `GameState.newKlondikeGame`.
+    static func seededKlondikeDeal(seed: UInt64) -> GameState {
+        var deck = seededDeck(seed: seed, faceUp: false)
+        var tableau: [[Card]] = Array(repeating: [], count: 7)
+        for pileIndex in 0..<7 {
+            for cardIndex in 0...pileIndex {
+                var card = deck.removeLast()
+                card.isFaceUp = cardIndex == pileIndex
+                tableau[pileIndex].append(card)
+            }
+        }
+        return GameState(
+            stock: deck,
+            waste: [],
+            wasteDrawCount: 0,
+            foundations: Array(repeating: [], count: 4),
+            tableau: tableau
+        )
+    }
+
+    private static func seededDeck(seed: UInt64, faceUp: Bool) -> [Card] {
+        var generator = SeededRandomNumberGenerator(seed: seed)
+        var deck = TestCards.fullDeck(faceUp: faceUp)
+        for index in stride(from: deck.count - 1, through: 1, by: -1) {
+            let swapIndex = Int(generator.next() % UInt64(index + 1))
+            deck.swapAt(index, swapIndex)
+        }
+        return deck
+    }
     static func emptyBoard() -> GameState {
         GameState(
             stock: [],

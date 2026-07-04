@@ -72,6 +72,7 @@ extension View {
     }
 }
 
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -127,8 +128,14 @@ struct ContentView: View {
     @State private var winCelebration = WinCelebrationController()
 
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
+    @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
+    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.classic.rawValue
+
+    private var gameVariant: GameVariant {
+        GameVariant(rawValue: gameVariantRawValue) ?? .klondike
+    }
 
     private var drawMode: DrawMode {
         DrawMode(rawValue: drawModeRawValue) ?? .three
@@ -154,12 +161,17 @@ struct ContentView: View {
 #endif
     }
 
+    private var currentCardStyle: CardStyle {
+        CardStyle(rawValue: cardStyleRawValue) ?? .classic
+    }
+
     var body: some View {
         sceneDecorations(
             for: AnyView(
                 GeometryReader { geometry in
                     boardRoot(for: geometry)
                 }
+                .environment(\.cardStyle, currentCardStyle)
             )
         )
     }
@@ -223,14 +235,16 @@ struct ContentView: View {
                         startNewGameFromUI()
                     } label: {
                         Label("New Game", systemImage: "plus")
-                            .labelStyle(.titleAndIcon)
                     }
+                    .labelStyle(.iconOnly)
+                    .help("New Game")
                     Button {
                         redealFromUI()
                     } label: {
                         Label("Redeal", systemImage: "arrow.clockwise")
-                            .labelStyle(.titleAndIcon)
                     }
+                    .labelStyle(.iconOnly)
+                    .help("Redeal")
                 }
                 ToolbarSpacer(.fixed)
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -248,6 +262,7 @@ struct ContentView: View {
                     } label: {
                         Label("Auto Finish", systemImage: "bolt")
                     }
+                    .labelStyle(.iconOnly)
                     .help("Auto Finish")
                     .disabled(isAutoFinishDisabled)
                     if isHintButtonVisible {
@@ -256,6 +271,7 @@ struct ContentView: View {
                         } label: {
                             Label("Hint", systemImage: "lightbulb")
                         }
+                        .labelStyle(.iconOnly)
                         .help("Hint")
                         .disabled(isHintDisabled)
                     }
@@ -264,12 +280,14 @@ struct ContentView: View {
                     } label: {
                         Label("Statistics", systemImage: "chart.bar")
                     }
+                    .labelStyle(.iconOnly)
                     .help("Statistics")
                     Button {
                         isShowingSettings = true
                     } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
+                    .labelStyle(.iconOnly)
                     .help("Settings")
                 }
 #endif
@@ -296,10 +314,10 @@ struct ContentView: View {
             .sheet(isPresented: $isShowingStats) {
 #if os(iOS)
                 NavigationStack {
-                    StatisticsView(viewModel: viewModel)
+                    StatisticsView(viewModel: viewModel, initialVariant: viewModel.gameVariant)
                 }
 #else
-                StatisticsView(viewModel: viewModel)
+                StatisticsView(viewModel: viewModel, initialVariant: viewModel.gameVariant)
 #endif
             }
         )
@@ -318,7 +336,16 @@ struct ContentView: View {
 
         let gameStateObservedView = AnyView(
             commandObservedView
+            .onChange(of: gameVariantRawValue) { _, newValue in
+                guard hasLoadedGame, !isHydratingGame else { return }
+                let variant = GameVariant(rawValue: newValue) ?? .klondike
+                stopAutoFinish()
+                winCelebration.reset(to: .idle)
+                viewModel.newGame(variant: variant, drawMode: drawMode)
+                persistGameNow()
+            }
             .onChange(of: drawModeRawValue) { (_, newValue: Int) in
+                guard viewModel.supportsDrawMode else { return }
                 let mode = DrawMode(rawValue: newValue) ?? .three
                 viewModel.updateDrawMode(mode)
                 scheduleAutosave()
@@ -391,15 +418,21 @@ struct ContentView: View {
 
     @ViewBuilder
     private func boardRoot(for geometry: GeometryProxy) -> some View {
+        let boardColumnCount = max(viewModel.state.tableau.count, viewModel.gameVariant == .freecell ? 8 : 7)
 #if os(iOS)
-        let metrics = Layout.metrics(for: geometry.size, isRegularWidth: horizontalSizeClass == .regular)
+        let metrics = Layout.metrics(
+            for: geometry.size,
+            isRegularWidth: horizontalSizeClass == .regular,
+            tableauColumnCount: boardColumnCount
+        )
 #else
-        let metrics = Layout.metrics(for: geometry.size)
+        let metrics = Layout.metrics(for: geometry.size, tableauColumnCount: boardColumnCount)
 #endif
         let cardSize = metrics.cardSize
         let boardScaleFactor = boardScaleFactor(for: geometry.size)
         let effectiveCardSize = CGSize(width: cardSize.width * boardScaleFactor, height: cardSize.height * boardScaleFactor)
-        let boardContentWidth = (cardSize.width * 7) + (metrics.columnSpacing * 6)
+        let boardContentWidth = (cardSize.width * CGFloat(boardColumnCount))
+            + (metrics.columnSpacing * CGFloat(max(0, boardColumnCount - 1)))
         let isBoardReady = hasLoadedGame && !isHydratingGame
         let hintedTarget: DropTarget? = {
             guard let destination = viewModel.hintedDestination else { return nil }
@@ -425,6 +458,7 @@ struct ContentView: View {
                     }
                     TopRowView(
                         viewModel: viewModel,
+                        variant: viewModel.gameVariant,
                         cardSize: cardSize,
                         columnSpacing: metrics.columnSpacing,
                         wasteFanSpacing: metrics.wasteFanSpacing,
@@ -668,7 +702,7 @@ struct ContentView: View {
 #if os(macOS)
     private var gameMenuActions: GameMenuActions {
         GameMenuActions(
-            newGame: startNewGameFromUI,
+            newGame: { startNewGameFromUI() },
             redeal: redealFromUI,
             undo: {
                 stopAutoFinish()
@@ -703,10 +737,11 @@ struct ContentView: View {
         viewModel.requestHint()
     }
 
-    private func startNewGameFromUI() {
+    private func startNewGameFromUI(variant: GameVariant? = nil) {
         stopAutoFinish()
         winCelebration.reset(to: .idle)
-        viewModel.newGame(drawMode: drawMode)
+        let selectedVariant = variant ?? gameVariant
+        viewModel.newGame(variant: selectedVariant, drawMode: drawMode)
         persistGameNow()
     }
 
@@ -808,6 +843,8 @@ struct ContentView: View {
             started = viewModel.startDragFromWaste()
         case .foundation(let index):
             started = viewModel.startDragFromFoundation(index: index)
+        case .freeCell(let index):
+            started = viewModel.startDragFromFreeCell(index: index)
         case .tableau(let pile, let index):
             started = viewModel.startDragFromTableau(pileIndex: pile, cardIndex: index)
         }
@@ -1013,6 +1050,8 @@ struct ContentView: View {
 
     private func destination(for target: DropTarget) -> Destination {
         switch target {
+        case .freeCell(let index):
+            return .freeCell(index)
         case .foundation(let index):
             return .foundation(index)
         case .tableau(let index):
@@ -1022,6 +1061,8 @@ struct ContentView: View {
 
     private func dropTarget(for destination: Destination) -> DropTarget {
         switch destination {
+        case .freeCell(let index):
+            return .freeCell(index)
         case .foundation(let index):
             return .foundation(index)
         case .tableau(let index):
@@ -1186,6 +1227,7 @@ struct ContentView: View {
         var lookup: [UUID: Card] = [:]
         for card in state.stock { lookup[card.id] = card }
         for card in state.waste { lookup[card.id] = card }
+        for card in state.freeCells.compactMap({ $0 }) { lookup[card.id] = card }
         for pile in state.foundations {
             for card in pile { lookup[card.id] = card }
         }
@@ -1198,6 +1240,7 @@ struct ContentView: View {
     private enum CardLocation: Equatable {
         case stock(Int)
         case waste(Int)
+        case freeCell(Int)
         case foundation(pile: Int, index: Int)
         case tableau(pile: Int, index: Int)
     }
@@ -1210,6 +1253,11 @@ struct ContentView: View {
         }
         for (index, card) in state.waste.enumerated() {
             locations[card.id] = .waste(index)
+        }
+        for (index, card) in state.freeCells.enumerated() {
+            if let card {
+                locations[card.id] = .freeCell(index)
+            }
         }
         for (pile, cards) in state.foundations.enumerated() {
             for (index, card) in cards.enumerated() {
@@ -1287,7 +1335,8 @@ struct ContentView: View {
         case (.none, _), (_, .none):
             return false
         case (.some(.stock(_)), .some(.stock(_))),
-             (.some(.waste(_)), .some(.waste(_))):
+             (.some(.waste(_)), .some(.waste(_))),
+             (.some(.freeCell(_)), .some(.freeCell(_))):
             return false
         default:
             return true
@@ -1305,12 +1354,15 @@ struct ContentView: View {
         }
 
         if let payload = GamePersistence.load(from: modelContext), viewModel.restore(from: payload) {
-            if drawModeRawValue != viewModel.stockDrawCount {
+            if gameVariantRawValue != viewModel.gameVariant.rawValue {
+                gameVariantRawValue = viewModel.gameVariant.rawValue
+            }
+            if viewModel.supportsDrawMode, drawModeRawValue != viewModel.stockDrawCount {
                 drawModeRawValue = viewModel.stockDrawCount
             }
         } else {
             winCelebration.reset(to: .idle)
-            viewModel.newGame(drawMode: drawMode)
+            viewModel.newGame(variant: gameVariant, drawMode: drawMode)
             persistGameNow()
         }
         winCelebration.syncForLoadedGame(
