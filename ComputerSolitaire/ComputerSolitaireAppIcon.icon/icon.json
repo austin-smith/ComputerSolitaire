@@ -1,6 +1,6 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.45728,0.63330,0.83252,1.00000",
+    "automatic-gradient" : "display-p3:0.18250,0.41357,0.66016,1.00000",
     "orientation" : {
       "start" : {
         "x" : 0.5,
@@ -17,10 +17,11 @@
       "layers" : [
         {
           "glass" : false,
-          "image-name" : "computer-solitaire.png",
-          "name" : "computer-solitaire",
+          "hidden" : false,
+          "image-name" : "cards.png",
+          "name" : "cards",
           "position" : {
-            "scale" : 0.6,
+            "scale" : 0.85,
             "translation-in-points" : [
               0,
               0
