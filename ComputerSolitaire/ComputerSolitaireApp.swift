@@ -17,9 +17,22 @@ struct ComputerSolitaireApp: App {
     var body: some Scene {
 #if os(macOS)
         WindowGroup {
-            ContentView()
-                .frame(minWidth: MainWindowMetrics.minWidth, minHeight: MainWindowMetrics.minHeight)
+#if DEBUG
+            // Screenshot capture (`-screenshotWindowSize`): pin the content
+            // area to the exact requested size; windowResizability below
+            // makes the window conform, so the capture UI test gets exact
+            // App Store pixels without any window manipulation.
+            if let size = ScreenshotFixtures.requestedWindowSize {
+                ContentView()
+                    .frame(width: size.width, height: size.height)
+            } else {
+                mainWindowContent
+            }
+#else
+            mainWindowContent
+#endif
         }
+        .windowResizability(mainWindowResizability)
         .modelContainer(for: SavedGameRecord.self, isAutosaveEnabled: true, isUndoEnabled: false)
         .commands {
             appCommands
@@ -41,6 +54,21 @@ struct ComputerSolitaireApp: App {
         }
 #endif
     }
+
+#if os(macOS)
+    private var mainWindowContent: some View {
+        ContentView()
+            .frame(minWidth: MainWindowMetrics.minWidth, minHeight: MainWindowMetrics.minHeight)
+    }
+
+    private var mainWindowResizability: WindowResizability {
+#if DEBUG
+        ScreenshotFixtures.requestedWindowSize != nil ? .contentSize : .automatic
+#else
+        .automatic
+#endif
+    }
+#endif
 
     @CommandsBuilder
     private var appCommands: some Commands {

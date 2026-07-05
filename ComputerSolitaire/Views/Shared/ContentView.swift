@@ -118,6 +118,9 @@ struct ContentView: View {
     @State private var previousStockCount: Int = 0
     @State private var hasLoadedGame = false
     @State private var isHydratingGame = false
+    // True while a screenshot board is on screen; suppresses autosave so the
+    // staged game never overwrites the real one. Only set in DEBUG builds.
+    @State private var isScreenshotSession = false
     @State private var autosaveTask: Task<Void, Never>?
     @State private var isAutoFinishing = false
     @State private var isShowingRulesAndScoring = false
@@ -341,6 +344,7 @@ struct ContentView: View {
                 let variant = GameVariant(rawValue: newValue) ?? .klondike
                 stopAutoFinish()
                 winCelebration.reset(to: .idle)
+                isScreenshotSession = false
                 viewModel.newGame(variant: variant, drawMode: drawMode)
                 persistGameNow()
             }
@@ -740,6 +744,7 @@ struct ContentView: View {
     private func startNewGameFromUI(variant: GameVariant? = nil) {
         stopAutoFinish()
         winCelebration.reset(to: .idle)
+        isScreenshotSession = false
         let selectedVariant = variant ?? gameVariant
         viewModel.newGame(variant: selectedVariant, drawMode: drawMode)
         persistGameNow()
@@ -1353,7 +1358,9 @@ struct ContentView: View {
             previousStockCount = viewModel.state.stock.count
         }
 
-        if let payload = GamePersistence.load(from: modelContext), viewModel.restore(from: payload) {
+        if restoreScreenshotFixtureIfRequested() {
+            // Staged board loaded; shared post-load setup below still applies.
+        } else if let payload = GamePersistence.load(from: modelContext), viewModel.restore(from: payload) {
             if gameVariantRawValue != viewModel.gameVariant.rawValue {
                 gameVariantRawValue = viewModel.gameVariant.rawValue
             }
@@ -1443,8 +1450,29 @@ struct ContentView: View {
         return min(1, widthScale, heightScale)
     }
 
+    private func restoreScreenshotFixtureIfRequested() -> Bool {
+#if DEBUG
+        guard let payload = ScreenshotFixtures.payloadFromLaunchArguments(),
+              viewModel.restore(from: payload) else {
+            return false
+        }
+        isScreenshotSession = true
+        if gameVariantRawValue != viewModel.gameVariant.rawValue {
+            gameVariantRawValue = viewModel.gameVariant.rawValue
+        }
+        if viewModel.supportsDrawMode, drawModeRawValue != viewModel.stockDrawCount {
+            drawModeRawValue = viewModel.stockDrawCount
+        }
+        return true
+#else
+        return false
+#endif
+    }
+
     private func persistGameNow() {
         guard hasLoadedGame else { return }
+        // A screenshot session must never overwrite the real saved game.
+        guard !isScreenshotSession else { return }
         autosaveTask?.cancel()
         autosaveTask = nil
         do {
