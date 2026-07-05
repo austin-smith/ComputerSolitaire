@@ -65,6 +65,44 @@ final class SolitaireViewModelCoreTests: XCTestCase {
         XCTAssertTrue(viewModel.state.stock.allSatisfy { !$0.isFaceUp })
     }
 
+    func testRecyclePenaltyAppliesWhenDealtDrawOneEvenAfterSwitchingToDrawThree() {
+        var state = GameStateFixtures.validPersistenceState()
+        state.waste = state.stock.map { card in
+            var faceUp = card
+            faceUp.isFaceUp = true
+            return faceUp
+        }
+        state.stock = []
+        state.wasteDrawCount = min(1, state.waste.count)
+        let viewModel = makeViewModel(
+            restoring: payload(state: state, stockDrawCount: DrawMode.one.rawValue, score: 150)
+        )
+
+        viewModel.updateDrawMode(.three)
+        viewModel.handleStockTap()
+
+        XCTAssertEqual(viewModel.score, 150 + Scoring.delta(for: .recycleWasteInDrawOne))
+    }
+
+    func testRecycleHasNoPenaltyWhenDealtDrawThreeEvenAfterSwitchingToDrawOne() {
+        var state = GameStateFixtures.validPersistenceState()
+        state.waste = state.stock.map { card in
+            var faceUp = card
+            faceUp.isFaceUp = true
+            return faceUp
+        }
+        state.stock = []
+        state.wasteDrawCount = min(3, state.waste.count)
+        let viewModel = makeViewModel(
+            restoring: payload(state: state, stockDrawCount: DrawMode.three.rawValue, score: 150)
+        )
+
+        viewModel.updateDrawMode(.one)
+        viewModel.handleStockTap()
+
+        XCTAssertEqual(viewModel.score, 150)
+    }
+
     func testStartDragCanDropAndHandleDropMoveWasteToFoundation() {
         let aceSpades = TestCards.make(.spades, .ace, isFaceUp: true)
         let state = makeValidState(
@@ -168,6 +206,7 @@ final class SolitaireViewModelCoreTests: XCTestCase {
         state: GameState,
         savedAt: Date = DateFixtures.reference,
         stockDrawCount: Int,
+        score: Int = 0,
         gameStartedAt: Date = DateFixtures.reference,
         pauseStartedAt: Date? = nil
     ) -> SavedGamePayload {
@@ -175,7 +214,7 @@ final class SolitaireViewModelCoreTests: XCTestCase {
             savedAt: savedAt,
             state: state,
             movesCount: 0,
-            score: 0,
+            score: score,
             gameStartedAt: gameStartedAt,
             pauseStartedAt: pauseStartedAt,
             hasAppliedTimeBonus: false,
