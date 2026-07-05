@@ -8,6 +8,7 @@ scheme("ComputerSolitaireScreenshots")
 
 devices([
   "iPhone 17 Pro Max",       # 6.9" (1320x2868) — the required iPhone size
+  "iPhone 17 Pro",           # 6.3" (1206x2622)
   "iPad Pro 13-inch (M5)",   # 13" (2064x2752) — the required iPad size
   "iPad Pro 11-inch (M5)"    # 11" (2420x1668)
 ])

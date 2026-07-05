@@ -30,21 +30,33 @@ final class ScreenshotCaptureUITests: XCTestCase {
     ]
 
 #if os(macOS)
-    /// Content-area size in points (the app scene pins its content to this,
-    /// see ComputerSolitaireApp); on a 2x display the content capture comes
-    /// out at 2880x1800 pixels — an exact Mac App Store screenshot size.
+    /// Full window size in points — title bar and toolbar included, since
+    /// the toolbar holds the app's controls and belongs in the screenshot.
+    /// On a 2x display the capture comes out at 2880x1800 pixels — an exact
+    /// Mac App Store screenshot size.
     private static let windowSize = CGSize(width: 1440, height: 900)
 #endif
 
     @MainActor
     func testCaptureScreenshots() throws {
+#if os(macOS)
+        // The app pins its *content* size (pure SwiftUI; the app target has
+        // no AppKit), but the capture needs the *window* to be exactly
+        // `windowSize`. Probe once to measure the title-bar height, then pin
+        // the content that much shorter for the real captures.
+        let titleBarHeight = try measureTitleBarHeight()
+        let contentSize = CGSize(
+            width: Self.windowSize.width,
+            height: Self.windowSize.height - titleBarHeight
+        )
+#endif
         for board in Self.boards {
             let app = XCUIApplication()
 #if os(macOS)
             // Ignore any persisted window state so the app-side pin always wins.
             app.launchArguments += [
                 "-screenshotWindowSize",
-                "\(Int(Self.windowSize.width))x\(Int(Self.windowSize.height))",
+                "\(Int(contentSize.width))x\(Int(contentSize.height))",
                 "-ApplePersistenceIgnoreState", "YES"
             ]
 #else
@@ -75,30 +87,54 @@ final class ScreenshotCaptureUITests: XCTestCase {
     }
 
 #if os(macOS)
-    /// Captures the app window's content area as an exact-size PNG attachment.
+    /// Measures the window title-bar height: launches the app with its
+    /// content pinned to the reference size and returns how much taller the
+    /// window frame is. The probe instance is replaced by the next launch.
+    @MainActor
+    private func measureTitleBarHeight() throws -> CGFloat {
+        let probe = XCUIApplication()
+        probe.launchArguments += [
+            "-screenshotWindowSize",
+            "\(Int(Self.windowSize.width))x\(Int(Self.windowSize.height))",
+            "-ApplePersistenceIgnoreState", "YES",
+            "-screenshotFixture", Self.boards[0]
+        ]
+        probe.launch()
+        let window = probe.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 10), "probe window never appeared")
+
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline, window.frame.height < Self.windowSize.height {
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        let titleBarHeight = window.frame.height - Self.windowSize.height
+        XCTAssertGreaterThan(titleBarHeight, 0, "probe: no title bar measured")
+        XCTAssertLessThan(titleBarHeight, 100, "probe: implausible title-bar height")
+        return titleBarHeight
+    }
+
+    /// Captures the full app window (title bar and toolbar included) as an
+    /// exact-size PNG attachment.
     ///
     /// `XCUIElement.screenshot()` is unreliable for macOS windows (it can
     /// return the entire desktop), so this takes a full-screen capture and
-    /// crops it to the window's content area: the bottom `windowSize.height`
-    /// points of the frame, which excludes the title bar (the app scene pins
-    /// the content to exactly `windowSize`). The window must be frontmost —
+    /// crops it to the window's frame. The window must be frontmost —
     /// anything overlapping it would end up in the crop.
     @MainActor
     private func captureMacWindow(of app: XCUIApplication, named name: String) throws {
         app.activate()
         let window = app.windows.firstMatch
 
-        // Wait for the scene's pinned content size to land (the window frame
-        // is the content plus the title bar).
+        // Wait for the pinned content size plus measured title bar to land.
         let deadline = Date().addingTimeInterval(10)
         while Date() < deadline,
               abs(window.frame.width - Self.windowSize.width) > 1
-                || window.frame.height < Self.windowSize.height {
+                || abs(window.frame.height - Self.windowSize.height) > 1 {
             Thread.sleep(forTimeInterval: 0.2)
         }
         let frame = window.frame
         XCTAssertEqual(frame.width, Self.windowSize.width, accuracy: 1, "\(name): window never took the pinned size")
-        XCTAssertGreaterThanOrEqual(frame.height, Self.windowSize.height, "\(name): window never took the pinned size")
+        XCTAssertEqual(frame.height, Self.windowSize.height, accuracy: 1, "\(name): window never took the pinned size")
 
         let screen = try XCTUnwrap(NSScreen.screens.first, "no screen")
         let fullImage = XCUIScreen.main.screenshot().image
@@ -109,14 +145,12 @@ final class ScreenshotCaptureUITests: XCTestCase {
 
         // Window frame is in points with a top-left origin — the same
         // orientation as CGImage rows — so only the display scale applies.
-        // Content sits at the bottom of the frame; whatever tops it off
-        // (title bar) is excluded by cropping from maxY upward.
         let scale = CGFloat(fullCG.width) / screen.frame.width
         let crop = CGRect(
             x: frame.minX * scale,
-            y: (frame.maxY - Self.windowSize.height) * scale,
-            width: Self.windowSize.width * scale,
-            height: Self.windowSize.height * scale
+            y: frame.minY * scale,
+            width: frame.width * scale,
+            height: frame.height * scale
         ).integral
         let cropped = try XCTUnwrap(fullCG.cropping(to: crop), "\(name): crop failed")
 
