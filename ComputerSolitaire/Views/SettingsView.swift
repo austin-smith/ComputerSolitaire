@@ -93,162 +93,28 @@ struct SettingsView: View {
 #endif
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                SettingsCard(title: "Table") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Background color")
-                                .font(.subheadline.weight(.semibold))
-                            Spacer()
-                            if let selected = TableBackgroundColor(rawValue: tableBackgroundColorRawValue) {
-                                Text(selected.label)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        HStack(spacing: 8) {
-                            ForEach(TableBackgroundColor.allCases) { option in
-                                colorSwatch(option)
-                            }
-                        }
-                        Toggle(isOn: $isFeltEffectEnabled) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Felt texture")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("Adds a fabric texture and vignette to the table.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .toggleStyle(.switch)
-                    }
-                }
-
-                SettingsCard(title: "Cards") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Card style")
-                            .font(.subheadline.weight(.semibold))
-                        HStack(spacing: 12) {
-                            ForEach(CardStyle.allCases) { style in
-                                cardStyleCard(style)
-                            }
-                        }
-                        Toggle(isOn: $isCardTiltEnabled) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Natural card tilt")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("Adds a subtle organic angle to each card.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .toggleStyle(.switch)
-                    }
-                }
-
-                SettingsCard(title: "Audio") {
-                    Toggle(isOn: $isSoundEffectsEnabled) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Sound effects")
-                                .font(.subheadline.weight(.semibold))
-                            Text("Play card and game action sounds.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .toggleStyle(.switch)
-                }
-
-                SettingsCard(title: "Gameplay") {
-                    Toggle(isOn: $isHintButtonVisible) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Show hint button")
-                                .font(.subheadline.weight(.semibold))
-                            Text("Hide hint controls to avoid spoilers about hint availability.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .toggleStyle(.switch)
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Game Type")
-                        .font(.headline)
-                        .padding(.leading, 4)
-
-                    HStack(spacing: 12) {
-                        ForEach(GameVariant.allCases, id: \.rawValue) { variant in
-                            variantCard(variant)
-                        }
-                    }
-                }
-
-                if gameVariantRawValue == GameVariant.klondike.rawValue {
-                    SettingsCard(title: "Draw Mode") {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Stock draw")
-                                .font(.subheadline.weight(.semibold))
-                            Picker("Stock draw", selection: $drawModeRawValue) {
-                                ForEach(DrawMode.allCases, id: \.rawValue) { mode in
-                                    Text(mode.title).tag(mode.rawValue)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.segmented)
-                            Text("Choose how many cards to draw from the stock.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
+        Form {
+            tableSection
+            cardsSection
+            audioSection
+            gameplaySection
+            gameTypeSection
 
 #if os(iOS)
-                if UIApplication.shared.supportsAlternateIcons {
-                    SettingsCard(title: "App Icon") {
-                        Button {
-                            isShowingAppIconPicker = true
-                        } label: {
-                            HStack(spacing: 10) {
-                                AppIconPreviewView(icon: selectedAppIcon, size: 30)
-                                Text(selectedAppIcon.name)
-                                    .font(.subheadline.weight(.semibold))
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+            if UIApplication.shared.supportsAlternateIcons {
+                appIconSection
+            }
 #endif
 
-                SettingsCard(title: "Help") {
-                    Button {
-                        isShowingRulesAndScoring = true
-                    } label: {
-                        HStack {
-                            Text("Rules & Scoring")
-                                .font(.subheadline.weight(.semibold))
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(24)
+            helpSection
         }
-        .frame(minWidth: 420, idealWidth: 480, maxWidth: 520, minHeight: 260)
         .navigationTitle("Settings")
 #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+#else
+        .formStyle(.grouped)
+        .padding(16)
+        .frame(minWidth: 420, idealWidth: 480, maxWidth: 520, minHeight: 320)
 #endif
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -285,11 +151,151 @@ struct SettingsView: View {
         }
     }
 
-    private func variantCard(_ variant: GameVariant) -> some View {
-        let isSelected = gameVariantRawValue == variant.rawValue
+    // MARK: - Sections
 
-        return Button {
-            guard !isSelected else { return }
+    private var tableSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Background color")
+                    Spacer()
+                    if let selected = TableBackgroundColor(rawValue: tableBackgroundColorRawValue) {
+                        Text(selected.label)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                HStack(spacing: 8) {
+                    ForEach(TableBackgroundColor.allCases) { option in
+                        colorSwatch(option)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+            Toggle(isOn: $isFeltEffectEnabled) {
+                Text("Felt texture")
+                Text("Adds a fabric texture and vignette to the table.")
+            }
+            .toggleStyle(.switch)
+        } header: {
+            Text("Table")
+        }
+    }
+
+    private var cardsSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                ForEach(CardStyle.allCases) { style in
+                    cardStyleCard(style)
+                }
+            }
+            .padding(.vertical, 4)
+            Toggle(isOn: $isCardTiltEnabled) {
+                Text("Natural card tilt")
+                Text("Adds a subtle organic angle to each card.")
+            }
+            .toggleStyle(.switch)
+        } header: {
+            Text("Cards")
+        }
+    }
+
+    private var audioSection: some View {
+        Section {
+            Toggle(isOn: $isSoundEffectsEnabled) {
+                Text("Sound effects")
+                Text("Play card and game action sounds.")
+            }
+            .toggleStyle(.switch)
+        } header: {
+            Text("Audio")
+        }
+    }
+
+    private var gameplaySection: some View {
+        Section {
+            Toggle(isOn: $isHintButtonVisible) {
+                Text("Show hint button")
+                Text("Turn off to avoid spoilers about hint availability.")
+            }
+            .toggleStyle(.switch)
+        } header: {
+            Text("Gameplay")
+        }
+    }
+
+    private var gameTypeSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                ForEach(GameVariant.allCases, id: \.rawValue) { variant in
+                    variantCard(variant)
+                }
+            }
+            .padding(.vertical, 4)
+
+            if gameVariantRawValue == GameVariant.klondike.rawValue {
+                Picker("Stock draw", selection: $drawModeRawValue) {
+                    ForEach(DrawMode.allCases, id: \.rawValue) { mode in
+                        Text(mode.title).tag(mode.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
+        } header: {
+            Text("Game Type")
+        }
+    }
+
+#if os(iOS)
+    private var appIconSection: some View {
+        Section {
+            Button {
+                isShowingAppIconPicker = true
+            } label: {
+                HStack(spacing: 10) {
+                    AppIconPreviewView(icon: selectedAppIcon, size: 30)
+                    Text(selectedAppIcon.name)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } header: {
+            Text("App Icon")
+        }
+    }
+#endif
+
+    private var helpSection: some View {
+        Section {
+            Button {
+                isShowingRulesAndScoring = true
+            } label: {
+                HStack {
+                    Text("Rules & Scoring")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } header: {
+            Text("Help")
+        }
+    }
+
+    // MARK: - Custom controls
+
+    private func variantCard(_ variant: GameVariant) -> some View {
+        Button {
+            guard gameVariantRawValue != variant.rawValue else { return }
             HapticManager.shared.play(.settingsSelection)
             withAnimation(.smooth(duration: 0.3)) {
                 gameVariantRawValue = variant.rawValue
@@ -303,45 +309,15 @@ struct SettingsView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? .thickMaterial : .thinMaterial)
-                    .shadow(
-                        color: .black.opacity(isSelected ? 0.12 : 0.04),
-                        radius: isSelected ? 8 : 2,
-                        y: isSelected ? 4 : 1
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        Color.accentColor.opacity(isSelected ? 1 : 0),
-                        lineWidth: 2.5
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        Color.primary.opacity(isSelected ? 0 : 0.1),
-                        lineWidth: 1
-                    )
-            }
-            .opacity(isSelected ? 1 : 0.7)
-            .scaleEffect(isSelected ? 1.0 : 0.96)
-            .contentShape(Rectangle())
+            .settingsChip(isSelected: gameVariantRawValue == variant.rawValue)
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAddTraits(gameVariantRawValue == variant.rawValue ? .isSelected : [])
     }
 
     private func cardStyleCard(_ style: CardStyle) -> some View {
-        let isSelected = cardStyleRawValue == style.rawValue
-
-        return Button {
-            guard !isSelected else { return }
+        Button {
+            guard cardStyleRawValue != style.rawValue else { return }
             HapticManager.shared.play(.settingsSelection)
             withAnimation(.smooth(duration: 0.3)) {
                 cardStyleRawValue = style.rawValue
@@ -359,38 +335,10 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? .thickMaterial : .thinMaterial)
-                    .shadow(
-                        color: .black.opacity(isSelected ? 0.12 : 0.04),
-                        radius: isSelected ? 8 : 2,
-                        y: isSelected ? 4 : 1
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        Color.accentColor.opacity(isSelected ? 1 : 0),
-                        lineWidth: 2.5
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        Color.primary.opacity(isSelected ? 0 : 0.1),
-                        lineWidth: 1
-                    )
-            }
-            .opacity(isSelected ? 1 : 0.7)
-            .scaleEffect(isSelected ? 1.0 : 0.96)
-            .contentShape(Rectangle())
+            .settingsChip(isSelected: cardStyleRawValue == style.rawValue)
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAddTraits(cardStyleRawValue == style.rawValue ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -456,29 +404,30 @@ struct SettingsView: View {
     }
 }
 
-private struct SettingsCard<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-            content
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.thinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
+private extension View {
+    func settingsChip(isSelected: Bool) -> some View {
+        self
+            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.12)) : AnyShapeStyle(.quaternary.opacity(0.5)))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        isSelected ? Color.accentColor : Color.primary.opacity(0.1),
+                        lineWidth: isSelected ? 2 : 1
+                    )
+            }
+            .opacity(isSelected ? 1 : 0.75)
+            .contentShape(Rectangle())
     }
 }
 
 #Preview {
-    SettingsView()
+    NavigationStack {
+        SettingsView()
+    }
 }
