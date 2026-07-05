@@ -1,0 +1,96 @@
+# Screenshot automation. The full App Store set is one command:
+#
+#   fastlane screenshots
+#
+# iPhone/iPad come from `snapshot` (see Snapfile); the Mac window screenshot
+# comes from a custom xcodebuild step because snapshot only supports
+# iOS/tvOS/watchOS simulators. Staged boards live in the app as
+# ScreenshotFixtures; see ScreenshotFixtureTests for regenerating them.
+
+default_platform(:ios)
+
+# Mac shots land next to the iOS ones in the locale folder with a device-style
+# prefix — the same layout `deliver` uploads from (it keys on pixel size).
+# fastlane chdirs into this fastlane directory for lane execution, so plain
+# Ruby file ops and `sh` both resolve these relative to fastlane/.
+MAC_EXPORT_TMP = "screenshots/mac-export".freeze
+MAC_FINAL_DIR = "screenshots/en-US".freeze
+
+# Shared scheme whose test action contains only ScreenshotCaptureUITests, so
+# screenshot runs never build or run the (macOS-only) unit test suite.
+SCHEME = "ComputerSolitaireScreenshots".freeze
+
+platform :ios do
+  desc "Capture all App Store screenshots (iPhone, iPad, and Mac)"
+  lane :screenshots do
+    # One iOS build shared by every simulator run (snapshot is configured
+    # with test_without_building against this derived data).
+    run_tests(
+      project: "ComputerSolitaire.xcodeproj",
+      scheme: SCHEME,
+      destination: "generic/platform=iOS Simulator",
+      derived_data_path: "fastlane/derived_data",
+      build_for_testing: true
+    )
+    snapshot
+    mac_screenshots
+  end
+
+  desc "Capture the Mac window screenshot via xcodebuild"
+  private_lane :mac_screenshots do
+    # The UI test can't terminate an app instance it didn't spawn (e.g. one
+    # left running from Xcode), so quit it first — gracefully, then harder.
+    # Gated on the app actually running: an unconditional quit AppleEvent can
+    # linger and get delivered to the instance the test launches later,
+    # quitting it mid-capture. An instance *paused in Xcode's debugger* can't
+    # be killed at all (the kernel defers signals for traced processes); if
+    # this leg fails with "Failed to terminate", hit Stop in Xcode and rerun.
+    if system("pgrep -xq 'Computer Solitaire'")
+      sh(%q(osascript -e 'with timeout of 3 seconds' -e 'quit app "Computer Solitaire"' -e 'end timeout' 2>/dev/null || true))
+      sh(%q(pkill -x "Computer Solitaire" 2>/dev/null || true; sleep 1; pkill -9 -x "Computer Solitaire" 2>/dev/null || true))
+    end
+
+    result_bundle = "screenshots/mac.xcresult"
+    FileUtils.rm_rf([MAC_EXPORT_TMP, result_bundle])
+    FileUtils.mkdir_p([MAC_EXPORT_TMP, MAC_FINAL_DIR])
+
+    sh("xcodebuild", "test",
+       "-project", "../ComputerSolitaire.xcodeproj",
+       "-scheme", SCHEME,
+       "-destination", "platform=macOS",
+       "-resultBundlePath", result_bundle,
+       "-quiet")
+    sh("xcrun", "xcresulttool", "export", "attachments",
+       "--path", result_bundle, "--output-path", MAC_EXPORT_TMP)
+
+    rename_exported_attachments(MAC_EXPORT_TMP)
+    Dir.glob(File.join(MAC_EXPORT_TMP, "*.png")).each do |png|
+      FileUtils.mv(png, File.join(MAC_FINAL_DIR, "macOS-#{File.basename(png)}"))
+    end
+    FileUtils.rm_rf([MAC_EXPORT_TMP, result_bundle])
+    UI.success("Mac screenshots in fastlane/#{MAC_FINAL_DIR}")
+  end
+end
+
+# xcresulttool exports opaque file names; the manifest maps them back to the
+# attachment names the UI test set (board names, plus an index/UUID suffix
+# this strips). Non-PNG attachments are runner diagnostics — dropped.
+def rename_exported_attachments(export_dir)
+  manifest_path = File.join(export_dir, "manifest.json")
+  return unless File.exist?(manifest_path)
+
+  JSON.parse(File.read(manifest_path)).each do |test|
+    (test["attachments"] || []).each do |attachment|
+      exported = File.join(export_dir, attachment["exportedFileName"].to_s)
+      next unless File.exist?(exported)
+      unless File.extname(exported).casecmp(".png").zero?
+        File.delete(exported)
+        next
+      end
+      name = attachment["suggestedHumanReadableName"] || File.basename(exported)
+      stem = File.basename(name, ".*").sub(/_\d+_[0-9A-Fa-f-]{36}\z/, "")
+      File.rename(exported, File.join(export_dir, "#{stem}.png"))
+    end
+  end
+  File.delete(manifest_path)
+end

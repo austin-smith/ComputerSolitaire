@@ -14,5 +14,13 @@ build/
 .build/
 .derivedData/
 
+## fastlane (generated screenshots and run artifacts)
+## per https://docs.fastlane.tools/best-practices/source-control/
+fastlane/screenshots
+fastlane/report.xml
+fastlane/test_output
+fastlane/Preview.html
+fastlane/derived_data
+
 ## macOS custom folder icon
 Icon[^a-zA-Z]

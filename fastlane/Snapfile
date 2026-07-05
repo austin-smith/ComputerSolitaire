@@ -1,0 +1,31 @@
+# Configuration for `fastlane snapshot` — iPhone/iPad App Store screenshots.
+# The Mac screenshot is captured by the custom step in the :screenshots lane
+# (snapshot does not support macOS apps).
+
+# Shared scheme whose test action contains only ScreenshotCaptureUITests, so
+# device runs never build or run the (macOS-only) unit test suite.
+scheme("ComputerSolitaireScreenshots")
+
+devices([
+  "iPhone 17 Pro Max",       # 6.9" (1320x2868) — the required iPhone size
+  "iPad Pro 13-inch (M5)",   # 13" (2064x2752) — the required iPad size
+  "iPad Pro 11-inch (M5)"    # 11" (2420x1668)
+])
+
+languages(["en-US"])
+
+# Clean 9:41 / full-bars / full-battery status bar, applied by fastlane.
+override_status_bar(true)
+
+# Concurrent mode runs on simulator clones, which don't inherit status-bar
+# overrides — keep runs sequential.
+concurrent_simulators(false)
+
+output_directory("./fastlane/screenshots")
+clear_previous_screenshots(true)
+stop_after_first_error(true)
+
+# The lane builds once via build_for_testing; every device run reuses that
+# build instead of recompiling the app per device.
+derived_data_path("./fastlane/derived_data")
+test_without_building(true)
