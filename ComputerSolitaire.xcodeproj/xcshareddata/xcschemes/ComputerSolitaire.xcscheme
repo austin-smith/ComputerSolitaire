@@ -38,8 +38,11 @@
                ReferencedContainer = "container:ComputerSolitaire.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <!-- Screenshot capture tests: skipped in normal test runs; they run
+              via the dedicated ComputerSolitaireScreenshots scheme
+              (fastlane screenshots). -->
          <TestableReference
-            skipped = "NO">
+            skipped = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "4B75C1F62F1A233600761A12"
