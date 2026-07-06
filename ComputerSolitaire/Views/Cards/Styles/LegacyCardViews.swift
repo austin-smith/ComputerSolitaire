@@ -1,13 +1,13 @@
 import SwiftUI
 
-// The "Classic" (parchment) card style. Shared card behavior and the style
+// The "Legacy" (parchment) card style. Shared card behavior and the style
 // dispatcher live in CardView.swift.
 
-enum ClassicCardStyle {
-    static let info = CardStyleInfo(title: "Classic", subtitle: "Parchment")
+enum LegacyCardStyle {
+    static let info = CardStyleInfo(title: "Legacy", subtitle: "Parchment")
 }
 
-private enum ClassicPalette {
+private enum LegacyPalette {
     static let parchment = Color(red: 0.98, green: 0.96, blue: 0.91)
     static let redInk = Color(red: 0.72, green: 0.16, blue: 0.18)
     static let blackInk = Color(red: 0.12, green: 0.12, blue: 0.12)
@@ -20,14 +20,14 @@ private enum ClassicPalette {
     }
 }
 
-struct ClassicCardFrontView: View {
+struct LegacyCardFrontView: View {
     let card: Card
     let cardSize: CGSize
     let isSelected: Bool
 
     var body: some View {
         let chrome = CardChrome(cardWidth: cardSize.width, isSelected: isSelected)
-        let inkColor = ClassicPalette.ink(for: card.suit)
+        let inkColor = LegacyPalette.ink(for: card.suit)
         // Rank in the top-left corner, suit in the top-right, mirrored 180 on
         // the bottom edge.
         let cornerMark = HStack(alignment: .firstTextBaseline, spacing: 0) {
@@ -39,7 +39,7 @@ struct ClassicCardFrontView: View {
         }
 
         ZStack {
-            ClassicCardBase(fill: ClassicPalette.parchment, chrome: chrome)
+            LegacyCardBase(fill: LegacyPalette.parchment, chrome: chrome)
                 .overlay(
                     RoundedRectangle(cornerRadius: chrome.cornerRadius, style: .continuous)
                         .fill(
@@ -53,13 +53,13 @@ struct ClassicCardFrontView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: chrome.cornerRadius * 0.92, style: .continuous)
-                        .strokeBorder(ClassicPalette.ornament.opacity(0.6), lineWidth: 1)
+                        .strokeBorder(LegacyPalette.ornament.opacity(0.6), lineWidth: 1)
                         .padding(cardSize.width * 0.06)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: chrome.cornerRadius * 0.78, style: .continuous)
                         .strokeBorder(
-                            ClassicPalette.ornament.opacity(0.45),
+                            LegacyPalette.ornament.opacity(0.45),
                             style: StrokeStyle(lineWidth: 0.6, dash: [4, 3])
                         )
                         .padding(cardSize.width * 0.1)
@@ -85,7 +85,7 @@ struct ClassicCardFrontView: View {
     }
 }
 
-struct ClassicCardBackView: View {
+struct LegacyCardBackView: View {
     let cardSize: CGSize
     let isSelected: Bool
 
@@ -93,26 +93,26 @@ struct ClassicCardBackView: View {
         let chrome = CardChrome(cardWidth: cardSize.width, isSelected: isSelected)
 
         ZStack {
-            ClassicCardBase(fill: ClassicPalette.lacquer, chrome: chrome)
+            LegacyCardBase(fill: LegacyPalette.lacquer, chrome: chrome)
                 .overlay(
                     RoundedRectangle(cornerRadius: chrome.cornerRadius * 0.92, style: .continuous)
-                        .strokeBorder(ClassicPalette.trim.opacity(0.55), lineWidth: 1)
+                        .strokeBorder(LegacyPalette.trim.opacity(0.55), lineWidth: 1)
                         .padding(cardSize.width * 0.08)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: chrome.cornerRadius * 0.8, style: .continuous)
-                        .strokeBorder(ClassicPalette.trim.opacity(0.35), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
+                        .strokeBorder(LegacyPalette.trim.opacity(0.35), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
                         .padding(cardSize.width * 0.12)
                 )
 
-            ClassicCardBackPattern()
+            LegacyCardBackPattern()
                 .padding(cardSize.width * 0.18)
         }
     }
 }
 
 /// Standalone classic card back (stock pile, deck art).
-struct ClassicStandaloneCardBackView: View {
+struct LegacyStandaloneCardBackView: View {
     let cardSize: CGSize
 
     var body: some View {
@@ -120,27 +120,27 @@ struct ClassicStandaloneCardBackView: View {
 
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(ClassicPalette.lacquer)
+                .fill(LegacyPalette.lacquer)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(ClassicPalette.trim.opacity(0.5), lineWidth: 1)
+                        .stroke(LegacyPalette.trim.opacity(0.5), lineWidth: 1)
                         .padding(cardSize.width * 0.06)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(ClassicPalette.trim.opacity(0.25), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
+                        .stroke(LegacyPalette.trim.opacity(0.25), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
                         .padding(cardSize.width * 0.1)
                 )
                 .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
 
-            ClassicCardBackPattern()
+            LegacyCardBackPattern()
                 .padding(cardSize.width * 0.18)
         }
         .frame(width: cardSize.width, height: cardSize.height)
     }
 }
 
-private struct ClassicCardBase: View {
+private struct LegacyCardBase: View {
     let fill: Color
     let chrome: CardChrome
 
@@ -155,7 +155,7 @@ private struct ClassicCardBase: View {
     }
 }
 
-private struct ClassicCardBackPattern: View {
+private struct LegacyCardBackPattern: View {
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size

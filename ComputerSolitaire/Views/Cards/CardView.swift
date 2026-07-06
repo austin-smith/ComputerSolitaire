@@ -13,15 +13,19 @@ struct CardStyleInfo {
 }
 
 enum CardStyle: String, CaseIterable, Identifiable {
-    case classic
+    case `default`
     case pixel
+    // Raw value stays "classic": shipped user preferences and the screenshot
+    // UI test launch arguments both store that string.
+    case legacy = "classic"
 
     var id: String { rawValue }
 
     /// The one dispatch point per style, alongside the view dispatch in CardView.
     var info: CardStyleInfo {
         switch self {
-        case .classic: ClassicCardStyle.info
+        case .default: DefaultCardStyle.info
+        case .legacy: LegacyCardStyle.info
         case .pixel: PixelCardStyle.info
         }
     }
@@ -31,7 +35,7 @@ enum CardStyle: String, CaseIterable, Identifiable {
 }
 
 private struct CardStyleKey: EnvironmentKey {
-    static let defaultValue: CardStyle = .classic
+    static let defaultValue: CardStyle = .default
 }
 
 extension EnvironmentValues {
@@ -215,8 +219,10 @@ struct CardView: View {
         switch cardStyle {
         case .pixel:
             PixelCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
-        case .classic:
-            ClassicCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
+        case .legacy:
+            LegacyCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
+        case .default:
+            DefaultCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
         }
     }
 
@@ -225,8 +231,10 @@ struct CardView: View {
         switch cardStyle {
         case .pixel:
             PixelCardBackView(cardSize: cardSize, isSelected: isSelected)
-        case .classic:
-            ClassicCardBackView(cardSize: cardSize, isSelected: isSelected)
+        case .legacy:
+            LegacyCardBackView(cardSize: cardSize, isSelected: isSelected)
+        case .default:
+            DefaultCardBackView(cardSize: cardSize, isSelected: isSelected)
         }
     }
 }
@@ -240,8 +248,10 @@ struct CardBackView: View {
         switch cardStyle {
         case .pixel:
             PixelStandaloneCardBackView(cardSize: cardSize)
-        case .classic:
-            ClassicStandaloneCardBackView(cardSize: cardSize)
+        case .legacy:
+            LegacyStandaloneCardBackView(cardSize: cardSize)
+        case .default:
+            DefaultStandaloneCardBackView(cardSize: cardSize)
         }
     }
 }
