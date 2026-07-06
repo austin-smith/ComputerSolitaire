@@ -28,9 +28,12 @@ struct ClassicCardFrontView: View {
     var body: some View {
         let chrome = CardChrome(cardWidth: cardSize.width, isSelected: isSelected)
         let inkColor = ClassicPalette.ink(for: card.suit)
-        let cornerMark = VStack(alignment: .leading, spacing: 2) {
+        // Rank in the top-left corner, suit in the top-right, mirrored 180 on
+        // the bottom edge.
+        let cornerMark = HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text(card.rank.label)
                 .font(.system(size: cardSize.width * 0.28, weight: .bold, design: .serif))
+            Spacer(minLength: 0)
             Image(systemName: card.suit.symbolName)
                 .font(.system(size: cardSize.width * 0.2, weight: .semibold))
         }
@@ -65,16 +68,16 @@ struct ClassicCardFrontView: View {
             cornerMark
                 .foregroundStyle(inkColor)
                 .padding(cardSize.width * 0.1)
-                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.topLeading)
+                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.top)
 
             cornerMark
                 .foregroundStyle(inkColor)
                 .rotationEffect(.degrees(180))
                 .padding(cardSize.width * 0.1)
-                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.bottomTrailing)
+                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.bottom)
 
             Image(systemName: card.suit.symbolName)
-                .font(.system(size: cardSize.width * 0.52, weight: .regular))
+                .font(.system(size: cardSize.width * 0.55, weight: .regular))
                 .foregroundStyle(inkColor.opacity(0.12))
                 .rotationEffect(.degrees(8))
                 .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.center)
