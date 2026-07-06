@@ -44,27 +44,6 @@ enum TableBackgroundColor: String, CaseIterable, Identifiable {
     }
 }
 
-enum CardStyle: String, CaseIterable, Identifiable {
-    case classic
-    case pixel
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .classic: return "Classic"
-        case .pixel: return "Pixel"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .classic: return "Parchment"
-        case .pixel: return "8-bit Retro"
-        }
-    }
-}
-
 enum SettingsKey {
     static let cardTiltEnabled = "settings.cardTiltEnabled"
     static let gameVariant = "settings.gameVariant"

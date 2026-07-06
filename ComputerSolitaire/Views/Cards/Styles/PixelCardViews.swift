@@ -1,5 +1,9 @@
 import SwiftUI
 
+enum PixelCardStyle {
+    static let info = CardStyleInfo(title: "Pixel", subtitle: "8-bit Retro")
+}
+
 // MARK: - Pixel Art Color Palette
 
 enum PixelPalette {
