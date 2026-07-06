@@ -36,14 +36,6 @@ struct CardFrameKey: PreferenceKey {
     }
 }
 
-struct BoardContentSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
-    }
-}
-
 struct CardFramePreference: ViewModifier {
     let cardID: UUID
     let xOffset: CGFloat
@@ -112,7 +104,6 @@ struct ContentView: View {
     @State private var isUndoAnimating = false
     @State private var hiddenCardIDs: Set<UUID> = []
     @State private var wasteFanProgress: [UUID: Double] = [:]
-    @State private var boardContentSize: CGSize = .zero
     @State private var boardViewportSize: CGSize = .zero
     @State private var previousWasteCount: Int = 0
     @State private var previousStockCount: Int = 0
@@ -433,10 +424,13 @@ struct ContentView: View {
         let metrics = Layout.metrics(for: geometry.size, tableauColumnCount: boardColumnCount)
 #endif
         let cardSize = metrics.cardSize
-        let boardScaleFactor = boardScaleFactor(for: geometry.size)
-        let effectiveCardSize = CGSize(width: cardSize.width * boardScaleFactor, height: cardSize.height * boardScaleFactor)
         let boardContentWidth = (cardSize.width * CGFloat(boardColumnCount))
             + (metrics.columnSpacing * CGFloat(max(0, boardColumnCount - 1)))
+        let boardScaleFactor = boardScaleFactor(
+            availableWidth: geometry.size.width,
+            requiredWidth: boardContentWidth + (metrics.horizontalPadding * 2)
+        )
+        let effectiveCardSize = CGSize(width: cardSize.width * boardScaleFactor, height: cardSize.height * boardScaleFactor)
         let isBoardReady = hasLoadedGame && !isHydratingGame
         let hintedTarget: DropTarget? = {
             guard let destination = viewModel.hintedDestination else { return nil }
@@ -487,6 +481,7 @@ struct ContentView: View {
                         columnSpacing: metrics.columnSpacing,
                         faceDownOffset: metrics.tableauFaceDownOffset,
                         faceUpOffset: metrics.tableauFaceUpOffset,
+                        maxPileHeight: metrics.tableauMaxHeight,
                         activeTarget: activeTarget,
                         hintedTarget: hintedTarget,
                         hintHighlightOpacity: hintHighlightOpacity,
@@ -514,11 +509,6 @@ struct ContentView: View {
                 .padding(.vertical, metrics.verticalPadding)
 
                 boardLayout
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(key: BoardContentSizeKey.self, value: proxy.size)
-                        }
-                    )
                     .scaleEffect(boardScaleFactor, anchor: .top)
 
                 Button("Cancel Drag") {
@@ -549,9 +539,6 @@ struct ContentView: View {
             if shouldUpdateCardFrames(with: frames) {
                 cardFrames = frames
             }
-        }
-        .onPreferenceChange(BoardContentSizeKey.self) { size in
-            boardContentSize = size
         }
         .onAppear {
             boardViewportSize = geometry.size
@@ -1443,11 +1430,11 @@ struct ContentView: View {
         }
     }
 
-    private func boardScaleFactor(for availableSize: CGSize) -> CGFloat {
-        guard boardContentSize.width > 0, boardContentSize.height > 0 else { return 1 }
-        let widthScale = availableSize.width / boardContentSize.width
-        let heightScale = availableSize.height / boardContentSize.height
-        return min(1, widthScale, heightScale)
+    /// Width overflow is computed analytically from the same inputs the board
+    /// lays out with; vertical overflow is prevented by per-pile compression.
+    private func boardScaleFactor(availableWidth: CGFloat, requiredWidth: CGFloat) -> CGFloat {
+        guard requiredWidth > 0 else { return 1 }
+        return min(1, availableWidth / requiredWidth)
     }
 
     private func restoreScreenshotFixtureIfRequested() -> Bool {
