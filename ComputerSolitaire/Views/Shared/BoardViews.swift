@@ -22,6 +22,35 @@ enum Layout {
     private static let maxFaceDownGaps: CGFloat = 6
     private static let maxFaceUpGaps: CGFloat = 12
 
+    /// The pile the layout commits to displaying at natural spacing; cards
+    /// are sized so this depth fits the board height. The one design knob:
+    /// deeper commitment means smaller cards on short screens. Piles deeper
+    /// than this compress their spacing as before.
+    private static let readableFaceDownGaps: CGFloat = 4
+    private static let readableFaceUpGaps: CGFloat = 10
+
+    /// Height-fitting never pushes cards below this width; on screens too
+    /// short to honor the readable depth at a usable card size (phone
+    /// landscape), spacing compression takes over instead.
+    private static let minHeightFittedCardWidth: CGFloat = 88
+
+    /// The largest card whose top row plus a readable-depth pile fit the
+    /// board height at natural spacing. Derived from the same chrome and
+    /// spacing fractions the layout actually uses, so it holds on any screen.
+    private static func heightFittedCardWidth(
+        boardHeight: CGFloat,
+        verticalPadding: CGFloat,
+        rowSpacing: CGFloat,
+        faceDownFraction: CGFloat,
+        faceUpFraction: CGFloat
+    ) -> CGFloat {
+        let chrome = (verticalPadding * 2) + headerHeightEstimate + (rowSpacing * 2)
+        // Top-row card + pile base card + gaps, in units of card height.
+        let heightUnits = 2 + (readableFaceDownGaps * faceDownFraction) + (readableFaceUpGaps * faceUpFraction)
+        let cardHeight = (boardHeight - chrome) / heightUnits
+        return max(minHeightFittedCardWidth, cardHeight / 1.45)
+    }
+
     static func metrics(
         for boardSize: CGSize,
         isRegularWidth: Bool = false,
@@ -42,10 +71,21 @@ enum Layout {
         let rowSpacing: CGFloat = isPadLandscape ? 16 : (isCompactBoard ? 16 : 24)
         let columnSpacing: CGFloat = isDenseBoard ? 5 : (isCompactBoard ? 8 : (isMediumBoard ? 10 : 18))
 
+        let faceDownFraction: CGFloat = isCompactBoard ? 0.16 : 0.18
+        let faceUpFraction: CGFloat = isCompactBoard ? 0.24 : 0.28
+        let landscapeOffsetScale: CGFloat = isPadLandscape ? 0.8 : 1
+
         let usableWidth = max(0, boardWidth - (horizontalPadding * 2))
         let fittedCardWidth = floor((usableWidth - (columnSpacing * CGFloat(columnCount - 1))) / CGFloat(columnCount))
         let maxCardWidth: CGFloat = isPadLandscape ? 112 : (boardWidth < 760 ? 96 : 120)
-        let cardWidth = max(32, min(maxCardWidth, fittedCardWidth))
+        let heightFittedWidth = Self.heightFittedCardWidth(
+            boardHeight: boardSize.height,
+            verticalPadding: verticalPadding,
+            rowSpacing: rowSpacing,
+            faceDownFraction: faceDownFraction * landscapeOffsetScale,
+            faceUpFraction: faceUpFraction * landscapeOffsetScale
+        )
+        let cardWidth = max(32, min(maxCardWidth, fittedCardWidth, heightFittedWidth))
         let cardSize = CGSize(width: cardWidth, height: cardWidth * 1.45)
 
         let tableauMaxHeight = tableauHeightBudget(
@@ -55,13 +95,12 @@ enum Layout {
             cardHeight: cardSize.height
         )
 
-        let baseFaceDownOffset = max(isCompactBoard ? 10 : 16, cardSize.height * (isCompactBoard ? 0.16 : 0.18))
-        let baseFaceUpOffset = max(isCompactBoard ? 14 : 22, cardSize.height * (isCompactBoard ? 0.24 : 0.28))
+        let baseFaceDownOffset = max(isCompactBoard ? 10 : 16, cardSize.height * faceDownFraction)
+        let baseFaceUpOffset = max(isCompactBoard ? 14 : 22, cardSize.height * faceUpFraction)
 
         let faceUpOffset: CGFloat
         let faceDownOffset: CGFloat
         if isPadLandscape {
-            let landscapeOffsetScale: CGFloat = 0.72
             faceUpOffset = max(22, baseFaceUpOffset * landscapeOffsetScale)
             faceDownOffset = max(14, baseFaceDownOffset * landscapeOffsetScale)
         } else if isCompactBoard && boardSize.height > boardSize.width {
@@ -94,12 +133,22 @@ enum Layout {
         let columnSpacing = min(18, max(10, boardWidth * 0.013))
         let rowSpacing = min(22, max(14, columnSpacing + 4))
 
+        let faceDownFraction: CGFloat = 0.18
+        let faceUpFraction: CGFloat = 0.26
+
         let usableWidth = max(0, boardWidth - (horizontalPadding * 2))
         let fittedCardWidth = floor((usableWidth - (columnSpacing * CGFloat(columnCount - 1))) / CGFloat(columnCount))
         let maxCardWidth = min(124, max(88, boardWidth * 0.095))
+        let heightFittedWidth = heightFittedCardWidth(
+            boardHeight: boardSize.height,
+            verticalPadding: verticalPadding,
+            rowSpacing: rowSpacing,
+            faceDownFraction: faceDownFraction,
+            faceUpFraction: faceUpFraction
+        )
         // Floor low enough that 8 FreeCell columns fit at the minimum window
         // width, which only accommodates 7 Klondike columns at 52pt.
-        let cardWidth = max(40, min(maxCardWidth, fittedCardWidth))
+        let cardWidth = max(40, min(maxCardWidth, fittedCardWidth, heightFittedWidth))
         let cardSize = CGSize(width: cardWidth, height: cardWidth * 1.45)
 
         let tableauMaxHeight = tableauHeightBudget(
@@ -109,8 +158,8 @@ enum Layout {
             cardHeight: cardSize.height
         )
 
-        let faceDownOffset = max(13, cardSize.height * 0.18)
-        let faceUpOffset = max(18, cardSize.height * 0.26)
+        let faceDownOffset = max(13, cardSize.height * faceDownFraction)
+        let faceUpOffset = max(18, cardSize.height * faceUpFraction)
         let wasteFanSpacing = cardSize.width * (boardWidth < 760 ? 0.2 : 0.25)
 
         return Metrics(
