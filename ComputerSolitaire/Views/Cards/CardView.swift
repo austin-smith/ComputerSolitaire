@@ -184,7 +184,10 @@ struct CardView: View {
         }
         .onAppear {
             if flipOnAppear, card.isFaceUp, flipRotation != 0 {
-                withAnimation(.easeInOut(duration: 0.22).delay(flipDelay)) {
+                // easeOut so the rotation is front-loaded like the travel
+                // spring — the card visibly turns while it's moving fastest,
+                // not after it has mostly arrived.
+                withAnimation(.easeOut(duration: 0.3).delay(flipDelay)) {
                     flipRotation = 0
                 }
             }
@@ -200,7 +203,10 @@ struct CardView: View {
             } else {
                 targetTilt = 0
             }
-            animateTilt(to: targetTilt)
+            // No animation: a card entering the hierarchy (dealt, revealed
+            // from under another, or restored) is already resting — animating
+            // 0 → tilt here reads as the card visibly re-tilting on reveal.
+            tiltAngle = targetTilt
         }
         .onChange(of: cardTilts[card.id]) { _, newTilt in
             guard isCardTiltEnabled, let newTilt else { return }

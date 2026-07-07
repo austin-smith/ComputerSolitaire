@@ -12,11 +12,17 @@ struct DropTargetFrameKey: PreferenceKey {
     }
 }
 
+// Single-frame keys must ignore the default: on macOS, sibling subtrees that
+// never set the key still run reduce with .zero, and a last-wins reducer lets
+// that erase the real frame (the draw animation then never runs).
 struct StockFrameKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
 
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
+        let next = nextValue()
+        if next != .zero {
+            value = next
+        }
     }
 }
 
@@ -24,7 +30,10 @@ struct WasteFrameKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
 
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
+        let next = nextValue()
+        if next != .zero {
+            value = next
+        }
     }
 }
 
@@ -574,9 +583,20 @@ struct ContentView: View {
             let newCards = addedCount > 0 ? Array(viewModel.state.waste.suffix(addedCount)) : []
             syncFanProgress(with: viewModel.state.waste, excluding: Set(newCards.map(\.id)))
             if addedCount > 0, stockCount < previousStockCount {
-                prepareFan(for: newCards)
-                let travelDelay = startDrawAnimation(for: newCards, cardSize: effectiveCardSize)
-                animateFan(for: newCards, delay: travelDelay)
+                // The overlay cards fan themselves while flipping; the real
+                // cards wait fully fanned underneath.
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    for card in newCards {
+                        wasteFanProgress[card.id] = 1
+                    }
+                }
+                startDrawAnimation(
+                    for: newCards,
+                    cardSize: effectiveCardSize,
+                    fanSpacing: metrics.wasteFanSpacing * boardScaleFactor
+                )
             }
             previousWasteCount = newValue
             previousStockCount = stockCount
@@ -588,7 +608,9 @@ struct ContentView: View {
                 ZStack {
                     DrawOverlayView(
                         cards: drawAnimationCards,
-                        cardSize: effectiveCardSize
+                        cardSize: effectiveCardSize,
+                        isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts
                     )
                     .zIndex(50)
                     UndoOverlayView(
@@ -999,45 +1021,26 @@ struct ContentView: View {
         }
     }
 
-    private func prepareFan(for newCards: [Card]) {
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            for card in newCards {
-                wasteFanProgress[card.id] = 0
-            }
-        }
-    }
-
-    private func animateFan(for newCards: [Card], delay: Double) {
-        for (index, card) in newCards.enumerated() {
-            let stagger = 0.04 * Double(index)
-            withAnimation(.spring(response: 0.22, dampingFraction: 0.82).delay(delay + stagger)) {
-                wasteFanProgress[card.id] = 1
-            }
-        }
-    }
-
-    private func startDrawAnimation(for newCards: [Card], cardSize: CGSize) -> Double {
+    private func startDrawAnimation(for newCards: [Card], cardSize: CGSize, fanSpacing: CGFloat) {
         guard let plan = DrawAnimationCoordinator.makeDrawPlan(
             newCards: newCards,
             cardSize: cardSize,
             stockFrame: stockFrame,
-            wasteFrame: wasteFrame
+            wasteFrame: wasteFrame,
+            fanSpacing: fanSpacing
         ) else {
-            return 0
+            return
         }
 
         drawAnimationCards = plan.cards
         drawingCardIDs = plan.cardIDs
         drawAnimationToken = plan.token
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + plan.travelDuration + plan.totalDelay) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + plan.travelDuration + plan.settleDuration) {
             guard drawAnimationToken == plan.token else { return }
             drawAnimationCards = []
             drawingCardIDs = []
         }
-        return plan.travelDuration + plan.totalDelay
     }
 
     private func destination(for target: DropTarget) -> Destination {

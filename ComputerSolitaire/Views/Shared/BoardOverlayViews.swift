@@ -4,6 +4,8 @@ import Observation
 struct DrawOverlayView: View {
     let cards: [DrawAnimationCard]
     let cardSize: CGSize
+    let isCardTiltEnabled: Bool
+    @Binding var cardTilts: [UUID: Double]
 
     var body: some View {
         ForEach(cards) { item in
@@ -12,7 +14,9 @@ struct DrawOverlayView: View {
                 cardSize: cardSize,
                 start: item.start,
                 end: item.end,
-                delay: item.delay
+                delay: item.delay,
+                isCardTiltEnabled: isCardTiltEnabled,
+                cardTilts: $cardTilts
             )
         }
         .allowsHitTesting(false)
@@ -71,6 +75,8 @@ private struct DrawOverlayCardView: View {
     let start: CGPoint
     let end: CGPoint
     let delay: Double
+    let isCardTiltEnabled: Bool
+    @Binding var cardTilts: [UUID: Double]
     @State private var progress: CGFloat = 0
 
     var body: some View {
@@ -80,10 +86,13 @@ private struct DrawOverlayCardView: View {
             card: card,
             isSelected: false,
             cardSize: cardSize,
-            isCardTiltEnabled: false,
-            cardTilts: .constant([:]),
+            // Shares the real card's tilt so the resting pose is already
+            // there when the overlay hands off — no post-landing tilt pop.
+            isCardTiltEnabled: isCardTiltEnabled,
+            cardTilts: $cardTilts,
             flipOnAppear: true,
-            flipDelay: delay + 0.05
+            // The packet flips in the air while it travels and spreads.
+            flipDelay: delay
         )
         .position(x: currentX, y: currentY)
         .onAppear {
