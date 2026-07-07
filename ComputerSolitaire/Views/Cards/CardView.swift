@@ -191,27 +191,29 @@ struct CardView: View {
                     flipRotation = 0
                 }
             }
-            let targetTilt: Double
-            if isCardTiltEnabled {
-                if let existing = cardTilts[card.id] {
-                    targetTilt = existing
-                } else {
-                    let newTilt = Double.random(in: CardTilt.angleRange)
-                    cardTilts[card.id] = newTilt
-                    targetTilt = newTilt
-                }
-            } else {
-                targetTilt = 0
-            }
             // No animation: a card entering the hierarchy (dealt, revealed
             // from under another, or restored) is already resting — animating
             // 0 → tilt here reads as the card visibly re-tilting on reveal.
-            tiltAngle = targetTilt
+            tiltAngle = isCardTiltEnabled ? resolvedTilt() : 0
         }
         .onChange(of: cardTilts[card.id]) { _, newTilt in
             guard isCardTiltEnabled, let newTilt else { return }
             animateTilt(to: newTilt)
         }
+        .onChange(of: isCardTiltEnabled) { _, enabled in
+            animateTilt(to: enabled ? resolvedTilt() : 0)
+        }
+    }
+
+    // Returns the card's stored tilt, assigning a new random one on first use
+    // so a card keeps the same lean for as long as it stays in play.
+    private func resolvedTilt() -> Double {
+        if let existing = cardTilts[card.id] {
+            return existing
+        }
+        let newTilt = Double.random(in: CardTilt.angleRange)
+        cardTilts[card.id] = newTilt
+        return newTilt
     }
 
     private func animateTilt(to target: Double) {
