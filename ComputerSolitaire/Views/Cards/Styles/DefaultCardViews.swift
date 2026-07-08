@@ -8,8 +8,8 @@ enum DefaultCardStyle {
     static let info = CardStyleInfo(title: "Default", subtitle: "Clean")
 }
 
-/// Royal artwork anchored to the bottom edge of the face, replacing the
-/// center suit glyph. Cards without art keep the plain glyph face.
+/// Royal artwork anchored to the bottom-right corner of the face, replacing
+/// the center suit glyph. Cards without art keep the plain glyph face.
 private enum DefaultCardArt {
     static func imageName(for card: Card) -> String? {
         switch (card.rank, card.suit) {
@@ -66,14 +66,19 @@ struct DefaultCardFrontView: View {
             .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.top)
 
             if let artName = DefaultCardArt.imageName(for: card) {
-                // Royal figure rises from the bottom edge, dress trimmed by
-                // the card bounds; sized to stay clear of the top marks.
+                // Royal figure planted in the bottom-right corner, dress and
+                // trailing arm trimmed by the card bounds; sized to stay
+                // clear of the top marks. Jack artwork carries extra headroom
+                // in its canvas, so it gets a small extra nudge into the
+                // corner to line up with the kings and queens.
+                let isJack = card.rank == .jack
                 Image(artName)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: cardSize.width * 0.82)
-                    .offset(y: cardSize.width * 0.08)
-                    .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.bottom)
+                    .frame(width: cardSize.width * 0.88)
+                    .offset(x: cardSize.width * (isJack ? 0.19 : 0.17),
+                            y: cardSize.width * (isJack ? 0.36 : 0.32))
+                    .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.bottomTrailing)
                     .clipShape(RoundedRectangle(cornerRadius: chrome.cornerRadius, style: .continuous))
             } else {
                 // Optically centered in the region below the top marks, not
