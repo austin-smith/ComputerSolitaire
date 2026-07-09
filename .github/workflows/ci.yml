@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Run unit tests (macOS)
         run: |
@@ -36,7 +36,7 @@ jobs:
 
       - name: Upload test result bundle on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-test-results
           path: ${{ runner.temp }}/ComputerSolitaireTests.xcresult
@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build app (iOS Simulator)
         run: |
