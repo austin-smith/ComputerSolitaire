@@ -66,7 +66,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
     @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
-    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.default.rawValue
+    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
     @AppStorage(SettingsKey.cardBackColor) private var cardBackColorRawValue = CardBackColor.defaultValue.id
 #if os(iOS)
     @State private var selectedAppIcon = AppIcon.current()
@@ -312,8 +312,10 @@ struct SettingsView: View {
     }
 
     private func cardStyleCard(_ style: CardStyle) -> some View {
-        Button {
-            guard cardStyleRawValue != style.rawValue else { return }
+        let isSelected = cardStyleRawValue == style.rawValue
+
+        return Button {
+            guard !isSelected else { return }
             HapticManager.shared.play(.settingsSelection)
             withAnimation(.smooth(duration: 0.3)) {
                 cardStyleRawValue = style.rawValue
@@ -331,29 +333,29 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .settingsChip(isSelected: cardStyleRawValue == style.rawValue)
+            .settingsChip(isSelected: isSelected)
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(cardStyleRawValue == style.rawValue ? .isSelected : [])
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     @ViewBuilder
     private func cardStylePreview(_ style: CardStyle) -> some View {
         switch style {
-        case .legacy:
-            LegacyCardFrontView(
+        case .classic:
+            ClassicCardFrontView(
+                card: Card(suit: .hearts, rank: .queen, isFaceUp: true),
+                cardSize: CGSize(width: 44, height: 64),
+                isSelected: false
+            )
+        case .simple:
+            SimpleCardFrontView(
                 card: Card(suit: .hearts, rank: .queen, isFaceUp: true),
                 cardSize: CGSize(width: 44, height: 64),
                 isSelected: false
             )
         case .pixel:
             PixelCardFrontView(
-                card: Card(suit: .hearts, rank: .queen, isFaceUp: true),
-                cardSize: CGSize(width: 44, height: 64),
-                isSelected: false
-            )
-        case .default:
-            DefaultCardFrontView(
                 card: Card(suit: .hearts, rank: .queen, isFaceUp: true),
                 cardSize: CGSize(width: 44, height: 64),
                 isSelected: false

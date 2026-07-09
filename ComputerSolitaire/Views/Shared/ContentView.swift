@@ -134,7 +134,7 @@ struct ContentView: View {
     @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
-    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.default.rawValue
+    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
 
     private var gameVariant: GameVariant {
         GameVariant(rawValue: gameVariantRawValue) ?? .klondike
@@ -165,7 +165,7 @@ struct ContentView: View {
     }
 
     private var currentCardStyle: CardStyle {
-        CardStyle(rawValue: cardStyleRawValue) ?? .default
+        CardStyle(rawValue: cardStyleRawValue) ?? .defaultValue
     }
 
     var body: some View {

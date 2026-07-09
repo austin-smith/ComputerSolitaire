@@ -3,7 +3,7 @@ import SwiftUI
 // Shared card infrastructure: the style catalog, the environment plumbing, and
 // the CardView dispatcher with behavior common to every card style (flip
 // animation, tilt, selection scale, hint wiggle). Style-specific rendering
-// lives in ClassicCardViews.swift and PixelCardViews.swift.
+// lives in ClassicCardViews.swift, SimpleCardViews.swift, and PixelCardViews.swift.
 
 /// Display metadata a card style provides for the settings picker; each style
 /// defines its own in its file under Styles/.
@@ -13,19 +13,19 @@ struct CardStyleInfo {
 }
 
 enum CardStyle: String, CaseIterable, Identifiable {
-    case `default`
+    case classic
+    case simple
     case pixel
-    // Raw value stays "classic": shipped user preferences and the screenshot
-    // UI test launch arguments both store that string.
-    case legacy = "classic"
+
+    static let defaultValue: CardStyle = .classic
 
     var id: String { rawValue }
 
     /// The one dispatch point per style, alongside the view dispatch in CardView.
     var info: CardStyleInfo {
         switch self {
-        case .default: DefaultCardStyle.info
-        case .legacy: LegacyCardStyle.info
+        case .classic: ClassicCardStyle.info
+        case .simple: SimpleCardStyle.info
         case .pixel: PixelCardStyle.info
         }
     }
@@ -69,7 +69,7 @@ struct CardBackColor: Identifiable, Equatable {
 }
 
 private struct CardStyleKey: EnvironmentKey {
-    static let defaultValue: CardStyle = .default
+    static let defaultValue: CardStyle = .defaultValue
 }
 
 extension EnvironmentValues {
@@ -259,24 +259,24 @@ struct CardView: View {
     @ViewBuilder
     private var cardFrontView: some View {
         switch cardStyle {
+        case .classic:
+            ClassicCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
+        case .simple:
+            SimpleCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
         case .pixel:
             PixelCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
-        case .legacy:
-            LegacyCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
-        case .default:
-            DefaultCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
         }
     }
 
     @ViewBuilder
     private var cardBackView: some View {
         switch cardStyle {
+        case .classic:
+            ClassicCardBackView(cardSize: cardSize, isSelected: isSelected)
+        case .simple:
+            SimpleCardBackView(cardSize: cardSize, isSelected: isSelected)
         case .pixel:
             PixelCardBackView(cardSize: cardSize, isSelected: isSelected)
-        case .legacy:
-            LegacyCardBackView(cardSize: cardSize, isSelected: isSelected)
-        case .default:
-            DefaultCardBackView(cardSize: cardSize, isSelected: isSelected)
         }
     }
 }
@@ -288,12 +288,12 @@ struct CardBackView: View {
 
     var body: some View {
         switch cardStyle {
+        case .classic:
+            ClassicStandaloneCardBackView(cardSize: cardSize)
+        case .simple:
+            SimpleStandaloneCardBackView(cardSize: cardSize)
         case .pixel:
             PixelStandaloneCardBackView(cardSize: cardSize)
-        case .legacy:
-            LegacyStandaloneCardBackView(cardSize: cardSize)
-        case .default:
-            DefaultStandaloneCardBackView(cardSize: cardSize)
         }
     }
 }
