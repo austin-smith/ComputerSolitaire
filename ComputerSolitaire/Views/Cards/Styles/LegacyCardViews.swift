@@ -12,11 +12,44 @@ private enum LegacyPalette {
     static let redInk = Color(red: 0.72, green: 0.16, blue: 0.18)
     static let blackInk = Color(red: 0.12, green: 0.12, blue: 0.12)
     static let ornament = Color(red: 0.66, green: 0.58, blue: 0.48)
-    static let lacquer = Color(red: 0.18, green: 0.26, blue: 0.52)
-    static let trim = Color(red: 0.78, green: 0.85, blue: 0.95)
 
     static func ink(for suit: Suit) -> Color {
         suit.isRed ? redInk : blackInk
+    }
+}
+
+/// The legacy style's lacquer and trim for each CardBackColor identity.
+/// Navy keeps the shipped values so existing decks look unchanged.
+private struct LegacyBackColorway {
+    let backColorID: String
+    let lacquer: Color
+    let trim: Color
+
+    static let navy = LegacyBackColorway(
+        backColorID: CardBackColor.navy.id,
+        lacquer: Color(red: 0.18, green: 0.26, blue: 0.52),
+        trim: Color(red: 0.78, green: 0.85, blue: 0.95)
+    )
+    static let crimson = LegacyBackColorway(
+        backColorID: CardBackColor.crimson.id,
+        lacquer: Color(red: 0.48, green: 0.15, blue: 0.18),
+        trim: Color(red: 0.95, green: 0.82, blue: 0.82)
+    )
+    static let forest = LegacyBackColorway(
+        backColorID: CardBackColor.forest.id,
+        lacquer: Color(red: 0.13, green: 0.34, blue: 0.22),
+        trim: Color(red: 0.80, green: 0.92, blue: 0.83)
+    )
+    static let plum = LegacyBackColorway(
+        backColorID: CardBackColor.plum.id,
+        lacquer: Color(red: 0.32, green: 0.17, blue: 0.46),
+        trim: Color(red: 0.88, green: 0.81, blue: 0.95)
+    )
+
+    static let all: [LegacyBackColorway] = [navy, crimson, forest, plum]
+
+    static func matching(_ back: CardBackColor) -> LegacyBackColorway {
+        all.first { $0.backColorID == back.id } ?? navy
     }
 }
 
@@ -89,19 +122,22 @@ struct LegacyCardBackView: View {
     let cardSize: CGSize
     let isSelected: Bool
 
+    @AppStorage(SettingsKey.cardBackColor) private var cardBackColorRawValue = CardBackColor.defaultValue.id
+
     var body: some View {
         let chrome = CardChrome(cardWidth: cardSize.width, isSelected: isSelected)
+        let colorway = LegacyBackColorway.matching(.from(rawValue: cardBackColorRawValue))
 
         ZStack {
-            LegacyCardBase(fill: LegacyPalette.lacquer, chrome: chrome)
+            LegacyCardBase(fill: colorway.lacquer, chrome: chrome)
                 .overlay(
                     RoundedRectangle(cornerRadius: chrome.cornerRadius * 0.92, style: .continuous)
-                        .strokeBorder(LegacyPalette.trim.opacity(0.55), lineWidth: 1)
+                        .strokeBorder(colorway.trim.opacity(0.55), lineWidth: 1)
                         .padding(cardSize.width * 0.08)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: chrome.cornerRadius * 0.8, style: .continuous)
-                        .strokeBorder(LegacyPalette.trim.opacity(0.35), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
+                        .strokeBorder(colorway.trim.opacity(0.35), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
                         .padding(cardSize.width * 0.12)
                 )
 
@@ -115,20 +151,23 @@ struct LegacyCardBackView: View {
 struct LegacyStandaloneCardBackView: View {
     let cardSize: CGSize
 
+    @AppStorage(SettingsKey.cardBackColor) private var cardBackColorRawValue = CardBackColor.defaultValue.id
+
     var body: some View {
         let cornerRadius = cardSize.width * 0.12
+        let colorway = LegacyBackColorway.matching(.from(rawValue: cardBackColorRawValue))
 
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(LegacyPalette.lacquer)
+                .fill(colorway.lacquer)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(LegacyPalette.trim.opacity(0.5), lineWidth: 1)
+                        .stroke(colorway.trim.opacity(0.5), lineWidth: 1)
                         .padding(cardSize.width * 0.06)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(LegacyPalette.trim.opacity(0.25), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
+                        .stroke(colorway.trim.opacity(0.25), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
                         .padding(cardSize.width * 0.1)
                 )
                 .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)

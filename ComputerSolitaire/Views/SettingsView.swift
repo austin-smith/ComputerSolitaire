@@ -175,25 +175,21 @@ struct SettingsView: View {
                 Text("Adds a subtle organic angle to each card.")
             }
             .toggleStyle(.switch)
-            // Only the pixel style renders back colorways so far; hide the row
-            // for styles that would silently ignore it.
-            if cardStyleRawValue == CardStyle.pixel.rawValue {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Card back color")
-                        Spacer()
-                        Text(CardBackColor.from(rawValue: cardBackColorRawValue).label)
-                            .foregroundStyle(.secondary)
-                    }
-                    HStack(spacing: 8) {
-                        ForEach(CardBackColor.all) { option in
-                            cardBackSwatch(option)
-                        }
-                        Spacer()
-                    }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Card back color")
+                    Spacer()
+                    Text(CardBackColor.from(rawValue: cardBackColorRawValue).label)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.vertical, 4)
+                HStack(spacing: 8) {
+                    ForEach(CardBackColor.all) { option in
+                        cardBackSwatch(option)
+                    }
+                    Spacer()
+                }
             }
+            .padding(.vertical, 4)
         } header: {
             Text("Cards")
         }
