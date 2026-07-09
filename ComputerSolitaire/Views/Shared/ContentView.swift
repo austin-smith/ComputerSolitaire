@@ -12,11 +12,17 @@ struct DropTargetFrameKey: PreferenceKey {
     }
 }
 
+// Single-frame keys must ignore the default: on macOS, sibling subtrees that
+// never set the key still run reduce with .zero, and a last-wins reducer lets
+// that erase the real frame (the draw animation then never runs).
 struct StockFrameKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
 
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
+        let next = nextValue()
+        if next != .zero {
+            value = next
+        }
     }
 }
 
@@ -24,7 +30,10 @@ struct WasteFrameKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
 
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
+        let next = nextValue()
+        if next != .zero {
+            value = next
+        }
     }
 }
 
@@ -33,14 +42,6 @@ struct CardFrameKey: PreferenceKey {
 
     static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
-    }
-}
-
-struct BoardContentSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
     }
 }
 
@@ -112,7 +113,6 @@ struct ContentView: View {
     @State private var isUndoAnimating = false
     @State private var hiddenCardIDs: Set<UUID> = []
     @State private var wasteFanProgress: [UUID: Double] = [:]
-    @State private var boardContentSize: CGSize = .zero
     @State private var boardViewportSize: CGSize = .zero
     @State private var previousWasteCount: Int = 0
     @State private var previousStockCount: Int = 0
@@ -134,7 +134,7 @@ struct ContentView: View {
     @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
-    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.classic.rawValue
+    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
 
     private var gameVariant: GameVariant {
         GameVariant(rawValue: gameVariantRawValue) ?? .klondike
@@ -165,7 +165,7 @@ struct ContentView: View {
     }
 
     private var currentCardStyle: CardStyle {
-        CardStyle(rawValue: cardStyleRawValue) ?? .classic
+        CardStyle(rawValue: cardStyleRawValue) ?? .defaultValue
     }
 
     var body: some View {
@@ -433,10 +433,13 @@ struct ContentView: View {
         let metrics = Layout.metrics(for: geometry.size, tableauColumnCount: boardColumnCount)
 #endif
         let cardSize = metrics.cardSize
-        let boardScaleFactor = boardScaleFactor(for: geometry.size)
-        let effectiveCardSize = CGSize(width: cardSize.width * boardScaleFactor, height: cardSize.height * boardScaleFactor)
         let boardContentWidth = (cardSize.width * CGFloat(boardColumnCount))
             + (metrics.columnSpacing * CGFloat(max(0, boardColumnCount - 1)))
+        let boardScaleFactor = boardScaleFactor(
+            availableWidth: geometry.size.width,
+            requiredWidth: boardContentWidth + (metrics.horizontalPadding * 2)
+        )
+        let effectiveCardSize = CGSize(width: cardSize.width * boardScaleFactor, height: cardSize.height * boardScaleFactor)
         let isBoardReady = hasLoadedGame && !isHydratingGame
         let hintedTarget: DropTarget? = {
             guard let destination = viewModel.hintedDestination else { return nil }
@@ -487,6 +490,7 @@ struct ContentView: View {
                         columnSpacing: metrics.columnSpacing,
                         faceDownOffset: metrics.tableauFaceDownOffset,
                         faceUpOffset: metrics.tableauFaceUpOffset,
+                        maxPileHeight: metrics.tableauMaxHeight,
                         activeTarget: activeTarget,
                         hintedTarget: hintedTarget,
                         hintHighlightOpacity: hintHighlightOpacity,
@@ -514,11 +518,6 @@ struct ContentView: View {
                 .padding(.vertical, metrics.verticalPadding)
 
                 boardLayout
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(key: BoardContentSizeKey.self, value: proxy.size)
-                        }
-                    )
                     .scaleEffect(boardScaleFactor, anchor: .top)
 
                 Button("Cancel Drag") {
@@ -549,9 +548,6 @@ struct ContentView: View {
             if shouldUpdateCardFrames(with: frames) {
                 cardFrames = frames
             }
-        }
-        .onPreferenceChange(BoardContentSizeKey.self) { size in
-            boardContentSize = size
         }
         .onAppear {
             boardViewportSize = geometry.size
@@ -587,9 +583,20 @@ struct ContentView: View {
             let newCards = addedCount > 0 ? Array(viewModel.state.waste.suffix(addedCount)) : []
             syncFanProgress(with: viewModel.state.waste, excluding: Set(newCards.map(\.id)))
             if addedCount > 0, stockCount < previousStockCount {
-                prepareFan(for: newCards)
-                let travelDelay = startDrawAnimation(for: newCards, cardSize: effectiveCardSize)
-                animateFan(for: newCards, delay: travelDelay)
+                // The overlay cards fan themselves while flipping; the real
+                // cards wait fully fanned underneath.
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    for card in newCards {
+                        wasteFanProgress[card.id] = 1
+                    }
+                }
+                startDrawAnimation(
+                    for: newCards,
+                    cardSize: effectiveCardSize,
+                    fanSpacing: metrics.wasteFanSpacing * boardScaleFactor
+                )
             }
             previousWasteCount = newValue
             previousStockCount = stockCount
@@ -601,7 +608,9 @@ struct ContentView: View {
                 ZStack {
                     DrawOverlayView(
                         cards: drawAnimationCards,
-                        cardSize: effectiveCardSize
+                        cardSize: effectiveCardSize,
+                        isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts
                     )
                     .zIndex(50)
                     UndoOverlayView(
@@ -1012,45 +1021,26 @@ struct ContentView: View {
         }
     }
 
-    private func prepareFan(for newCards: [Card]) {
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            for card in newCards {
-                wasteFanProgress[card.id] = 0
-            }
-        }
-    }
-
-    private func animateFan(for newCards: [Card], delay: Double) {
-        for (index, card) in newCards.enumerated() {
-            let stagger = 0.04 * Double(index)
-            withAnimation(.spring(response: 0.22, dampingFraction: 0.82).delay(delay + stagger)) {
-                wasteFanProgress[card.id] = 1
-            }
-        }
-    }
-
-    private func startDrawAnimation(for newCards: [Card], cardSize: CGSize) -> Double {
+    private func startDrawAnimation(for newCards: [Card], cardSize: CGSize, fanSpacing: CGFloat) {
         guard let plan = DrawAnimationCoordinator.makeDrawPlan(
             newCards: newCards,
             cardSize: cardSize,
             stockFrame: stockFrame,
-            wasteFrame: wasteFrame
+            wasteFrame: wasteFrame,
+            fanSpacing: fanSpacing
         ) else {
-            return 0
+            return
         }
 
         drawAnimationCards = plan.cards
         drawingCardIDs = plan.cardIDs
         drawAnimationToken = plan.token
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + plan.travelDuration + plan.totalDelay) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + plan.travelDuration + plan.settleDuration) {
             guard drawAnimationToken == plan.token else { return }
             drawAnimationCards = []
             drawingCardIDs = []
         }
-        return plan.travelDuration + plan.totalDelay
     }
 
     private func destination(for target: DropTarget) -> Destination {
@@ -1443,11 +1433,11 @@ struct ContentView: View {
         }
     }
 
-    private func boardScaleFactor(for availableSize: CGSize) -> CGFloat {
-        guard boardContentSize.width > 0, boardContentSize.height > 0 else { return 1 }
-        let widthScale = availableSize.width / boardContentSize.width
-        let heightScale = availableSize.height / boardContentSize.height
-        return min(1, widthScale, heightScale)
+    /// Width overflow is computed analytically from the same inputs the board
+    /// lays out with; vertical overflow is prevented by per-pile compression.
+    private func boardScaleFactor(availableWidth: CGFloat, requiredWidth: CGFloat) -> CGFloat {
+        guard requiredWidth > 0 else { return 1 }
+        return min(1, availableWidth / requiredWidth)
     }
 
     private func restoreScreenshotFixtureIfRequested() -> Bool {

@@ -44,27 +44,6 @@ enum TableBackgroundColor: String, CaseIterable, Identifiable {
     }
 }
 
-enum CardStyle: String, CaseIterable, Identifiable {
-    case classic
-    case pixel
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .classic: return "Classic"
-        case .pixel: return "Pixel"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .classic: return "Parchment"
-        case .pixel: return "8-bit Retro"
-        }
-    }
-}
-
 enum SettingsKey {
     static let cardTiltEnabled = "settings.cardTiltEnabled"
     static let gameVariant = "settings.gameVariant"
@@ -74,6 +53,7 @@ enum SettingsKey {
     static let soundEffectsEnabled = "settings.soundEffectsEnabled"
     static let showHintButton = "settings.showHintButton"
     static let cardStyle = "settings.cardStyle"
+    static let cardBackColor = "settings.cardBackColor"
 }
 
 struct SettingsView: View {
@@ -86,7 +66,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
     @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
-    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.classic.rawValue
+    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
+    @AppStorage(SettingsKey.cardBackColor) private var cardBackColorRawValue = CardBackColor.defaultValue.id
 #if os(iOS)
     @State private var selectedAppIcon = AppIcon.current()
     @State private var isShowingAppIconPicker = false
@@ -194,6 +175,21 @@ struct SettingsView: View {
                 Text("Adds a subtle organic angle to each card.")
             }
             .toggleStyle(.switch)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Card back color")
+                    Spacer()
+                    Text(CardBackColor.from(rawValue: cardBackColorRawValue).label)
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 8) {
+                    ForEach(CardBackColor.all) { option in
+                        cardBackSwatch(option)
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.vertical, 4)
         } header: {
             Text("Cards")
         }
@@ -316,8 +312,10 @@ struct SettingsView: View {
     }
 
     private func cardStyleCard(_ style: CardStyle) -> some View {
-        Button {
-            guard cardStyleRawValue != style.rawValue else { return }
+        let isSelected = cardStyleRawValue == style.rawValue
+
+        return Button {
+            guard !isSelected else { return }
             HapticManager.shared.play(.settingsSelection)
             withAnimation(.smooth(duration: 0.3)) {
                 cardStyleRawValue = style.rawValue
@@ -335,36 +333,30 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .settingsChip(isSelected: cardStyleRawValue == style.rawValue)
+            .settingsChip(isSelected: isSelected)
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(cardStyleRawValue == style.rawValue ? .isSelected : [])
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     @ViewBuilder
     private func cardStylePreview(_ style: CardStyle) -> some View {
         switch style {
         case .classic:
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color(red: 0.98, green: 0.96, blue: 0.91))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .stroke(Color.black.opacity(0.2), lineWidth: 0.5)
-                )
-                .overlay(
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("A")
-                            .font(.system(size: 11, weight: .bold, design: .serif))
-                        Image(systemName: "suit.spade.fill")
-                            .font(.system(size: 8))
-                    }
-                    .foregroundStyle(Color(red: 0.12, green: 0.12, blue: 0.12))
-                    .padding(4),
-                    alignment: .topLeading
-                )
+            ClassicCardFrontView(
+                card: Card(suit: .hearts, rank: .queen, isFaceUp: true),
+                cardSize: CGSize(width: 44, height: 64),
+                isSelected: false
+            )
+        case .simple:
+            SimpleCardFrontView(
+                card: Card(suit: .hearts, rank: .queen, isFaceUp: true),
+                cardSize: CGSize(width: 44, height: 64),
+                isSelected: false
+            )
         case .pixel:
             PixelCardFrontView(
-                card: Card(suit: .hearts, rank: .king, isFaceUp: true),
+                card: Card(suit: .hearts, rank: .queen, isFaceUp: true),
                 cardSize: CGSize(width: 44, height: 64),
                 isSelected: false
             )
@@ -397,6 +389,37 @@ struct SettingsView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.label)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func cardBackSwatch(_ option: CardBackColor) -> some View {
+        let isSelected = cardBackColorRawValue == option.id
+
+        return Button {
+            guard !isSelected else { return }
+            HapticManager.shared.play(.settingsSelection)
+            cardBackColorRawValue = option.id
+        } label: {
+            Circle()
+                .fill(option.swatch)
+                .overlay {
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .overlay {
+                    Circle()
+                        .stroke(
+                            isSelected ? Color.accentColor : Color.primary.opacity(0.18),
+                            lineWidth: isSelected ? 2.5 : 1
+                        )
+                }
+                .frame(width: 32, height: 32)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(option.label)

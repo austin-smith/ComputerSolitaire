@@ -1,19 +1,6 @@
 import SwiftUI
 import Observation
 
-// MARK: - CardStyle Environment Key
-
-private struct CardStyleKey: EnvironmentKey {
-    static let defaultValue: CardStyle = .classic
-}
-
-extension EnvironmentValues {
-    var cardStyle: CardStyle {
-        get { self[CardStyleKey.self] }
-        set { self[CardStyleKey.self] = newValue }
-    }
-}
-
 enum Layout {
     struct Metrics {
         let horizontalPadding: CGFloat
@@ -24,6 +11,44 @@ enum Layout {
         let tableauFaceDownOffset: CGFloat
         let tableauFaceUpOffset: CGFloat
         let wasteFanSpacing: CGFloat
+        let tableauMaxHeight: CGFloat
+    }
+
+    /// Estimated height of HeaderView (stat tiles + padding); only feeds the
+    /// tableau-height budget, so an approximation is fine.
+    private static let headerHeightEstimate: CGFloat = 66
+
+    /// Worst-case Klondike pile: 6 face-down cards under a full K–A run.
+    private static let maxFaceDownGaps: CGFloat = 6
+    private static let maxFaceUpGaps: CGFloat = 12
+
+    /// The pile the layout commits to displaying at natural spacing; cards
+    /// are sized so this depth fits the board height. The one design knob:
+    /// deeper commitment means smaller cards on short screens. Piles deeper
+    /// than this compress their spacing as before.
+    private static let readableFaceDownGaps: CGFloat = 4
+    private static let readableFaceUpGaps: CGFloat = 10
+
+    /// Height-fitting never pushes cards below this width; on screens too
+    /// short to honor the readable depth at a usable card size (phone
+    /// landscape), spacing compression takes over instead.
+    private static let minHeightFittedCardWidth: CGFloat = 88
+
+    /// The largest card whose top row plus a readable-depth pile fit the
+    /// board height at natural spacing. Derived from the same chrome and
+    /// spacing fractions the layout actually uses, so it holds on any screen.
+    private static func heightFittedCardWidth(
+        boardHeight: CGFloat,
+        verticalPadding: CGFloat,
+        rowSpacing: CGFloat,
+        faceDownFraction: CGFloat,
+        faceUpFraction: CGFloat
+    ) -> CGFloat {
+        let chrome = (verticalPadding * 2) + headerHeightEstimate + (rowSpacing * 2)
+        // Top-row card + pile base card + gaps, in units of card height.
+        let heightUnits = 2 + (readableFaceDownGaps * faceDownFraction) + (readableFaceUpGaps * faceUpFraction)
+        let cardHeight = (boardHeight - chrome) / heightUnits
+        return max(minHeightFittedCardWidth, cardHeight / 1.45)
     }
 
     static func metrics(
@@ -37,27 +62,53 @@ enum Layout {
         let isCompactBoard = boardWidth <= 430
         let isMediumBoard = boardWidth > 430 && boardWidth < 760
         let isPadLandscape = isRegularWidth && boardSize.width > boardSize.height
+        // Eight-column boards (FreeCell) on phones need tighter chrome so the
+        // extra column doesn't shrink every card.
+        let isDenseBoard = isCompactBoard && columnCount >= 8
 
-        let horizontalPadding: CGFloat = isCompactBoard ? 12 : (isMediumBoard ? 14 : 24)
+        let horizontalPadding: CGFloat = isDenseBoard ? 8 : (isCompactBoard ? 12 : (isMediumBoard ? 14 : 24))
         let verticalPadding: CGFloat = isPadLandscape ? 12 : (isCompactBoard ? 16 : 24)
         let rowSpacing: CGFloat = isPadLandscape ? 16 : (isCompactBoard ? 16 : 24)
-        let columnSpacing: CGFloat = isCompactBoard ? 8 : (isMediumBoard ? 10 : 18)
+        let columnSpacing: CGFloat = isDenseBoard ? 5 : (isCompactBoard ? 8 : (isMediumBoard ? 10 : 18))
+
+        let faceDownFraction: CGFloat = isCompactBoard ? 0.16 : 0.18
+        let faceUpFraction: CGFloat = isCompactBoard ? 0.24 : 0.28
+        let landscapeOffsetScale: CGFloat = isPadLandscape ? 0.8 : 1
 
         let usableWidth = max(0, boardWidth - (horizontalPadding * 2))
         let fittedCardWidth = floor((usableWidth - (columnSpacing * CGFloat(columnCount - 1))) / CGFloat(columnCount))
         let maxCardWidth: CGFloat = isPadLandscape ? 112 : (boardWidth < 760 ? 96 : 120)
-        let cardWidth = max(32, min(maxCardWidth, fittedCardWidth))
+        let heightFittedWidth = Self.heightFittedCardWidth(
+            boardHeight: boardSize.height,
+            verticalPadding: verticalPadding,
+            rowSpacing: rowSpacing,
+            faceDownFraction: faceDownFraction * landscapeOffsetScale,
+            faceUpFraction: faceUpFraction * landscapeOffsetScale
+        )
+        let cardWidth = max(32, min(maxCardWidth, fittedCardWidth, heightFittedWidth))
         let cardSize = CGSize(width: cardWidth, height: cardWidth * 1.45)
 
-        let baseFaceDownOffset = max(isCompactBoard ? 10 : 16, cardSize.height * (isCompactBoard ? 0.16 : 0.18))
-        let baseFaceUpOffset = max(isCompactBoard ? 14 : 22, cardSize.height * (isCompactBoard ? 0.24 : 0.28))
+        let tableauMaxHeight = tableauHeightBudget(
+            boardHeight: boardSize.height,
+            verticalPadding: verticalPadding,
+            rowSpacing: rowSpacing,
+            cardHeight: cardSize.height
+        )
+
+        let baseFaceDownOffset = max(isCompactBoard ? 10 : 16, cardSize.height * faceDownFraction)
+        let baseFaceUpOffset = max(isCompactBoard ? 14 : 22, cardSize.height * faceUpFraction)
 
         let faceUpOffset: CGFloat
         let faceDownOffset: CGFloat
         if isPadLandscape {
-            let landscapeOffsetScale: CGFloat = 0.72
             faceUpOffset = max(22, baseFaceUpOffset * landscapeOffsetScale)
             faceDownOffset = max(14, baseFaceDownOffset * landscapeOffsetScale)
+        } else if isCompactBoard && boardSize.height > boardSize.width {
+            // Portrait phones have far more height than the width-fitted cards
+            // use; spread the worst-case pile into it, capped for readability.
+            let fittedFaceUp = (tableauMaxHeight - cardSize.height - maxFaceDownGaps * baseFaceDownOffset) / maxFaceUpGaps
+            faceUpOffset = min(max(baseFaceUpOffset, fittedFaceUp), cardSize.height * 0.38)
+            faceDownOffset = baseFaceDownOffset
         } else {
             faceUpOffset = baseFaceUpOffset
             faceDownOffset = baseFaceDownOffset
@@ -73,7 +124,8 @@ enum Layout {
             cardSize: cardSize,
             tableauFaceDownOffset: faceDownOffset,
             tableauFaceUpOffset: faceUpOffset,
-            wasteFanSpacing: wasteFanSpacing
+            wasteFanSpacing: wasteFanSpacing,
+            tableauMaxHeight: tableauMaxHeight
         )
 #else
         let horizontalPadding = min(24, max(14, boardWidth * 0.018))
@@ -81,14 +133,33 @@ enum Layout {
         let columnSpacing = min(18, max(10, boardWidth * 0.013))
         let rowSpacing = min(22, max(14, columnSpacing + 4))
 
+        let faceDownFraction: CGFloat = 0.18
+        let faceUpFraction: CGFloat = 0.26
+
         let usableWidth = max(0, boardWidth - (horizontalPadding * 2))
         let fittedCardWidth = floor((usableWidth - (columnSpacing * CGFloat(columnCount - 1))) / CGFloat(columnCount))
         let maxCardWidth = min(124, max(88, boardWidth * 0.095))
-        let cardWidth = max(52, min(maxCardWidth, fittedCardWidth))
+        let heightFittedWidth = heightFittedCardWidth(
+            boardHeight: boardSize.height,
+            verticalPadding: verticalPadding,
+            rowSpacing: rowSpacing,
+            faceDownFraction: faceDownFraction,
+            faceUpFraction: faceUpFraction
+        )
+        // Floor low enough that 8 FreeCell columns fit at the minimum window
+        // width, which only accommodates 7 Klondike columns at 52pt.
+        let cardWidth = max(40, min(maxCardWidth, fittedCardWidth, heightFittedWidth))
         let cardSize = CGSize(width: cardWidth, height: cardWidth * 1.45)
 
-        let faceDownOffset = max(13, cardSize.height * 0.18)
-        let faceUpOffset = max(18, cardSize.height * 0.26)
+        let tableauMaxHeight = tableauHeightBudget(
+            boardHeight: boardSize.height,
+            verticalPadding: verticalPadding,
+            rowSpacing: rowSpacing,
+            cardHeight: cardSize.height
+        )
+
+        let faceDownOffset = max(13, cardSize.height * faceDownFraction)
+        let faceUpOffset = max(18, cardSize.height * faceUpFraction)
         let wasteFanSpacing = cardSize.width * (boardWidth < 760 ? 0.2 : 0.25)
 
         return Metrics(
@@ -99,14 +170,21 @@ enum Layout {
             cardSize: cardSize,
             tableauFaceDownOffset: faceDownOffset,
             tableauFaceUpOffset: faceUpOffset,
-            wasteFanSpacing: wasteFanSpacing
+            wasteFanSpacing: wasteFanSpacing,
+            tableauMaxHeight: tableauMaxHeight
         )
 #endif
     }
-}
 
-enum CardTilt {
-    static let angleRange: ClosedRange<Double> = -2.0...2.0
+    private static func tableauHeightBudget(
+        boardHeight: CGFloat,
+        verticalPadding: CGFloat,
+        rowSpacing: CGFloat,
+        cardHeight: CGFloat
+    ) -> CGFloat {
+        let chrome = (verticalPadding * 2) + headerHeightEstimate + (rowSpacing * 2) + cardHeight
+        return max(cardHeight * 2, boardHeight - chrome)
+    }
 }
 
 struct HeaderView: View {
@@ -273,6 +351,7 @@ struct TableauRowView: View {
     let columnSpacing: CGFloat
     let faceDownOffset: CGFloat
     let faceUpOffset: CGFloat
+    let maxPileHeight: CGFloat
     let activeTarget: DropTarget?
     let hintedTarget: DropTarget?
     let hintHighlightOpacity: Double
@@ -292,6 +371,7 @@ struct TableauRowView: View {
                     cardSize: cardSize,
                     faceDownOffset: faceDownOffset,
                     faceUpOffset: faceUpOffset,
+                    maxPileHeight: maxPileHeight,
                     isTargeted: activeTarget == .tableau(index),
                     isHintTargeted: hintedTarget == .tableau(index),
                     hintHighlightOpacity: hintHighlightOpacity,
@@ -411,6 +491,7 @@ struct TableauPileView: View {
     let cardSize: CGSize
     let faceDownOffset: CGFloat
     let faceUpOffset: CGFloat
+    let maxPileHeight: CGFloat
     let isTargeted: Bool
     let isHintTargeted: Bool
     let hintHighlightOpacity: Double
@@ -549,426 +630,21 @@ struct TableauPileView: View {
             }
         }
 
+        // Compress this pile's spread evenly when it would overflow the board.
+        let maxTopOffset = maxPileHeight - cardSize.height
+        if let last = yOffsets.last, last > maxTopOffset, maxTopOffset > 0 {
+            let scale = maxTopOffset / last
+            yOffsets = yOffsets.map { $0 * scale }
+        }
+
         return yOffsets
     }
 
     private func dropYOffset(for pile: [Card], yOffsets: [CGFloat]) -> CGFloat {
         guard let lastCard = pile.last, let lastYOffset = yOffsets.last else { return 0 }
-        return lastYOffset + (lastCard.isFaceUp ? faceUpOffset : faceDownOffset)
-    }
-}
-
-enum HintWiggleStyle {
-    static let angles: [Double] = [-1.4, 1.4, -0.8, 0.8, 0]
-    static let stepDuration: Double = 0.13
-    static let stepSleepNanoseconds: UInt64 = 200_000_000
-}
-
-struct HintWiggleModifier: ViewModifier {
-    let token: UUID?
-    @State private var wiggleAngle: Double = 0
-    @State private var wiggleTask: Task<Void, Never>?
-
-    func body(content: Content) -> some View {
-        content
-            .rotationEffect(.degrees(wiggleAngle))
-            .onChange(of: token) { _, newToken in
-                if newToken == nil {
-                    wiggleTask?.cancel()
-                    wiggleAngle = 0
-                    return
-                }
-                startHintWiggle()
-            }
-            .onAppear {
-                if token != nil {
-                    startHintWiggle()
-                }
-            }
-            .onDisappear {
-                wiggleTask?.cancel()
-                wiggleAngle = 0
-            }
-    }
-
-    private func startHintWiggle() {
-        wiggleTask?.cancel()
-        wiggleTask = Task { @MainActor in
-            for angle in HintWiggleStyle.angles {
-                if Task.isCancelled { return }
-                withAnimation(.easeInOut(duration: HintWiggleStyle.stepDuration)) {
-                    wiggleAngle = angle
-                }
-                try? await Task.sleep(nanoseconds: HintWiggleStyle.stepSleepNanoseconds)
-            }
-            wiggleAngle = 0
-        }
-    }
-}
-
-extension View {
-    func hintWiggle(token: UUID?) -> some View {
-        modifier(HintWiggleModifier(token: token))
-    }
-}
-
-struct CardView: View {
-    let card: Card
-    let isSelected: Bool
-    let cardSize: CGSize
-    let isCardTiltEnabled: Bool
-    @Binding var cardTilts: [UUID: Double]
-    let hintWiggleToken: UUID?
-    let flipOnAppear: Bool
-    let flipDelay: Double
-    @State private var flipRotation: Double
-    @State private var tiltAngle: Double = 0
-    @Environment(\.cardStyle) private var cardStyle
-
-    init(
-        card: Card,
-        isSelected: Bool,
-        cardSize: CGSize,
-        isCardTiltEnabled: Bool,
-        cardTilts: Binding<[UUID: Double]>,
-        hintWiggleToken: UUID? = nil,
-        flipOnAppear: Bool = false,
-        flipDelay: Double = 0
-    ) {
-        self.card = card
-        self.isSelected = isSelected
-        self.cardSize = cardSize
-        self.isCardTiltEnabled = isCardTiltEnabled
-        self._cardTilts = cardTilts
-        self.hintWiggleToken = hintWiggleToken
-        self.flipOnAppear = flipOnAppear
-        self.flipDelay = flipDelay
-        let startFaceDown = flipOnAppear && card.isFaceUp
-        _flipRotation = State(initialValue: startFaceDown ? 180 : (card.isFaceUp ? 0 : 180))
-    }
-
-    var body: some View {
-        let cornerRadius = cardSize.width * 0.12
-        let borderColor = isSelected ? Color.yellow.opacity(0.9) : Color.black.opacity(0.2)
-        let borderWidth: CGFloat = isSelected ? 3 : 1
-        let shadowColor = Color.black.opacity(isSelected ? 0.35 : 0.2)
-        let shadowRadius: CGFloat = isSelected ? 8 : 4
-        let shadowYOffset: CGFloat = isSelected ? 6 : 2
-        let frontAngle = flipRotation
-        let backAngle = flipRotation - 180
-        let frontOpacity = flipRotation < 90 ? 1.0 : 0.0
-        let backOpacity = flipRotation < 90 ? 0.0 : 1.0
-
-        ZStack {
-            cardFrontView(
-                cornerRadius: cornerRadius,
-                borderColor: borderColor,
-                borderWidth: borderWidth,
-                shadowColor: shadowColor,
-                shadowRadius: shadowRadius,
-                shadowYOffset: shadowYOffset
-            )
-            .opacity(frontOpacity)
-            .rotation3DEffect(.degrees(frontAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.7)
-
-            cardBackView(
-                cornerRadius: cornerRadius,
-                borderColor: borderColor,
-                borderWidth: borderWidth,
-                shadowColor: shadowColor,
-                shadowRadius: shadowRadius,
-                shadowYOffset: shadowYOffset
-            )
-            .opacity(backOpacity)
-            .rotation3DEffect(.degrees(backAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.7)
-        }
-        .frame(width: cardSize.width, height: cardSize.height)
-        .rotationEffect(.degrees(tiltAngle))
-        .hintWiggle(token: hintWiggleToken)
-        .scaleEffect(isSelected ? 1.03 : 1)
-        .onChange(of: card.isFaceUp) { _, newValue in
-            withAnimation(.easeInOut(duration: 0.32)) {
-                flipRotation = newValue ? 0 : 180
-            }
-        }
-        .onAppear {
-            if flipOnAppear, card.isFaceUp, flipRotation != 0 {
-                withAnimation(.easeInOut(duration: 0.22).delay(flipDelay)) {
-                    flipRotation = 0
-                }
-            }
-            let targetTilt: Double
-            if isCardTiltEnabled {
-                if let existing = cardTilts[card.id] {
-                    targetTilt = existing
-                } else {
-                    let newTilt = Double.random(in: CardTilt.angleRange)
-                    cardTilts[card.id] = newTilt
-                    targetTilt = newTilt
-                }
-            } else {
-                targetTilt = 0
-            }
-            animateTilt(to: targetTilt)
-        }
-        .onChange(of: cardTilts[card.id]) { _, newTilt in
-            guard isCardTiltEnabled, let newTilt else { return }
-            animateTilt(to: newTilt)
-        }
-    }
-
-    private func animateTilt(to target: Double) {
-        withAnimation(.easeOut(duration: 0.2)) {
-            tiltAngle = target
-        }
-    }
-
-    @ViewBuilder
-    private func cardFrontView(
-        cornerRadius: CGFloat,
-        borderColor: Color,
-        borderWidth: CGFloat,
-        shadowColor: Color,
-        shadowRadius: CGFloat,
-        shadowYOffset: CGFloat
-    ) -> some View {
-        switch cardStyle {
-        case .pixel:
-            PixelCardFrontView(card: card, cardSize: cardSize, isSelected: isSelected)
-        case .classic:
-            classicCardFront(
-                cornerRadius: cornerRadius,
-                borderColor: borderColor,
-                borderWidth: borderWidth,
-                shadowColor: shadowColor,
-                shadowRadius: shadowRadius,
-                shadowYOffset: shadowYOffset
-            )
-        }
-    }
-
-    @ViewBuilder
-    private func cardBackView(
-        cornerRadius: CGFloat,
-        borderColor: Color,
-        borderWidth: CGFloat,
-        shadowColor: Color,
-        shadowRadius: CGFloat,
-        shadowYOffset: CGFloat
-    ) -> some View {
-        switch cardStyle {
-        case .pixel:
-            PixelCardBackView(cardSize: cardSize, isSelected: isSelected)
-        case .classic:
-            classicCardBack(
-                cornerRadius: cornerRadius,
-                borderColor: borderColor,
-                borderWidth: borderWidth,
-                shadowColor: shadowColor,
-                shadowRadius: shadowRadius,
-                shadowYOffset: shadowYOffset
-            )
-        }
-    }
-
-    private func classicCardFront(
-        cornerRadius: CGFloat,
-        borderColor: Color,
-        borderWidth: CGFloat,
-        shadowColor: Color,
-        shadowRadius: CGFloat,
-        shadowYOffset: CGFloat
-    ) -> some View {
-        let parchment = Color(red: 0.98, green: 0.96, blue: 0.91)
-        let inkColor = card.suit.isRed ? Color(red: 0.72, green: 0.16, blue: 0.18) : Color(red: 0.12, green: 0.12, blue: 0.12)
-        let ornamentColor = Color(red: 0.66, green: 0.58, blue: 0.48)
-        let cornerMark = VStack(alignment: .leading, spacing: 2) {
-            Text(card.rank.label)
-                .font(.system(size: cardSize.width * 0.28, weight: .bold, design: .serif))
-            Image(systemName: card.suit.symbolName)
-                .font(.system(size: cardSize.width * 0.2, weight: .semibold))
-        }
-
-        return ZStack {
-            cardBase(
-                cornerRadius: cornerRadius,
-                fill: parchment,
-                borderColor: borderColor,
-                borderWidth: borderWidth,
-                shadowColor: shadowColor,
-                shadowRadius: shadowRadius,
-                shadowYOffset: shadowYOffset
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.55), Color.clear],
-                            startPoint: UnitPoint.topLeading,
-                            endPoint: UnitPoint.bottomTrailing
-                        )
-                    )
-                    .blendMode(.softLight)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius * 0.92, style: .continuous)
-                    .strokeBorder(ornamentColor.opacity(0.6), lineWidth: 1)
-                    .padding(cardSize.width * 0.06)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius * 0.78, style: .continuous)
-                    .strokeBorder(
-                        ornamentColor.opacity(0.45),
-                        style: StrokeStyle(lineWidth: 0.6, dash: [4, 3])
-                    )
-                    .padding(cardSize.width * 0.1)
-            )
-
-            cornerMark
-                .foregroundStyle(inkColor)
-                .padding(cardSize.width * 0.1)
-                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.topLeading)
-
-            cornerMark
-                .foregroundStyle(inkColor)
-                .rotationEffect(.degrees(180))
-                .padding(cardSize.width * 0.1)
-                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.bottomTrailing)
-
-            Image(systemName: card.suit.symbolName)
-                .font(.system(size: cardSize.width * 0.52, weight: .regular))
-                .foregroundStyle(inkColor.opacity(0.12))
-                .rotationEffect(.degrees(8))
-                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.center)
-        }
-    }
-
-    private func classicCardBack(
-        cornerRadius: CGFloat,
-        borderColor: Color,
-        borderWidth: CGFloat,
-        shadowColor: Color,
-        shadowRadius: CGFloat,
-        shadowYOffset: CGFloat
-    ) -> some View {
-        let lacquer = Color(red: 0.18, green: 0.26, blue: 0.52)
-        let trim = Color(red: 0.78, green: 0.85, blue: 0.95)
-
-        return ZStack {
-            cardBase(
-                cornerRadius: cornerRadius,
-                fill: lacquer,
-                borderColor: borderColor,
-                borderWidth: borderWidth,
-                shadowColor: shadowColor,
-                shadowRadius: shadowRadius,
-                shadowYOffset: shadowYOffset
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius * 0.92, style: .continuous)
-                    .strokeBorder(trim.opacity(0.55), lineWidth: 1)
-                    .padding(cardSize.width * 0.08)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius * 0.8, style: .continuous)
-                    .strokeBorder(trim.opacity(0.35), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
-                    .padding(cardSize.width * 0.12)
-            )
-
-            CardBackPattern()
-                .padding(cardSize.width * 0.18)
-        }
-    }
-
-    private func cardBase(
-        cornerRadius: CGFloat,
-        fill: Color,
-        borderColor: Color,
-        borderWidth: CGFloat,
-        shadowColor: Color,
-        shadowRadius: CGFloat,
-        shadowYOffset: CGFloat
-    ) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(fill)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(borderColor, lineWidth: borderWidth)
-            )
-            .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: shadowYOffset)
-    }
-}
-
-struct CardBackPattern: View {
-    var body: some View {
-        GeometryReader { geometry in
-            let size = geometry.size
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                Path { path in
-                    let step: CGFloat = 10
-                    var x: CGFloat = 0
-                    while x < size.width {
-                        path.move(to: CGPoint(x: x, y: 0))
-                        path.addLine(to: CGPoint(x: x, y: size.height))
-                        x += step
-                    }
-                }
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-
-                Path { path in
-                    let step: CGFloat = 10
-                    var y: CGFloat = 0
-                    while y < size.height {
-                        path.move(to: CGPoint(x: 0, y: y))
-                        path.addLine(to: CGPoint(x: size.width, y: y))
-                        y += step
-                    }
-                }
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-            }
-        }
-    }
-}
-
-struct CardBackView: View {
-    let cardSize: CGSize
-    @Environment(\.cardStyle) private var cardStyle
-
-    var body: some View {
-        switch cardStyle {
-        case .pixel:
-            PixelStandaloneCardBackView(cardSize: cardSize)
-        case .classic:
-            classicCardBack
-        }
-    }
-
-    private var classicCardBack: some View {
-        let cornerRadius = cardSize.width * 0.12
-        let lacquer = Color(red: 0.18, green: 0.26, blue: 0.52)
-        let trim = Color(red: 0.78, green: 0.85, blue: 0.95)
-
-        return ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(lacquer)
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(trim.opacity(0.5), lineWidth: 1)
-                        .padding(cardSize.width * 0.06)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(trim.opacity(0.25), style: StrokeStyle(lineWidth: 0.6, dash: [5, 3]))
-                        .padding(cardSize.width * 0.1)
-                )
-                .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-
-            CardBackPattern()
-                .padding(cardSize.width * 0.18)
-        }
-        .frame(width: cardSize.width, height: cardSize.height)
+        let natural = lastYOffset + (lastCard.isFaceUp ? faceUpOffset : faceDownOffset)
+        let maxTopOffset = maxPileHeight - cardSize.height
+        return maxTopOffset > 0 ? min(natural, maxTopOffset) : natural
     }
 }
 
@@ -1014,76 +690,17 @@ struct TableBackground: View {
 
     var body: some View {
         let baseColor = (TableBackgroundColor(rawValue: tableBackgroundColorRawValue) ?? TableBackgroundColor.defaultValue).color
-        ZStack {
-            baseColor
-
+        Group {
             if feltEffectEnabled {
-                // Felt fiber texture
-                FeltTextureOverlay()
-
-                // Vignette: darken edges for a real table look
-                RadialGradient(
-                    gradient: Gradient(colors: [
-                        Color.clear,
-                        Color.black.opacity(0.35)
-                    ]),
-                    center: .center,
-                    startRadius: 100,
-                    endRadius: 900
-                )
+                GeometryReader { proxy in
+                    baseColor
+                        .colorEffect(ShaderLibrary.feltTexture(.float2(proxy.size)))
+                }
+            } else {
+                baseColor
             }
         }
         .ignoresSafeArea()
-    }
-}
-
-/// Procedural felt fiber noise drawn via Canvas.
-private struct FeltTextureOverlay: View {
-    var body: some View {
-        Canvas { context, size in
-            // Deterministic seed-based RNG for consistent pattern
-            var rng = FeltRNG(seed: 42)
-            let count = Int(size.width * size.height * 0.06)
-            for _ in 0..<count {
-                let x = CGFloat(rng.next()) * size.width
-                let y = CGFloat(rng.next()) * size.height
-                let brightness = rng.next()
-                let opacity = 0.03 + Double(brightness) * 0.06
-                let length = 1.5 + CGFloat(rng.next()) * 3.0
-                let angle = Angle.degrees(Double(rng.next()) * 360)
-
-                var path = Path()
-                let dx = cos(angle.radians) * length
-                let dy = sin(angle.radians) * length
-                path.move(to: CGPoint(x: x - dx, y: y - dy))
-                path.addLine(to: CGPoint(x: x + dx, y: y + dy))
-
-                let isLight = brightness > 0.5
-                let color = isLight
-                    ? Color.white.opacity(opacity)
-                    : Color.black.opacity(opacity)
-                context.stroke(path, with: .color(color), lineWidth: 0.5)
-            }
-        }
-    }
-}
-
-/// Simple splitmix-style RNG for deterministic felt pattern.
-private struct FeltRNG {
-    private var state: UInt64
-
-    init(seed: UInt64) {
-        state = seed
-    }
-
-    /// Returns a value in 0..<1
-    mutating func next() -> Double {
-        state &+= 0x9e3779b97f4a7c15
-        var z = state
-        z = (z ^ (z >> 30)) &* 0xbf58476d1ce4e5b9
-        z = (z ^ (z >> 27)) &* 0x94d049bb133111eb
-        z = z ^ (z >> 31)
-        return Double(z &>> 11) / Double(1 << 53)
     }
 }
 
