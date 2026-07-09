@@ -34,6 +34,40 @@ enum CardStyle: String, CaseIterable, Identifiable {
     var subtitle: String { info.subtitle }
 }
 
+/// Style-agnostic card back color identity. Each card style maps an identity
+/// to its own palette (see PixelBackColorway); styles that haven't adopted the
+/// setting yet simply ignore it.
+struct CardBackColor: Identifiable, Equatable {
+    let id: String
+    let label: String
+    /// Representative color for the settings swatch.
+    let swatch: Color
+
+    static let navy = CardBackColor(
+        id: "navy", label: "Navy",
+        swatch: Color(red: 0.21, green: 0.29, blue: 0.56)
+    )
+    static let crimson = CardBackColor(
+        id: "crimson", label: "Crimson",
+        swatch: Color(red: 0.57, green: 0.20, blue: 0.22)
+    )
+    static let forest = CardBackColor(
+        id: "forest", label: "Forest",
+        swatch: Color(red: 0.15, green: 0.40, blue: 0.25)
+    )
+    static let plum = CardBackColor(
+        id: "plum", label: "Plum",
+        swatch: Color(red: 0.38, green: 0.21, blue: 0.53)
+    )
+
+    static let all: [CardBackColor] = [navy, crimson, forest, plum]
+    static let defaultValue: CardBackColor = .navy
+
+    static func from(rawValue: String) -> CardBackColor {
+        all.first { $0.id == rawValue } ?? defaultValue
+    }
+}
+
 private struct CardStyleKey: EnvironmentKey {
     static let defaultValue: CardStyle = .default
 }

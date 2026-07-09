@@ -29,16 +29,57 @@ enum PixelPalette {
     static let ermine = Color(red: 0.96, green: 0.95, blue: 0.92)
     static let accent = Color(red: 0.83, green: 0.22, blue: 0.25)
 
-    // Card back
-    static let backDeep = Color(red: 0.11, green: 0.16, blue: 0.37)
-    static let backMid = Color(red: 0.21, green: 0.29, blue: 0.56)
-    static let backBright = Color(red: 0.55, green: 0.64, blue: 0.90)
-    static let backGold = Color(red: 0.85, green: 0.68, blue: 0.25)
-
     static func suitColor(for suit: Suit) -> Color {
         suit.isRed ? red : black
     }
+}
 
+/// The pixel style's tone ramp for each CardBackColor identity: deep field,
+/// muted weave, mid intersections, bright frame.
+struct PixelBackColorway {
+    let backColorID: String
+    let deep: Color
+    let muted: Color
+    let mid: Color
+    let bright: Color
+
+    static let navy = PixelBackColorway(
+        backColorID: CardBackColor.navy.id,
+        deep: Color(red: 0.11, green: 0.16, blue: 0.37),
+        muted: Color(red: 0.18, green: 0.25, blue: 0.50),
+        mid: Color(red: 0.21, green: 0.29, blue: 0.56),
+        bright: Color(red: 0.55, green: 0.64, blue: 0.90)
+    )
+    static let crimson = PixelBackColorway(
+        backColorID: CardBackColor.crimson.id,
+        deep: Color(red: 0.38, green: 0.10, blue: 0.12),
+        muted: Color(red: 0.50, green: 0.16, blue: 0.18),
+        mid: Color(red: 0.57, green: 0.20, blue: 0.22),
+        bright: Color(red: 0.92, green: 0.58, blue: 0.58)
+    )
+    static let forest = PixelBackColorway(
+        backColorID: CardBackColor.forest.id,
+        deep: Color(red: 0.07, green: 0.24, blue: 0.14),
+        muted: Color(red: 0.12, green: 0.34, blue: 0.21),
+        mid: Color(red: 0.15, green: 0.40, blue: 0.25),
+        bright: Color(red: 0.55, green: 0.80, blue: 0.62)
+    )
+    static let plum = PixelBackColorway(
+        backColorID: CardBackColor.plum.id,
+        deep: Color(red: 0.24, green: 0.11, blue: 0.34),
+        muted: Color(red: 0.33, green: 0.17, blue: 0.46),
+        mid: Color(red: 0.38, green: 0.21, blue: 0.53),
+        bright: Color(red: 0.74, green: 0.60, blue: 0.90)
+    )
+
+    static let all: [PixelBackColorway] = [navy, crimson, forest, plum]
+
+    static func matching(_ back: CardBackColor) -> PixelBackColorway {
+        all.first { $0.backColorID == back.id } ?? navy
+    }
+}
+
+extension PixelPalette {
     static func suitHighlight(for suit: Suit) -> Color {
         suit.isRed ? redLight : blackLight
     }
@@ -653,35 +694,40 @@ enum PixelCardArt {
 
     // MARK: Back
 
-    static func drawBack(in context: GraphicsContext, size: CGSize, unit: CGFloat) {
+    /// Woven-lattice card back: a bright single-pixel frame around a diagonal
+    /// weave in the colorway's muted tone with mid-tone intersections.
+    static func drawBack(
+        in context: GraphicsContext, size: CGSize, unit: CGFloat,
+        colorway: PixelBackColorway = .navy
+    ) {
         let gridH = size.height / unit
         let lastRow = Int(gridH.rounded(.down)) - 3
 
         // Inner bright frame, one unit thick, inset 2 from the edge.
-        let frame = PixelPalette.backBright
+        let frame = colorway.bright
         fillCells(context, x: 2, y: 2, w: gridWidth - 4, h: 1, unit: unit, color: frame)
         fillCells(context, x: 2, y: gridH - 3, w: gridWidth - 4, h: 1, unit: unit, color: frame)
         fillCells(context, x: 2, y: 3, w: 1, h: gridH - 6, unit: unit, color: frame)
         fillCells(context, x: gridWidth - 3, y: 3, w: 1, h: gridH - 6, unit: unit, color: frame)
 
-        // Diamond trellis field, phase-locked to the card center.
+        // Diagonal weave, phase-locked to the card center.
         let centerX = Int(gridWidth) / 2
         let centerYCell = Int((gridH / 2).rounded(.down))
         for cy in 4...(lastRow - 1) {
             for cx in 4...Int(gridWidth) - 5 {
                 let sum = (cx - centerX) + (cy - centerYCell)
                 let diff = (cx - centerX) - (cy - centerYCell)
-                let onSum = sum % 6 == 0
-                let onDiff = diff % 6 == 0
+                let onSum = ((sum % 6) + 6) % 6 == 0
+                let onDiff = ((diff % 6) + 6) % 6 == 0
                 if onSum && onDiff {
                     fillCells(
                         context, x: CGFloat(cx), y: CGFloat(cy), w: 1, h: 1,
-                        unit: unit, color: PixelPalette.backGold
+                        unit: unit, color: colorway.mid
                     )
                 } else if onSum || onDiff {
                     fillCells(
                         context, x: CGFloat(cx), y: CGFloat(cy), w: 1, h: 1,
-                        unit: unit, color: PixelPalette.backMid
+                        unit: unit, color: colorway.muted
                     )
                 }
             }
@@ -728,6 +774,8 @@ struct PixelCardBackView: View {
     let cardSize: CGSize
     let isSelected: Bool
 
+    @AppStorage(SettingsKey.cardBackColor) private var cardBackColorRawValue = CardBackColor.defaultValue.id
+
     init(cardSize: CGSize, isSelected: Bool = false) {
         self.cardSize = cardSize
         self.isSelected = isSelected
@@ -738,11 +786,12 @@ struct PixelCardBackView: View {
         let shape = PixelCardShape(px: unit)
         let borderColor = isSelected ? Color.yellow.opacity(0.88) : PixelPalette.outline
         let borderWidth = isSelected ? max(2, unit * 1.6) : max(0.8, unit)
+        let colorway = PixelBackColorway.matching(.from(rawValue: cardBackColorRawValue))
 
         ZStack {
-            shape.fill(PixelPalette.backDeep, style: FillStyle(antialiased: false))
+            shape.fill(colorway.deep, style: FillStyle(antialiased: false))
             Canvas { context, size in
-                PixelCardArt.drawBack(in: context, size: size, unit: unit)
+                PixelCardArt.drawBack(in: context, size: size, unit: unit, colorway: colorway)
             }
         }
         .frame(width: cardSize.width, height: cardSize.height)

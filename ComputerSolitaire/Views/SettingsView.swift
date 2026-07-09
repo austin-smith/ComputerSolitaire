@@ -53,6 +53,7 @@ enum SettingsKey {
     static let soundEffectsEnabled = "settings.soundEffectsEnabled"
     static let showHintButton = "settings.showHintButton"
     static let cardStyle = "settings.cardStyle"
+    static let cardBackColor = "settings.cardBackColor"
 }
 
 struct SettingsView: View {
@@ -66,6 +67,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
     @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.default.rawValue
+    @AppStorage(SettingsKey.cardBackColor) private var cardBackColorRawValue = CardBackColor.defaultValue.id
 #if os(iOS)
     @State private var selectedAppIcon = AppIcon.current()
     @State private var isShowingAppIconPicker = false
@@ -173,6 +175,25 @@ struct SettingsView: View {
                 Text("Adds a subtle organic angle to each card.")
             }
             .toggleStyle(.switch)
+            // Only the pixel style renders back colorways so far; hide the row
+            // for styles that would silently ignore it.
+            if cardStyleRawValue == CardStyle.pixel.rawValue {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Card back color")
+                        Spacer()
+                        Text(CardBackColor.from(rawValue: cardBackColorRawValue).label)
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 8) {
+                        ForEach(CardBackColor.all) { option in
+                            cardBackSwatch(option)
+                        }
+                        Spacer()
+                    }
+                }
+                .padding(.vertical, 4)
+            }
         } header: {
             Text("Cards")
         }
@@ -370,6 +391,37 @@ struct SettingsView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.label)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func cardBackSwatch(_ option: CardBackColor) -> some View {
+        let isSelected = cardBackColorRawValue == option.id
+
+        return Button {
+            guard !isSelected else { return }
+            HapticManager.shared.play(.settingsSelection)
+            cardBackColorRawValue = option.id
+        } label: {
+            Circle()
+                .fill(option.swatch)
+                .overlay {
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .overlay {
+                    Circle()
+                        .stroke(
+                            isSelected ? Color.accentColor : Color.primary.opacity(0.18),
+                            lineWidth: isSelected ? 2.5 : 1
+                        )
+                }
+                .frame(width: 32, height: 32)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(option.label)
