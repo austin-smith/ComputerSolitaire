@@ -161,13 +161,18 @@ struct StatisticsView: View {
             Button(resetActionTitle, role: .destructive) {
                 resetStatistics()
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {
+                // The system dismisses cancellation actions automatically.
+            }
         } message: {
             Text(resetMessage)
         }
     }
 
-    private var winLossBar: some View {
+}
+
+private extension StatisticsView {
+    var winLossBar: some View {
         let losses = stats.gamesPlayed - stats.gamesWon
         let winsLabel = "\(stats.gamesWon) \(stats.gamesWon == 1 ? "win" : "wins")"
         let lossesLabel = "\(losses) \(losses == 1 ? "loss" : "losses")"
@@ -278,6 +283,7 @@ struct StatisticsView: View {
             Image(systemName: icon)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text(value)
                 .font(.system(.headline, design: .monospaced, weight: .bold))
             Text(label)

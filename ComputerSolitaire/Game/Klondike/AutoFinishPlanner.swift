@@ -38,6 +38,13 @@ enum AutoFinishPlanner {
 }
 
 private extension AutoFinishPlanner {
+    struct Candidate {
+        let move: AutoFinishMove
+        let rankValue: Int
+        let sourceOrder: Int
+        let foundationPile: Int
+    }
+
     static func isAutoFinishCandidateState(_ state: GameState) -> Bool {
         guard !isWin(state) else { return false }
         switch state.variant {
@@ -54,49 +61,15 @@ private extension AutoFinishPlanner {
     }
 
     static func nextAutoFinishMoveInternal(in state: GameState) -> AutoFinishMove? {
-        var candidates: [(move: AutoFinishMove, rankValue: Int, sourceOrder: Int, foundationPile: Int)] = []
+        var candidates: [Candidate] = []
 
         for pileIndex in state.tableau.indices {
-            guard let topIndex = state.tableau[pileIndex].indices.last else { continue }
-            let card = state.tableau[pileIndex][topIndex]
-            guard card.isFaceUp else { continue }
-
-            for foundationIndex in state.foundations.indices {
-                let foundation = state.foundations[foundationIndex]
-                guard GameRules.canMoveToFoundation(card: card, foundation: foundation) else { continue }
-
-                let selection = Selection(
-                    source: .tableau(pile: pileIndex, index: topIndex),
-                    cards: [card]
-                )
-                candidates.append(
-                    (
-                        move: AutoFinishMove(selection: selection, destination: .foundation(foundationIndex)),
-                        rankValue: card.rank.rawValue,
-                        sourceOrder: pileIndex,
-                        foundationPile: foundationIndex
-                    )
-                )
-            }
+            candidates.append(contentsOf: tableauCandidates(in: state, pileIndex: pileIndex))
         }
 
         if state.variant == .freecell {
             for slot in state.freeCells.indices {
-                guard let card = state.freeCells[slot] else { continue }
-                for foundationIndex in state.foundations.indices {
-                    let foundation = state.foundations[foundationIndex]
-                    guard GameRules.canMoveToFoundation(card: card, foundation: foundation) else { continue }
-
-                    let selection = Selection(source: .freeCell(slot: slot), cards: [card])
-                    candidates.append(
-                        (
-                            move: AutoFinishMove(selection: selection, destination: .foundation(foundationIndex)),
-                            rankValue: card.rank.rawValue,
-                            sourceOrder: state.tableau.count + slot,
-                            foundationPile: foundationIndex
-                        )
-                    )
-                }
+                candidates.append(contentsOf: freeCellCandidates(in: state, slot: slot))
             }
         }
 
@@ -110,6 +83,48 @@ private extension AutoFinishPlanner {
             return lhs.foundationPile < rhs.foundationPile
         }
         return sorted.first?.move
+    }
+
+    static func tableauCandidates(in state: GameState, pileIndex: Int) -> [Candidate] {
+        guard let topIndex = state.tableau[pileIndex].indices.last else { return [] }
+        let card = state.tableau[pileIndex][topIndex]
+        guard card.isFaceUp else { return [] }
+        let selection = Selection(source: .tableau(pile: pileIndex, index: topIndex), cards: [card])
+        return foundationCandidates(
+            for: card,
+            selection: selection,
+            sourceOrder: pileIndex,
+            in: state
+        )
+    }
+
+    static func freeCellCandidates(in state: GameState, slot: Int) -> [Candidate] {
+        guard let card = state.freeCells[slot] else { return [] }
+        let selection = Selection(source: .freeCell(slot: slot), cards: [card])
+        return foundationCandidates(
+            for: card,
+            selection: selection,
+            sourceOrder: state.tableau.count + slot,
+            in: state
+        )
+    }
+
+    static func foundationCandidates(
+        for card: Card,
+        selection: Selection,
+        sourceOrder: Int,
+        in state: GameState
+    ) -> [Candidate] {
+        state.foundations.indices.compactMap { foundationIndex in
+            let foundation = state.foundations[foundationIndex]
+            guard GameRules.canMoveToFoundation(card: card, foundation: foundation) else { return nil }
+            return Candidate(
+                move: AutoFinishMove(selection: selection, destination: .foundation(foundationIndex)),
+                rankValue: card.rank.rawValue,
+                sourceOrder: sourceOrder,
+                foundationPile: foundationIndex
+            )
+        }
     }
 
     @discardableResult

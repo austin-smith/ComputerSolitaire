@@ -14,8 +14,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  swiftlint:
+    name: SwiftLint
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pinned SwiftLint
+        env:
+          SWIFTLINT_VERSION: 0.65.0
+          SWIFTLINT_SHA256: eb333bd76dfb5f46d21fdf3615fe39bb938956ca0b8e94c241c4b2db6e696b90
+        run: |
+          ARCHIVE="$RUNNER_TEMP/SwiftLintBinary.artifactbundle.zip"
+          INSTALL_DIR="$RUNNER_TEMP/swiftlint"
+          curl --fail --location --retry 3 --show-error \
+            --output "$ARCHIVE" \
+            "https://github.com/realm/SwiftLint/releases/download/$SWIFTLINT_VERSION/SwiftLintBinary.artifactbundle.zip"
+          printf '%s  %s\n' "$SWIFTLINT_SHA256" "$ARCHIVE" | shasum -a 256 --check
+          mkdir -p "$INSTALL_DIR"
+          ditto -x -k "$ARCHIVE" "$INSTALL_DIR"
+          echo "$INSTALL_DIR/SwiftLintBinary.artifactbundle/macos" >> "$GITHUB_PATH"
+
+      - name: Run SwiftLint
+        run: swiftlint lint --strict --no-cache --reporter github-actions-logging
+
   macos-unit-tests:
     name: macOS Build & Test
+    needs: swiftlint
     runs-on: macos-26
 
     steps:
@@ -43,6 +70,7 @@ jobs:
 
   ios-build:
     name: iOS Build
+    needs: swiftlint
     runs-on: macos-26
 
     steps:

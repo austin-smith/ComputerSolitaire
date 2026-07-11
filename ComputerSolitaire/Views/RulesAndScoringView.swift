@@ -188,7 +188,11 @@ struct RulesAndScoringView: View {
                 Text("On win, a time bonus is added.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("Time bonus starts at \(Scoring.timedMaxBonusDrawOne) in 1-card draw and \(Scoring.timedMaxBonusDrawThree) in 3-card draw, then drops by \(Scoring.timedPointsLostPerSecond) point per second.")
+                Text(
+                    "Time bonus starts at \(Scoring.timedMaxBonusDrawOne) in 1-card draw and " +
+                        "\(Scoring.timedMaxBonusDrawThree) in 3-card draw, then drops by " +
+                        "\(Scoring.timedPointsLostPerSecond) point per second."
+                )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text("Score cannot go below \(Scoring.minimumScore).")
@@ -223,7 +227,10 @@ struct RulesAndScoringView: View {
                 TermRow(term: "Cascade", definition: "One of eight tableau columns where all cards are face up."),
                 TermRow(term: "Free Cell", definition: "A temporary single-card holding slot (four total)."),
                 TermRow(term: "Foundation", definition: "Four suit piles built from Ace to King."),
-                TermRow(term: "Supermove", definition: "A multi-card move enabled by available free cells and empty cascades.")
+                TermRow(
+                    term: "Supermove",
+                    definition: "A multi-card move enabled by available free cells and empty cascades."
+                )
             ]
         }
     }
@@ -258,7 +265,11 @@ struct RulesAndScoringView: View {
         case .freecell:
             return [
                 ScoringRow(move: "Move cards", points: 0, note: "FreeCell currently tracks time and completion."),
-                ScoringRow(move: "Win time bonus", points: Scoring.timedMaxBonusDrawThree, note: "Reduced by elapsed time.")
+                ScoringRow(
+                    move: "Win time bonus",
+                    points: Scoring.timedMaxBonusDrawThree,
+                    note: "Reduced by elapsed time."
+                )
             ]
         }
     }

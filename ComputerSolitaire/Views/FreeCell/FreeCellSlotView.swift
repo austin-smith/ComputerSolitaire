@@ -42,7 +42,10 @@ struct FreeCellView: View {
                     cardTilts: $cardTilts,
                     hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
                 )
-                .opacity((viewModel.isDragging && viewModel.isSelected(card: card)) || hiddenCardIDs.contains(card.id) ? 0 : 1)
+                .opacity(
+                    (viewModel.isDragging && viewModel.isSelected(card: card))
+                        || hiddenCardIDs.contains(card.id) ? 0 : 1
+                )
                 .gesture(dragGesture(.freeCell(index)))
                 .cardFramePreference(card.id)
             }
@@ -50,6 +53,7 @@ struct FreeCellView: View {
         .onTapGesture {
             viewModel.handleFreeCellTap(index: index)
         }
+        .accessibilityAddTraits(.isButton)
         .background(
             GeometryReader { proxy in
                 let boardFrame = proxy.frame(in: .named("board"))

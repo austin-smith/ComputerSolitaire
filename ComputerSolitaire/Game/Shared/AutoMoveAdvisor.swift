@@ -97,35 +97,8 @@ enum AutoMoveAdvisor {
         guard legalDestinations(for: selection, in: state).contains(destination) else { return nil }
 
         var nextState = state
-
-        switch selection.source {
-        case .waste:
-            _ = nextState.waste.popLast()
-            if stockDrawCount == DrawMode.one.rawValue {
-                nextState.wasteDrawCount = min(1, nextState.waste.count)
-            } else {
-                nextState.wasteDrawCount = max(0, nextState.wasteDrawCount - 1)
-            }
-        case .freeCell(let slot):
-            nextState.freeCells[slot] = nil
-        case .foundation(let pile):
-            _ = nextState.foundations[pile].popLast()
-        case .tableau(let pile, let index):
-            nextState.tableau[pile].removeSubrange(index..<nextState.tableau[pile].count)
-            applyVariantTableauSourceRemovalEffects(on: &nextState, pileIndex: pile)
-        }
-
-        switch destination {
-        case .foundation(let index):
-            guard selection.cards.count == 1, let card = selection.cards.first else { return nil }
-            nextState.foundations[index].append(card)
-        case .tableau(let index):
-            nextState.tableau[index].append(contentsOf: selection.cards)
-        case .freeCell(let index):
-            guard selection.cards.count == 1, let card = selection.cards.first else { return nil }
-            nextState.freeCells[index] = card
-        }
-
+        remove(selection, from: &nextState, stockDrawCount: stockDrawCount)
+        guard append(selection.cards, to: destination, in: &nextState) else { return nil }
         return nextState
     }
 
@@ -134,27 +107,13 @@ enum AutoMoveAdvisor {
 
         switch selection.source {
         case .waste:
-            guard selection.cards.count == 1, let topWaste = state.waste.last else { return false }
-            return topWaste.id == selection.cards[0].id
-
+            return matchesWaste(selection, in: state)
         case .freeCell(let slot):
-            guard selection.cards.count == 1 else { return false }
-            guard state.freeCells.indices.contains(slot), let freeCellCard = state.freeCells[slot] else { return false }
-            return freeCellCard.id == selection.cards[0].id
-
+            return matchesFreeCell(selection, slot: slot, in: state)
         case .foundation(let pile):
-            guard selection.cards.count == 1 else { return false }
-            guard state.foundations.indices.contains(pile),
-                  let topFoundation = state.foundations[pile].last else { return false }
-            return topFoundation.id == selection.cards[0].id
-
+            return matchesFoundation(selection, pile: pile, in: state)
         case .tableau(let pile, let index):
-            guard state.tableau.indices.contains(pile) else { return false }
-            let sourcePile = state.tableau[pile]
-            guard sourcePile.indices.contains(index) else { return false }
-            let selectedCards = Array(sourcePile[index...])
-            guard selectedCards.count == selection.cards.count else { return false }
-            return zip(selectedCards, selection.cards).allSatisfy { $0.id == $1.id }
+            return matchesTableau(selection, pile: pile, index: index, in: state)
         }
     }
 
@@ -164,6 +123,69 @@ enum AutoMoveAdvisor {
 }
 
 private extension AutoMoveAdvisor {
+    static func remove(_ selection: Selection, from state: inout GameState, stockDrawCount: Int) {
+        switch selection.source {
+        case .waste:
+            _ = state.waste.popLast()
+            state.wasteDrawCount = stockDrawCount == DrawMode.one.rawValue
+                ? min(1, state.waste.count)
+                : max(0, state.wasteDrawCount - 1)
+        case .freeCell(let slot):
+            state.freeCells[slot] = nil
+        case .foundation(let pile):
+            _ = state.foundations[pile].popLast()
+        case .tableau(let pile, let index):
+            state.tableau[pile].removeSubrange(index..<state.tableau[pile].count)
+            applyVariantTableauSourceRemovalEffects(on: &state, pileIndex: pile)
+        }
+    }
+
+    static func append(_ cards: [Card], to destination: Destination, in state: inout GameState) -> Bool {
+        switch destination {
+        case .foundation(let index):
+            guard cards.count == 1, let card = cards.first else { return false }
+            state.foundations[index].append(card)
+        case .tableau(let index):
+            state.tableau[index].append(contentsOf: cards)
+        case .freeCell(let index):
+            guard cards.count == 1, let card = cards.first else { return false }
+            state.freeCells[index] = card
+        }
+        return true
+    }
+
+    static func matchesWaste(_ selection: Selection, in state: GameState) -> Bool {
+        guard selection.cards.count == 1, let topWaste = state.waste.last else { return false }
+        return topWaste.id == selection.cards[0].id
+    }
+
+    static func matchesFreeCell(_ selection: Selection, slot: Int, in state: GameState) -> Bool {
+        guard selection.cards.count == 1,
+              state.freeCells.indices.contains(slot),
+              let card = state.freeCells[slot] else { return false }
+        return card.id == selection.cards[0].id
+    }
+
+    static func matchesFoundation(_ selection: Selection, pile: Int, in state: GameState) -> Bool {
+        guard selection.cards.count == 1,
+              state.foundations.indices.contains(pile),
+              let card = state.foundations[pile].last else { return false }
+        return card.id == selection.cards[0].id
+    }
+
+    static func matchesTableau(
+        _ selection: Selection,
+        pile: Int,
+        index: Int,
+        in state: GameState
+    ) -> Bool {
+        guard state.tableau.indices.contains(pile) else { return false }
+        let sourcePile = state.tableau[pile]
+        guard sourcePile.indices.contains(index) else { return false }
+        let selectedCards = Array(sourcePile[index...])
+        guard selectedCards.count == selection.cards.count else { return false }
+        return zip(selectedCards, selection.cards).allSatisfy { $0.id == $1.id }
+    }
     static func variantAllowsTableauTransfer(
         selection: Selection,
         destinationTableauIndex: Int,

@@ -1,7 +1,6 @@
 import Foundation
 import SwiftData
 
-
 @Model
 final class SavedGameRecord {
     static let currentRecordKey = "current"
@@ -140,93 +139,75 @@ struct SavedGamePayload: Codable {
         guard schemaVersion == Self.currentSchemaVersion else { return nil }
         guard state.isValidForPersistence else { return nil }
 
-        let sanitizedStockDrawCount: Int = {
-            if state.variant == .klondike {
-                return DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
-            }
-            return DrawMode.three.rawValue
-        }()
-        let sanitizedMovesCount = max(0, movesCount)
-        let sanitizedScore = Scoring.clamped(score)
-        let sanitizedSavedAt = min(savedAt, now)
+        let sanitizedStockDrawCount = sanitizedDrawCount(stockDrawCount)
+        let sanitizedScoringDrawCount = sanitizedDrawCount(
+            scoringDrawCount,
+            fallback: sanitizedStockDrawCount
+        )
         let sanitizedStartedAt = min(gameStartedAt, now)
-        let sanitizedScoringDrawCount: Int = {
-            if state.variant == .klondike {
-                return DrawMode(rawValue: scoringDrawCount)?.rawValue ?? sanitizedStockDrawCount
-            }
-            return DrawMode.three.rawValue
-        }()
         let sanitizedPauseStartedAt = pauseStartedAt
             .map { min($0, now) }
             .flatMap { $0 >= sanitizedStartedAt ? $0 : nil }
-        let sanitizedFinalElapsedSeconds: Int? = {
-            guard hasAppliedTimeBonus else { return nil }
-            return finalElapsedSeconds.map { max(0, $0) }
-        }()
-        let sanitizedHasStartedTrackedGame = hasStartedTrackedGame
-        let sanitizedIsCurrentGameFinalized = sanitizedHasStartedTrackedGame ? isCurrentGameFinalized : false
-        let sanitizedHintRequestsInCurrentGame = sanitizedHasStartedTrackedGame ? max(0, hintRequestsInCurrentGame) : 0
-        let sanitizedUndosUsedInCurrentGame = sanitizedHasStartedTrackedGame ? max(0, undosUsedInCurrentGame) : 0
-        let sanitizedUsedRedealInCurrentGame = sanitizedHasStartedTrackedGame ? usedRedealInCurrentGame : false
-        let sanitizedHistory = history
-            .filter { $0.movesCount >= 0 && $0.state.isValidForPersistence }
-            .map { snapshot in
-                GameSnapshot(
-                    state: snapshot.state,
-                    movesCount: snapshot.movesCount,
-                    score: Scoring.clamped(snapshot.score),
-                    hasAppliedTimeBonus: snapshot.hasAppliedTimeBonus,
-                    undoContext: snapshot.undoContext
-                )
-            }
-            .suffix(SolitaireViewModel.maxUndoHistoryCount)
-
-        var sanitizedState = state
-        if sanitizedState.variant == .klondike {
-            sanitizedState.wasteDrawCount = min(
-                max(0, sanitizedState.wasteDrawCount),
-                min(sanitizedStockDrawCount, sanitizedState.waste.count)
-            )
-        } else {
-            sanitizedState.wasteDrawCount = 0
-        }
-
-        let sanitizedRedealState: GameState? = {
-            guard var baseState = redealState, baseState.isValidForPersistence else { return nil }
-            if baseState.variant == .klondike {
-                baseState.wasteDrawCount = min(
-                    max(0, baseState.wasteDrawCount),
-                    min(sanitizedStockDrawCount, baseState.waste.count)
-                )
-            } else {
-                baseState.wasteDrawCount = 0
-            }
-            return baseState
-        }()
 
         return SavedGamePayload(
             schemaVersion: schemaVersion,
-            savedAt: sanitizedSavedAt,
-            state: sanitizedState,
-            movesCount: sanitizedMovesCount,
-            score: sanitizedScore,
+            savedAt: min(savedAt, now),
+            state: sanitized(state, stockDrawCount: sanitizedStockDrawCount),
+            movesCount: max(0, movesCount),
+            score: Scoring.clamped(score),
             gameStartedAt: sanitizedStartedAt,
             pauseStartedAt: sanitizedPauseStartedAt,
             hasAppliedTimeBonus: hasAppliedTimeBonus,
-            finalElapsedSeconds: sanitizedFinalElapsedSeconds,
+            finalElapsedSeconds: hasAppliedTimeBonus ? finalElapsedSeconds : nil,
             stockDrawCount: sanitizedStockDrawCount,
             scoringDrawCount: sanitizedScoringDrawCount,
-            history: Array(sanitizedHistory),
-            redealState: sanitizedRedealState,
-            hasStartedTrackedGame: sanitizedHasStartedTrackedGame,
-            isCurrentGameFinalized: sanitizedIsCurrentGameFinalized,
-            hintRequestsInCurrentGame: sanitizedHintRequestsInCurrentGame,
-            undosUsedInCurrentGame: sanitizedUndosUsedInCurrentGame,
-            usedRedealInCurrentGame: sanitizedUsedRedealInCurrentGame
+            history: sanitizedHistory(),
+            redealState: redealState.flatMap {
+                $0.isValidForPersistence ? sanitized($0, stockDrawCount: sanitizedStockDrawCount) : nil
+            },
+            hasStartedTrackedGame: hasStartedTrackedGame,
+            isCurrentGameFinalized: hasStartedTrackedGame && isCurrentGameFinalized,
+            hintRequestsInCurrentGame: hasStartedTrackedGame ? hintRequestsInCurrentGame : 0,
+            undosUsedInCurrentGame: hasStartedTrackedGame ? undosUsedInCurrentGame : 0,
+            usedRedealInCurrentGame: hasStartedTrackedGame && usedRedealInCurrentGame
+        )
+    }
+
+    private func sanitizedDrawCount(_ count: Int, fallback: Int = DrawMode.three.rawValue) -> Int {
+        guard state.variant == .klondike else { return DrawMode.three.rawValue }
+        return DrawMode(rawValue: count)?.rawValue ?? fallback
+    }
+
+    private func sanitized(_ source: GameState, stockDrawCount: Int) -> GameState {
+        var result = source
+        if result.variant == .klondike {
+            result.wasteDrawCount = min(
+                max(0, result.wasteDrawCount),
+                min(stockDrawCount, result.waste.count)
+            )
+        } else {
+            result.wasteDrawCount = 0
+        }
+        return result
+    }
+
+    private func sanitizedHistory() -> [GameSnapshot] {
+        Array(
+            history
+                .filter { $0.movesCount >= 0 && $0.state.isValidForPersistence }
+                .map { snapshot in
+                    GameSnapshot(
+                        state: snapshot.state,
+                        movesCount: snapshot.movesCount,
+                        score: Scoring.clamped(snapshot.score),
+                        hasAppliedTimeBonus: snapshot.hasAppliedTimeBonus,
+                        undoContext: snapshot.undoContext
+                    )
+                }
+                .suffix(SolitaireViewModel.maxUndoHistoryCount)
         )
     }
 }
-
 
 enum GamePersistenceError: Error {
     case invalidPayload
@@ -269,6 +250,16 @@ enum GamePersistence {
         descriptor.fetchLimit = 1
         return try modelContext.fetch(descriptor).first
     }
+}
+
+struct CompletedGame {
+    let didWin: Bool
+    let elapsedSeconds: Int
+    let finalScore: Int
+    let drawCount: Int
+    let hintsUsedInGame: Int
+    let undosUsedInGame: Int
+    let usedRedealInGame: Bool
 }
 
 struct GameStatistics: Codable, Equatable {
@@ -321,7 +312,10 @@ struct GameStatistics: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        let decodedSchemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? Self.currentSchemaVersion
+        let decodedSchemaVersion = try container.decodeIfPresent(
+            Int.self,
+            forKey: .schemaVersion
+        ) ?? Self.currentSchemaVersion
         let decodedGamesPlayed = max(0, try container.decodeIfPresent(Int.self, forKey: .gamesPlayed) ?? 0)
         let decodedGamesWon = max(
             0,
@@ -418,24 +412,16 @@ struct GameStatistics: Codable, Equatable {
         )
     }
 
-    mutating func recordCompletedGame(
-        didWin: Bool,
-        elapsedSeconds: Int,
-        finalScore: Int,
-        drawCount: Int,
-        hintsUsedInGame: Int,
-        undosUsedInGame: Int,
-        usedRedealInGame: Bool
-    ) {
-        let sanitizedElapsed = max(0, elapsedSeconds)
-        let sanitizedScore = max(0, finalScore)
-        let sanitizedHintsUsedInGame = max(0, hintsUsedInGame)
-        let sanitizedUndosUsedInGame = max(0, undosUsedInGame)
+    mutating func recordCompletedGame(_ game: CompletedGame) {
+        let sanitizedElapsed = max(0, game.elapsedSeconds)
+        let sanitizedScore = max(0, game.finalScore)
+        let sanitizedHintsUsedInGame = max(0, game.hintsUsedInGame)
+        let sanitizedUndosUsedInGame = max(0, game.undosUsedInGame)
 
         gamesPlayed = addingSafely(gamesPlayed, 1)
         totalTimeSeconds = addingSafely(totalTimeSeconds, sanitizedElapsed)
 
-        guard didWin else { return }
+        guard game.didWin else { return }
 
         gamesWon = min(gamesPlayed, addingSafely(gamesWon, 1))
         if let bestTimeSeconds {
@@ -444,15 +430,15 @@ struct GameStatistics: Codable, Equatable {
             bestTimeSeconds = sanitizedElapsed
         }
 
-        if drawCount == DrawMode.one.rawValue {
+        if game.drawCount == DrawMode.one.rawValue {
             highScoreDrawOne = max(highScoreDrawOne ?? 0, sanitizedScore)
-        } else if drawCount == DrawMode.three.rawValue {
+        } else if game.drawCount == DrawMode.three.rawValue {
             highScoreDrawThree = max(highScoreDrawThree ?? 0, sanitizedScore)
         }
 
         let isCleanWin = sanitizedHintsUsedInGame == 0
             && sanitizedUndosUsedInGame == 0
-            && !usedRedealInGame
+            && !game.usedRedealInGame
         if isCleanWin {
             cleanWins = min(gamesWon, addingSafely(cleanWins, 1))
         }

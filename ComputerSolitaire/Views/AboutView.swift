@@ -30,7 +30,10 @@ struct AboutView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text("Computer Solitaire is a low-frills, ad-free solitaire game for your computer. Includes Klondike, FreeCell, and other things you enjoy.")
+                Text(
+                    "Computer Solitaire is a low-frills, ad-free solitaire game for your computer. " +
+                        "Includes Klondike, FreeCell, and other things you enjoy."
+                )
                     .font(.system(size: 14))
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
@@ -83,7 +86,7 @@ struct AboutView: View {
     @Environment(\.openURL) private var openURL
 
     private var appVersion: String {
-        Bundle.main.infoDictionary!["CFBundleShortVersionString"] as! String
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
     }
 
     private var copyrightYear: String {
@@ -101,6 +104,7 @@ struct AboutView: View {
                     .frame(width: 100, height: 100)
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
+                    .accessibilityHidden(true)
 
                 VStack(spacing: 3) {
                     Text("Computer Solitaire")
@@ -113,7 +117,10 @@ struct AboutView: View {
                 }
             }
 
-            Text("Computer Solitaire is a low-frills, ad-free solitaire game for your computer. Includes Klondike, FreeCell, and other things you enjoy.")
+            Text(
+                "Computer Solitaire is a low-frills, ad-free solitaire game for your computer. " +
+                    "Includes Klondike, FreeCell, and other things you enjoy."
+            )
                 .font(.system(size: 11))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)

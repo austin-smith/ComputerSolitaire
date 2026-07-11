@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+// TODO: Split board layout, interaction, animation, lifecycle, and persistence
+// coordination along stable ownership boundaries, then remove this exception.
+// swiftlint:disable file_length
+
 struct DropTargetFrameKey: PreferenceKey {
     static var defaultValue: [DropTarget: DropTargetGeometry] = [:]
 
@@ -73,6 +77,20 @@ extension View {
     }
 }
 
+private struct HeaderMetrics {
+    let elapsedSeconds: Int
+    let score: Int
+}
+
+private struct BoardPresentation {
+    let metrics: Layout.Metrics
+    let columnCount: Int
+    let contentWidth: CGFloat
+    let scale: CGFloat
+    let effectiveCardSize: CGSize
+    let hintedTarget: DropTarget?
+    let centersContent: Bool
+}
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -170,137 +188,95 @@ struct ContentView: View {
 
     var body: some View {
         sceneDecorations(
-            for: AnyView(
-                GeometryReader { geometry in
-                    boardRoot(for: geometry)
-                }
-                .environment(\.cardStyle, currentCardStyle)
-            )
+            for: GeometryReader { geometry in
+                boardRoot(for: geometry)
+            }
+            .environment(\.cardStyle, currentCardStyle)
         )
     }
 
-    private func sceneDecorations(for baseView: AnyView) -> some View {
+}
+
+private extension ContentView {
+    func sceneDecorations<Content: View>(for baseView: Content) -> some View {
         let toolbarView = applyToolbar(to: baseView)
         let sheetsView = applySheets(to: toolbarView)
         return applyObservers(to: sheetsView)
     }
 
-    private func applyToolbar(to view: AnyView) -> AnyView {
-        AnyView(
-            view
+    private func applyToolbar<Content: View>(to view: Content) -> some View {
+        view
             .toolbar {
-#if os(iOS)
-                ToolbarItemGroup(placement: .bottomBar) {
-                    Menu {
-                        Button("New Game", systemImage: "plus") {
-                            startNewGameFromUI()
-                        }
-                        Button("Redeal", systemImage: "arrow.clockwise") {
-                            redealFromUI()
-                        }
-                        Button("Auto Finish", systemImage: "bolt") {
-                            startAutoFinish()
-                        }
-                        .disabled(isAutoFinishDisabled)
-                        if isHintButtonVisible {
-                            Button("Hint", systemImage: "lightbulb") {
-                                triggerHint()
-                            }
-                            .disabled(isHintDisabled)
-                        }
-                    } label: {
-                        Label("Game", systemImage: "ellipsis.circle")
-                    }
-                    Button {
-                        stopAutoFinish()
-                        beginUndoAnimationIfNeeded()
-                    } label: {
-                        Label("Undo", systemImage: "arrow.uturn.backward")
-                    }
-                    .disabled(isUndoDisabled)
-                    Spacer(minLength: 0)
-                    Button {
-                        isShowingStats = true
-                    } label: {
-                        Label("Statistics", systemImage: "chart.bar")
-                    }
-                    Button {
-                        isShowingSettings = true
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
-                    }
-                }
-#endif
-#if os(macOS)
-                ToolbarSpacer(.flexible)
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button {
-                        startNewGameFromUI()
-                    } label: {
-                        Label("New Game", systemImage: "plus")
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("New Game")
-                    Button {
-                        redealFromUI()
-                    } label: {
-                        Label("Redeal", systemImage: "arrow.clockwise")
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Redeal")
-                }
-                ToolbarSpacer(.fixed)
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button {
-                        stopAutoFinish()
-                        beginUndoAnimationIfNeeded()
-                    } label: {
-                        Label("Undo", systemImage: "arrow.uturn.backward")
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Undo")
-                    .disabled(isUndoDisabled)
-                    Button {
-                        startAutoFinish()
-                    } label: {
-                        Label("Auto Finish", systemImage: "bolt")
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Auto Finish")
-                    .disabled(isAutoFinishDisabled)
-                    if isHintButtonVisible {
-                        Button {
-                            triggerHint()
-                        } label: {
-                            Label("Hint", systemImage: "lightbulb")
-                        }
-                        .labelStyle(.iconOnly)
-                        .help("Hint")
-                        .disabled(isHintDisabled)
-                    }
-                    Button {
-                        isShowingStats = true
-                    } label: {
-                        Label("Statistics", systemImage: "chart.bar")
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Statistics")
-                    Button {
-                        isShowingSettings = true
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Settings")
-                }
-#endif
+                gameToolbar
             }
-        )
     }
 
-    private func applySheets(to view: AnyView) -> AnyView {
-        AnyView(
-            view.sheet(isPresented: $isShowingSettings) {
+    @ToolbarContentBuilder
+    var gameToolbar: some ToolbarContent {
+#if os(iOS)
+        ToolbarItemGroup(placement: .bottomBar) {
+            Menu {
+                Button("New Game", systemImage: "plus") { startNewGameFromUI() }
+                Button("Redeal", systemImage: "arrow.clockwise") { redealFromUI() }
+                Button("Auto Finish", systemImage: "bolt") { startAutoFinish() }
+                    .disabled(isAutoFinishDisabled)
+                if isHintButtonVisible {
+                    Button("Hint", systemImage: "lightbulb") { triggerHint() }
+                        .disabled(isHintDisabled)
+                }
+            } label: {
+                Label("Game", systemImage: "ellipsis.circle")
+            }
+            Button {
+                stopAutoFinish()
+                beginUndoAnimationIfNeeded()
+            } label: {
+                Label("Undo", systemImage: "arrow.uturn.backward")
+            }
+            .disabled(isUndoDisabled)
+            Spacer(minLength: 0)
+            Button { isShowingStats = true } label: { Label("Statistics", systemImage: "chart.bar") }
+            Button { isShowingSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+        }
+#endif
+#if os(macOS)
+        ToolbarSpacer(.flexible)
+        ToolbarItemGroup(placement: .primaryAction) {
+            toolbarButton("New Game", systemImage: "plus") { startNewGameFromUI() }
+            toolbarButton("Redeal", systemImage: "arrow.clockwise", action: redealFromUI)
+        }
+        ToolbarSpacer(.fixed)
+        ToolbarItemGroup(placement: .primaryAction) {
+            toolbarButton("Undo", systemImage: "arrow.uturn.backward") {
+                stopAutoFinish()
+                beginUndoAnimationIfNeeded()
+            }
+            .disabled(isUndoDisabled)
+            toolbarButton("Auto Finish", systemImage: "bolt", action: startAutoFinish)
+                .disabled(isAutoFinishDisabled)
+            if isHintButtonVisible {
+                toolbarButton("Hint", systemImage: "lightbulb", action: triggerHint)
+                    .disabled(isHintDisabled)
+            }
+            toolbarButton("Statistics", systemImage: "chart.bar") { isShowingStats = true }
+            toolbarButton("Settings", systemImage: "gearshape") { isShowingSettings = true }
+        }
+#endif
+    }
+
+#if os(macOS)
+    func toolbarButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+        }
+        .labelStyle(.iconOnly)
+        .help(title)
+    }
+#endif
+
+    private func applySheets<Content: View>(to view: Content) -> some View {
+        view
+            .sheet(isPresented: $isShowingSettings) {
 #if os(iOS)
                 NavigationStack {
                     SettingsView()
@@ -323,22 +299,27 @@ struct ContentView: View {
                 StatisticsView(viewModel: viewModel, initialVariant: viewModel.gameVariant)
 #endif
             }
-        )
     }
 
-    private func applyObservers(to view: AnyView) -> AnyView {
-        let commandObservedView = AnyView(
-            view
-                .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+    private func applyObservers<Content: View>(to view: Content) -> some View {
+        let commands = applyCommandObservers(to: view)
+        let gameState = applyGameStateObservers(to: commands)
+        let interactions = applyInteractionObservers(to: gameState)
+        return applyLifecycleObservers(to: interactions)
+    }
+
+    private func applyCommandObservers<Content: View>(to view: Content) -> some View {
+        view
+            .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
                 isShowingSettings = true
             }
             .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
                 presentRulesAndScoring(initialSection: .rules)
             }
-        )
+    }
 
-        let gameStateObservedView = AnyView(
-            commandObservedView
+    private func applyGameStateObservers<Content: View>(to view: Content) -> some View {
+        view
             .onChange(of: gameVariantRawValue) { _, newValue in
                 guard hasLoadedGame, !isHydratingGame else { return }
                 let variant = GameVariant(rawValue: newValue) ?? .klondike
@@ -378,6 +359,10 @@ struct ContentView: View {
                     }
                 }
             }
+    }
+
+    private func applyInteractionObservers<Content: View>(to view: Content) -> some View {
+        view
             .onChange(of: viewModel.pendingAutoMove?.id) { _, _ in
                 processPendingAutoMoveIfPossible()
                 queueAutoFinishStepIfPossible()
@@ -394,10 +379,10 @@ struct ContentView: View {
                 processPendingAutoMoveIfPossible()
                 queueAutoFinishStepIfPossible()
             }
-        )
+    }
 
-        return AnyView(
-            gameStateObservedView
+    private func applyLifecycleObservers<Content: View>(to view: Content) -> some View {
+        view
             .onChange(of: scenePhase) { _, _ in
                 syncLifecyclePauseState()
             }
@@ -417,109 +402,57 @@ struct ContentView: View {
             .focusedSceneValue(\.gameMenuActions, gameMenuActions)
             .focusedSceneValue(\.gameMenuState, gameMenuState)
 #endif
-        )
     }
 
     @ViewBuilder
     private func boardRoot(for geometry: GeometryProxy) -> some View {
-        let boardColumnCount = max(viewModel.state.tableau.count, viewModel.gameVariant == .freecell ? 8 : 7)
+        let presentation = boardPresentation(for: geometry)
+        let surface = boardSurface(presentation: presentation)
+        let preferences = applyBoardPreferences(to: surface)
+        let geometryObserved = applyBoardGeometryObservers(to: preferences, geometry: geometry)
+        let wasteObserved = applyWasteObservers(to: geometryObserved, presentation: presentation)
+        applyBoardOverlays(to: wasteObserved, presentation: presentation)
+    }
+
+    private func boardPresentation(for geometry: GeometryProxy) -> BoardPresentation {
+        let columnCount = max(viewModel.state.tableau.count, viewModel.gameVariant == .freecell ? 8 : 7)
 #if os(iOS)
         let metrics = Layout.metrics(
             for: geometry.size,
             isRegularWidth: horizontalSizeClass == .regular,
-            tableauColumnCount: boardColumnCount
+            tableauColumnCount: columnCount
         )
 #else
-        let metrics = Layout.metrics(for: geometry.size, tableauColumnCount: boardColumnCount)
+        let metrics = Layout.metrics(for: geometry.size, tableauColumnCount: columnCount)
 #endif
         let cardSize = metrics.cardSize
-        let boardContentWidth = (cardSize.width * CGFloat(boardColumnCount))
-            + (metrics.columnSpacing * CGFloat(max(0, boardColumnCount - 1)))
-        let boardScaleFactor = boardScaleFactor(
+        let contentWidth = (cardSize.width * CGFloat(columnCount))
+            + (metrics.columnSpacing * CGFloat(max(0, columnCount - 1)))
+        let scale = boardScaleFactor(
             availableWidth: geometry.size.width,
-            requiredWidth: boardContentWidth + (metrics.horizontalPadding * 2)
+            requiredWidth: contentWidth + (metrics.horizontalPadding * 2)
         )
-        let effectiveCardSize = CGSize(width: cardSize.width * boardScaleFactor, height: cardSize.height * boardScaleFactor)
-        let isBoardReady = hasLoadedGame && !isHydratingGame
-        let hintedTarget: DropTarget? = {
-            guard let destination = viewModel.hintedDestination else { return nil }
-            return dropTarget(for: destination)
-        }()
-        let openScoringDetails: () -> Void = { presentRulesAndScoring(initialSection: .scoring) }
 #if os(iOS)
-        let isPadLandscape = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
+        let centersContent = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
+#else
+        let centersContent = true
 #endif
+        return BoardPresentation(
+            metrics: metrics,
+            columnCount: columnCount,
+            contentWidth: contentWidth,
+            scale: scale,
+            effectiveCardSize: CGSize(width: cardSize.width * scale, height: cardSize.height * scale),
+            hintedTarget: viewModel.hintedDestination.map(dropTarget(for:)),
+            centersContent: centersContent
+        )
+    }
 
+    private func boardSurface(presentation: BoardPresentation) -> some View {
         ZStack {
             TableBackground()
-            if isBoardReady {
-                let boardLayout = VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        let headerMetrics = headerMetrics(at: context.date)
-                        headerView(
-                            elapsedSeconds: headerMetrics.elapsedSeconds,
-                            score: headerMetrics.score,
-                            boardContentWidth: boardContentWidth,
-                            onScoreTapped: openScoringDetails
-                        )
-                    }
-                    TopRowView(
-                        viewModel: viewModel,
-                        variant: viewModel.gameVariant,
-                        cardSize: cardSize,
-                        columnSpacing: metrics.columnSpacing,
-                        wasteFanSpacing: metrics.wasteFanSpacing,
-                        activeTarget: activeTarget,
-                        hintedTarget: hintedTarget,
-                        isStockHinted: viewModel.isStockHinted,
-                        isWasteHinted: viewModel.isWasteHinted,
-                        hintHighlightOpacity: hintHighlightOpacity,
-                        isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts,
-                        hiddenCardIDs: effectiveHiddenCardIDs,
-                        hintedCardIDs: viewModel.hintedCardIDs,
-                        hintWiggleToken: viewModel.hintWiggleToken,
-                        drawingCardIDs: drawingCardIDs,
-                        fanProgress: wasteFanProgress,
-                        dragGesture: dragGesture(for:)
-                    )
-                    .frame(width: boardContentWidth, alignment: .leading)
-                    TableauRowView(
-                        viewModel: viewModel,
-                        cardSize: cardSize,
-                        columnSpacing: metrics.columnSpacing,
-                        faceDownOffset: metrics.tableauFaceDownOffset,
-                        faceUpOffset: metrics.tableauFaceUpOffset,
-                        maxPileHeight: metrics.tableauMaxHeight,
-                        activeTarget: activeTarget,
-                        hintedTarget: hintedTarget,
-                        hintHighlightOpacity: hintHighlightOpacity,
-                        isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts,
-                        hiddenCardIDs: effectiveHiddenCardIDs,
-                        hintedCardIDs: viewModel.hintedCardIDs,
-                        hintWiggleToken: viewModel.hintWiggleToken,
-                        dragGesture: dragGesture(for:)
-                    )
-                    .frame(width: boardContentWidth, alignment: .leading)
-                    Spacer(minLength: 0)
-                }
-                .allowsHitTesting(!isWinCascadeAnimating)
-#if os(iOS)
-                .frame(
-                    maxWidth: .infinity,
-                    maxHeight: .infinity,
-                    alignment: isPadLandscape ? .top : .topLeading
-                )
-#else
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-#endif
-                .padding(.horizontal, metrics.horizontalPadding)
-                .padding(.vertical, metrics.verticalPadding)
-
-                boardLayout
-                    .scaleEffect(boardScaleFactor, anchor: .top)
-
+            if hasLoadedGame && !isHydratingGame {
+                boardLayout(presentation: presentation)
                 Button("Cancel Drag") {
                     handleEscape()
                 }
@@ -530,128 +463,227 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .coordinateSpace(name: "board")
+        .coordinateSpace(.named("board"))
         .sensoryFeedback(trigger: hapticFeedback.trigger) {
             hapticFeedback.feedbackForTrigger
         }
-        .onPreferenceChange(DropTargetFrameKey.self) { frames in
-            dropFrames = frames
-            refreshLoadedWinPresentationIfNeeded()
-        }
-        .onPreferenceChange(StockFrameKey.self) { frame in
-            stockFrame = frame
-        }
-        .onPreferenceChange(WasteFrameKey.self) { frame in
-            wasteFrame = frame
-        }
-        .onPreferenceChange(CardFrameKey.self) { frames in
-            if shouldUpdateCardFrames(with: frames) {
-                cardFrames = frames
-            }
-        }
-        .onAppear {
-            boardViewportSize = geometry.size
-            refreshLoadedWinPresentationIfNeeded()
-        }
-        .onChange(of: geometry.size) { _, newSize in
-            boardViewportSize = newSize
-            refreshLoadedWinPresentationIfNeeded()
-        }
-        .onChange(of: viewModel.isWin) { _, isWin in
-            guard !isHydratingGame else { return }
-            if isWin {
-                winCelebration.beginIfNeededForWin(
-                    foundations: viewModel.state.foundations,
-                    dropFrames: dropFrames,
-                    boardViewportSize: boardViewportSize
-                )
-            } else if winCelebration.phase != .idle {
-                winCelebration.reset(to: .idle)
-            }
-        }
-        .onChange(of: viewModel.state.waste.count) { _, newValue in
-            let stockCount = viewModel.state.stock.count
-            if newValue == 0 {
-                drawAnimationCards = []
-                drawingCardIDs = []
-                wasteFanProgress = [:]
-                previousWasteCount = 0
-                previousStockCount = stockCount
-                return
-            }
-            let addedCount = max(0, newValue - previousWasteCount)
-            let newCards = addedCount > 0 ? Array(viewModel.state.waste.suffix(addedCount)) : []
-            syncFanProgress(with: viewModel.state.waste, excluding: Set(newCards.map(\.id)))
-            if addedCount > 0, stockCount < previousStockCount {
-                // The overlay cards fan themselves while flipping; the real
-                // cards wait fully fanned underneath.
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    for card in newCards {
-                        wasteFanProgress[card.id] = 1
-                    }
-                }
-                startDrawAnimation(
-                    for: newCards,
-                    cardSize: effectiveCardSize,
-                    fanSpacing: metrics.wasteFanSpacing * boardScaleFactor
-                )
-            }
-            previousWasteCount = newValue
-            previousStockCount = stockCount
-        }
-        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: viewModel.state)
-        .animation(.easeInOut(duration: 0.12), value: activeTarget)
-        .overlay {
-            GeometryReader { _ in
-                ZStack {
-                    DrawOverlayView(
-                        cards: drawAnimationCards,
-                        cardSize: effectiveCardSize,
-                        isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts
-                    )
-                    .zIndex(50)
-                    UndoOverlayView(
-                        items: undoAnimationItems,
-                        progress: undoAnimationProgress
-                    )
-                    .zIndex(75)
-                    WinCascadeOverlayView(cards: winCelebration.cards)
-                        .zIndex(90)
-                    DragOverlayView(
-                        viewModel: viewModel,
-                        cardFrames: dragOverlayCardFrames,
-                        cardTilts: cardTilts,
-                        dragTranslation: dragTranslation,
-                        dragReturnOffset: dragReturnOffset,
-                        isReturningDrag: isReturningDrag,
-                        returningCards: returningCards,
-                        isDroppingCards: isDroppingCards,
-                        droppingCards: droppingSelection?.cards ?? [],
-                        dropAnimationOffset: dropAnimationOffset,
-                        overlayTilt: overlayTilt
-                    )
-                    .zIndex(100)
-                    if viewModel.isWin && winCelebration.phase != .idle {
-                        WinOverlay(score: viewModel.score) {
-                            startNewGameFromUI()
-                        }
-                        .zIndex(200)
-                        .transition(.opacity)
-                    }
-                }
-            }
-            .accessibilityHidden(true)
-        }
     }
 
-    private func headerMetrics(at date: Date) -> (elapsedSeconds: Int, score: Int) {
-        if viewModel.isClockAdvancing {
-            return (viewModel.elapsedActiveSeconds(at: date), viewModel.displayScore(at: date))
+    private func boardLayout(presentation: BoardPresentation) -> some View {
+        VStack(alignment: .leading, spacing: presentation.metrics.rowSpacing) {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let metrics = headerMetrics(at: context.date)
+                headerView(
+                    elapsedSeconds: metrics.elapsedSeconds,
+                    score: metrics.score,
+                    boardContentWidth: presentation.contentWidth,
+                    onScoreTapped: { presentRulesAndScoring(initialSection: .scoring) }
+                )
+            }
+            topRow(presentation: presentation)
+            tableauRow(presentation: presentation)
+            Spacer(minLength: 0)
         }
-        return (viewModel.elapsedActiveSeconds(), viewModel.displayScore())
+        .allowsHitTesting(!isWinCascadeAnimating)
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: presentation.centersContent ? .top : .topLeading
+        )
+        .padding(.horizontal, presentation.metrics.horizontalPadding)
+        .padding(.vertical, presentation.metrics.verticalPadding)
+        .scaleEffect(presentation.scale, anchor: .top)
+    }
+
+    private func topRow(presentation: BoardPresentation) -> some View {
+        TopRowView(
+            viewModel: viewModel,
+            variant: viewModel.gameVariant,
+            cardSize: presentation.metrics.cardSize,
+            columnSpacing: presentation.metrics.columnSpacing,
+            wasteFanSpacing: presentation.metrics.wasteFanSpacing,
+            activeTarget: activeTarget,
+            hintedTarget: presentation.hintedTarget,
+            isStockHinted: viewModel.isStockHinted,
+            isWasteHinted: viewModel.isWasteHinted,
+            hintHighlightOpacity: hintHighlightOpacity,
+            isCardTiltEnabled: isCardTiltEnabled,
+            cardTilts: $cardTilts,
+            hiddenCardIDs: effectiveHiddenCardIDs,
+            hintedCardIDs: viewModel.hintedCardIDs,
+            hintWiggleToken: viewModel.hintWiggleToken,
+            drawingCardIDs: drawingCardIDs,
+            fanProgress: wasteFanProgress,
+            dragGesture: dragGesture(for:)
+        )
+        .frame(width: presentation.contentWidth, alignment: .leading)
+    }
+
+    private func tableauRow(presentation: BoardPresentation) -> some View {
+        TableauRowView(
+            viewModel: viewModel,
+            cardSize: presentation.metrics.cardSize,
+            columnSpacing: presentation.metrics.columnSpacing,
+            faceDownOffset: presentation.metrics.tableauFaceDownOffset,
+            faceUpOffset: presentation.metrics.tableauFaceUpOffset,
+            maxPileHeight: presentation.metrics.tableauMaxHeight,
+            activeTarget: activeTarget,
+            hintedTarget: presentation.hintedTarget,
+            hintHighlightOpacity: hintHighlightOpacity,
+            isCardTiltEnabled: isCardTiltEnabled,
+            cardTilts: $cardTilts,
+            hiddenCardIDs: effectiveHiddenCardIDs,
+            hintedCardIDs: viewModel.hintedCardIDs,
+            hintWiggleToken: viewModel.hintWiggleToken,
+            dragGesture: dragGesture(for:)
+        )
+        .frame(width: presentation.contentWidth, alignment: .leading)
+    }
+
+    private func applyBoardPreferences<Content: View>(to view: Content) -> some View {
+        view
+            .onPreferenceChange(DropTargetFrameKey.self) { frames in
+                dropFrames = frames
+                refreshLoadedWinPresentationIfNeeded()
+            }
+            .onPreferenceChange(StockFrameKey.self) { frame in
+                stockFrame = frame
+            }
+            .onPreferenceChange(WasteFrameKey.self) { frame in
+                wasteFrame = frame
+            }
+            .onPreferenceChange(CardFrameKey.self) { frames in
+                if shouldUpdateCardFrames(with: frames) {
+                    cardFrames = frames
+                }
+            }
+    }
+
+    private func applyBoardGeometryObservers<Content: View>(
+        to view: Content,
+        geometry: GeometryProxy
+    ) -> some View {
+        view
+            .onAppear {
+                boardViewportSize = geometry.size
+                refreshLoadedWinPresentationIfNeeded()
+            }
+            .onChange(of: geometry.size) { _, newSize in
+                boardViewportSize = newSize
+                refreshLoadedWinPresentationIfNeeded()
+            }
+            .onChange(of: viewModel.isWin) { _, isWin in
+                guard !isHydratingGame else { return }
+                if isWin {
+                    winCelebration.beginIfNeededForWin(
+                        foundations: viewModel.state.foundations,
+                        dropFrames: dropFrames,
+                        boardViewportSize: boardViewportSize
+                    )
+                } else if winCelebration.phase != .idle {
+                    winCelebration.reset(to: .idle)
+                }
+            }
+    }
+
+    private func applyWasteObservers<Content: View>(
+        to view: Content,
+        presentation: BoardPresentation
+    ) -> some View {
+        view
+            .onChange(of: viewModel.state.waste.count) { _, newValue in
+                let stockCount = viewModel.state.stock.count
+                if newValue == 0 {
+                    drawAnimationCards = []
+                    drawingCardIDs = []
+                    wasteFanProgress = [:]
+                    previousWasteCount = 0
+                    previousStockCount = stockCount
+                    return
+                }
+                let addedCount = max(0, newValue - previousWasteCount)
+                let newCards = addedCount > 0 ? Array(viewModel.state.waste.suffix(addedCount)) : []
+                syncFanProgress(with: viewModel.state.waste, excluding: Set(newCards.map(\.id)))
+                if addedCount > 0, stockCount < previousStockCount {
+                    // The overlay cards fan themselves while flipping; the real
+                    // cards wait fully fanned underneath.
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        for card in newCards {
+                            wasteFanProgress[card.id] = 1
+                        }
+                    }
+                    startDrawAnimation(
+                        for: newCards,
+                        cardSize: presentation.effectiveCardSize,
+                        fanSpacing: presentation.metrics.wasteFanSpacing * presentation.scale
+                    )
+                }
+                previousWasteCount = newValue
+                previousStockCount = stockCount
+            }
+    }
+
+    private func applyBoardOverlays<Content: View>(
+        to view: Content,
+        presentation: BoardPresentation
+    ) -> some View {
+        view
+            .animation(.spring(response: 0.35, dampingFraction: 0.86), value: viewModel.state)
+            .animation(.easeInOut(duration: 0.12), value: activeTarget)
+            .overlay {
+                GeometryReader { _ in
+                    ZStack {
+                        DrawOverlayView(
+                            cards: drawAnimationCards,
+                            cardSize: presentation.effectiveCardSize,
+                            isCardTiltEnabled: isCardTiltEnabled,
+                            cardTilts: $cardTilts
+                        )
+                        .zIndex(50)
+                        UndoOverlayView(
+                            items: undoAnimationItems,
+                            progress: undoAnimationProgress
+                        )
+                        .zIndex(75)
+                        WinCascadeOverlayView(cards: winCelebration.cards)
+                            .zIndex(90)
+                        DragOverlayView(
+                            viewModel: viewModel,
+                            cardFrames: dragOverlayCardFrames,
+                            cardTilts: cardTilts,
+                            dragTranslation: dragTranslation,
+                            dragReturnOffset: dragReturnOffset,
+                            isReturningDrag: isReturningDrag,
+                            returningCards: returningCards,
+                            isDroppingCards: isDroppingCards,
+                            droppingCards: droppingSelection?.cards ?? [],
+                            dropAnimationOffset: dropAnimationOffset,
+                            overlayTilt: overlayTilt
+                        )
+                        .zIndex(100)
+                        if viewModel.isWin && winCelebration.phase != .idle {
+                            WinOverlay(score: viewModel.score) {
+                                startNewGameFromUI()
+                            }
+                            .zIndex(200)
+                            .transition(.opacity)
+                        }
+                    }
+                }
+                .accessibilityHidden(true)
+            }
+    }
+
+    private func headerMetrics(at date: Date) -> HeaderMetrics {
+        if viewModel.isClockAdvancing {
+            return HeaderMetrics(
+                elapsedSeconds: viewModel.elapsedActiveSeconds(at: date),
+                score: viewModel.displayScore(at: date)
+            )
+        }
+        return HeaderMetrics(elapsedSeconds: viewModel.elapsedActiveSeconds(), score: viewModel.displayScore())
     }
 
     private func presentRulesAndScoring(initialSection: RulesAndScoringView.Section = .rules) {
@@ -934,35 +966,34 @@ struct ContentView: View {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + dropDuration) {
-            // Clear old tilts so cards get fresh tilts at new position
-            if let cards = droppingSelection?.cards {
-                for card in cards {
-                    cardTilts.removeValue(forKey: card.id)
-                }
-            }
-
-            // Update game state without animation to prevent double-animation
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                if let dest = pendingDropDestination {
-                    viewModel.handleDrop(to: dest)
-                }
-                dragTranslation = .zero
-                dropAnimationOffset = .zero
-                isDroppingCards = false
-                droppingSelection = nil
-                pendingDropDestination = nil
-            }
-            wasteReturnAnchorCardID = nil
-            wasteReturnAnchorFrame = nil
-            if !isAutoFinishing {
-                DispatchQueue.main.async {
-                    viewModel.refreshAutoFinishAvailability()
-                }
-            }
-            processPendingAutoMoveIfPossible()
+            completeDropAnimation()
         }
+    }
+
+    private func completeDropAnimation() {
+        for card in droppingSelection?.cards ?? [] {
+            cardTilts.removeValue(forKey: card.id)
+        }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            if let destination = pendingDropDestination {
+                viewModel.handleDrop(to: destination)
+            }
+            dragTranslation = .zero
+            dropAnimationOffset = .zero
+            isDroppingCards = false
+            droppingSelection = nil
+            pendingDropDestination = nil
+        }
+        wasteReturnAnchorCardID = nil
+        wasteReturnAnchorFrame = nil
+        if !isAutoFinishing {
+            DispatchQueue.main.async {
+                viewModel.refreshAutoFinishAvailability()
+            }
+        }
+        processPendingAutoMoveIfPossible()
     }
 
     private func beginReturnAnimation() {
@@ -1091,7 +1122,7 @@ struct ContentView: View {
             return
         }
 
-        let (startingItems, targets, needsPostUndoFrames): ([UndoAnimationItem], [UUID: UndoAnimationEndTarget], Bool) = {
+        let plan: UndoAnimationCoordinator.Plan = {
             if let context = snapshot.undoContext {
                 return buildUndoAnimationPlan(
                     context: context,
@@ -1109,17 +1140,21 @@ struct ContentView: View {
             )
         }()
 
-        guard !startingItems.isEmpty else {
+        guard !plan.items.isEmpty else {
             viewModel.undo()
             return
         }
 
-        undoAnimationItems = startingItems
-        undoAnimationTargets = targets
+        startUndoAnimation(with: plan)
+    }
+
+    private func startUndoAnimation(with plan: UndoAnimationCoordinator.Plan) {
+        undoAnimationItems = plan.items
+        undoAnimationTargets = plan.targets
         undoAnimationProgress = 0
         isUndoAnimating = true
-        hiddenCardIDs = Set(startingItems.map(\.id))
-        if needsPostUndoFrames {
+        hiddenCardIDs = Set(plan.items.map(\.id))
+        if plan.needsPostUndoFrames {
             cardFrames = [:]
         }
 
@@ -1129,7 +1164,7 @@ struct ContentView: View {
             viewModel.undo()
         }
 
-        if needsPostUndoFrames {
+        if plan.needsPostUndoFrames {
             DispatchQueue.main.async {
                 resolveUndoAnimationTargets(attemptsRemaining: 24)
             }
@@ -1143,16 +1178,16 @@ struct ContentView: View {
         beforeCards: [UUID: Card],
         afterCards: [UUID: Card],
         startingFrames: [UUID: CGRect]
-    ) -> (items: [UndoAnimationItem], targets: [UUID: UndoAnimationEndTarget], needsPostUndoFrames: Bool) {
-        let plan = UndoAnimationCoordinator.buildPlan(
+    ) -> UndoAnimationCoordinator.Plan {
+        UndoAnimationCoordinator.buildPlan(
             context: context,
-            beforeCards: beforeCards,
-            afterCards: afterCards,
-            cardFrames: startingFrames,
-            stockFrame: stockFrame,
-            wasteFrame: wasteFrame
+            cards: UndoAnimationCoordinator.Cards(before: beforeCards, after: afterCards),
+            frames: UndoAnimationCoordinator.Frames(
+                cards: startingFrames,
+                stock: stockFrame,
+                waste: wasteFrame
+            )
         )
-        return (plan.items, plan.targets, plan.needsPostUndoFrames)
     }
 
     private func resolveUndoTargetFrame(_ target: UndoAnimationEndTarget) -> CGRect? {
@@ -1180,7 +1215,10 @@ struct ContentView: View {
 
     private func resolveUndoAnimationTargets(attemptsRemaining: Int) {
         let resolvedItems = undoAnimationItems.compactMap { item -> UndoAnimationItem? in
-            guard let target = undoAnimationTargets[item.id], let endFrame = resolveUndoTargetFrame(target) else { return nil }
+            guard let target = undoAnimationTargets[item.id],
+                  let endFrame = resolveUndoTargetFrame(target) else {
+                return nil
+            }
             return UndoAnimationItem(id: item.id, card: item.card, startFrame: item.startFrame, endFrame: endFrame)
         }
 
@@ -1274,7 +1312,7 @@ struct ContentView: View {
         beforeCards: [UUID: Card],
         afterCards: [UUID: Card],
         startingFrames: [UUID: CGRect]
-    ) -> (items: [UndoAnimationItem], targets: [UUID: UndoAnimationEndTarget], needsPostUndoFrames: Bool) {
+    ) -> UndoAnimationCoordinator.Plan {
         let beforeLocations = cardLocations(in: beforeState)
         let afterLocations = cardLocations(in: afterState)
         let ids = Set(beforeLocations.keys).union(afterLocations.keys).filter { id in
@@ -1317,7 +1355,11 @@ struct ContentView: View {
             return false
         }
 
-        return (items, targets, needsPostUndoFrames)
+        return UndoAnimationCoordinator.Plan(
+            items: items,
+            targets: targets,
+            needsPostUndoFrames: needsPostUndoFrames
+        )
     }
 
     private func shouldAnimateFallbackTransition(

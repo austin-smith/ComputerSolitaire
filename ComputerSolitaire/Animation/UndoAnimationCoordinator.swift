@@ -9,6 +9,21 @@ struct UndoAnimationItem: Identifiable {
 }
 
 enum UndoAnimationCoordinator {
+    struct Cards {
+        let before: [UUID: Card]
+        let after: [UUID: Card]
+
+        func card(for id: UUID, preferringAfter: Bool = false) -> Card? {
+            preferringAfter ? after[id] ?? before[id] : before[id] ?? after[id]
+        }
+    }
+
+    struct Frames {
+        let cards: [UUID: CGRect]
+        let stock: CGRect
+        let waste: CGRect
+    }
+
     struct Plan {
         let items: [UndoAnimationItem]
         let targets: [UUID: UndoAnimationEndTarget]
@@ -17,49 +32,69 @@ enum UndoAnimationCoordinator {
 
     static func buildPlan(
         context: UndoAnimationContext,
-        beforeCards: [UUID: Card],
-        afterCards: [UUID: Card],
-        cardFrames: [UUID: CGRect],
-        stockFrame: CGRect,
-        wasteFrame: CGRect
+        cards: Cards,
+        frames: Frames
     ) -> Plan {
-        var items: [UndoAnimationItem] = []
-        var targets: [UUID: UndoAnimationEndTarget] = [:]
-        let cardIDs = context.cardIDs
-
         switch context.action {
         case .moveSelection:
-            for id in cardIDs {
-                guard let card = beforeCards[id] ?? afterCards[id], let startFrame = cardFrames[id] else { continue }
-                items.append(UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame))
-                targets[id] = .card(id)
-            }
-            return Plan(items: items, targets: targets, needsPostUndoFrames: true)
+            return moveSelectionPlan(cardIDs: context.cardIDs, cards: cards, frames: frames)
 
         case .drawFromStock:
-            for (index, id) in cardIDs.enumerated() {
-                guard let card = beforeCards[id] ?? afterCards[id] else { continue }
-                guard let startFrame = cardFrames[id] ?? wasteAnchorFrame(for: index, totalCards: cardIDs.count, stockFrame: stockFrame, wasteFrame: wasteFrame) else {
-                    continue
-                }
-                items.append(UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame))
-                targets[id] = .stock(index)
-            }
-            return Plan(items: items, targets: targets, needsPostUndoFrames: false)
+            return drawFromStockPlan(cardIDs: context.cardIDs, cards: cards, frames: frames)
 
         case .recycleWaste:
-            for (index, id) in cardIDs.enumerated() {
-                guard let card = afterCards[id] ?? beforeCards[id], let startFrame = stockAnchorFrame(for: index, stockFrame: stockFrame) else {
-                    continue
-                }
-                items.append(UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame))
-                targets[id] = .card(id)
-            }
-            return Plan(items: items, targets: targets, needsPostUndoFrames: true)
+            return recycleWastePlan(cardIDs: context.cardIDs, cards: cards, frames: frames)
 
         case .flipTableauTop:
             return Plan(items: [], targets: [:], needsPostUndoFrames: false)
         }
+    }
+
+    private static func moveSelectionPlan(cardIDs: [UUID], cards: Cards, frames: Frames) -> Plan {
+        var items: [UndoAnimationItem] = []
+        var targets: [UUID: UndoAnimationEndTarget] = [:]
+        for id in cardIDs {
+            guard let card = cards.card(for: id), let startFrame = frames.cards[id] else { continue }
+            items.append(item(id: id, card: card, startFrame: startFrame))
+            targets[id] = .card(id)
+        }
+        return Plan(items: items, targets: targets, needsPostUndoFrames: true)
+    }
+
+    private static func drawFromStockPlan(cardIDs: [UUID], cards: Cards, frames: Frames) -> Plan {
+        var items: [UndoAnimationItem] = []
+        var targets: [UUID: UndoAnimationEndTarget] = [:]
+        for (index, id) in cardIDs.enumerated() {
+            guard let card = cards.card(for: id) else { continue }
+            let startFrame = frames.cards[id] ?? wasteAnchorFrame(
+                for: index,
+                totalCards: cardIDs.count,
+                stockFrame: frames.stock,
+                wasteFrame: frames.waste
+            )
+            guard let startFrame else { continue }
+            items.append(item(id: id, card: card, startFrame: startFrame))
+            targets[id] = .stock(index)
+        }
+        return Plan(items: items, targets: targets, needsPostUndoFrames: false)
+    }
+
+    private static func recycleWastePlan(cardIDs: [UUID], cards: Cards, frames: Frames) -> Plan {
+        var items: [UndoAnimationItem] = []
+        var targets: [UUID: UndoAnimationEndTarget] = [:]
+        for (index, id) in cardIDs.enumerated() {
+            guard let card = cards.card(for: id, preferringAfter: true),
+                  let startFrame = stockAnchorFrame(for: index, stockFrame: frames.stock) else {
+                continue
+            }
+            items.append(item(id: id, card: card, startFrame: startFrame))
+            targets[id] = .card(id)
+        }
+        return Plan(items: items, targets: targets, needsPostUndoFrames: true)
+    }
+
+    private static func item(id: UUID, card: Card, startFrame: CGRect) -> UndoAnimationItem {
+        UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame)
     }
 
     static func resolveTargetFrame(
@@ -85,9 +120,9 @@ enum UndoAnimationCoordinator {
 
     static func stockAnchorFrame(for index: Int, stockFrame: CGRect) -> CGRect? {
         guard stockFrame != .zero else { return nil }
-        let dx = CGFloat(index) * 0.8
-        let dy = CGFloat(index) * 0.5
-        return stockFrame.offsetBy(dx: dx, dy: dy)
+        let horizontalOffset = CGFloat(index) * 0.8
+        let verticalOffset = CGFloat(index) * 0.5
+        return stockFrame.offsetBy(dx: horizontalOffset, dy: verticalOffset)
     }
 
     static func wasteAnchorFrame(
@@ -101,7 +136,7 @@ enum UndoAnimationCoordinator {
         let baseHeight = stockFrame.height > 0 ? stockFrame.height : wasteFrame.height
         let fanSpacing = baseWidth * 0.25
         let rightBias = max(0, totalCards - 1 - index)
-        let x = wasteFrame.minX + CGFloat(rightBias) * fanSpacing
-        return CGRect(x: x, y: wasteFrame.minY, width: baseWidth, height: baseHeight)
+        let horizontalPosition = wasteFrame.minX + CGFloat(rightBias) * fanSpacing
+        return CGRect(x: horizontalPosition, y: wasteFrame.minY, width: baseWidth, height: baseHeight)
     }
 }

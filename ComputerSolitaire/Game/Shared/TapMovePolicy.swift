@@ -6,6 +6,11 @@ import Foundation
 /// never dead-ends while a legal move exists. Destination preference is deterministic:
 /// higher tier wins, then a larger resulting build, then the lowest pile index.
 enum TapMovePolicy {
+    struct Move {
+        let selection: Selection
+        let destination: Destination
+    }
+
     static func bestDestination(for selection: Selection, in state: GameState) -> Destination? {
         // Tapping a foundation card only selects it; pulling cards back off the
         // foundation is deliberate enough to require a drag.
@@ -14,11 +19,15 @@ enum TapMovePolicy {
         let destinations = AutoMoveAdvisor.legalDestinations(for: selection, in: state)
         guard !destinations.isEmpty else { return nil }
 
-        var best: (destination: Destination, priority: Priority)?
+        var best: RankedDestination?
         for destination in destinations {
             let priority = priority(of: destination, for: selection, in: state)
-            if best == nil || priority.isBetter(than: best!.priority) {
-                best = (destination, priority)
+            if let currentBest = best {
+                if priority.isBetter(than: currentBest.priority) {
+                    best = RankedDestination(destination: destination, priority: priority)
+                }
+            } else {
+                best = RankedDestination(destination: destination, priority: priority)
             }
         }
         return best?.destination
@@ -27,18 +36,22 @@ enum TapMovePolicy {
     /// The single best legal move across every pickable selection, using the same
     /// destination preferences as taps. Used as the hint of last resort when the
     /// FreeCell solver can't find a winning line.
-    static func bestMove(in state: GameState) -> (selection: Selection, destination: Destination)? {
-        var best: (selection: Selection, destination: Destination, priority: Priority)?
+    static func bestMove(in state: GameState) -> Move? {
+        var best: RankedMove?
         for selection in AutoMoveAdvisor.candidateSelections(in: state) {
             if case .foundation = selection.source { continue }
             for destination in AutoMoveAdvisor.legalDestinations(for: selection, in: state) {
                 let priority = priority(of: destination, for: selection, in: state)
-                if best == nil || priority.isBetter(than: best!.priority) {
-                    best = (selection, destination, priority)
+                if let currentBest = best {
+                    if priority.isBetter(than: currentBest.priority) {
+                        best = RankedMove(selection: selection, destination: destination, priority: priority)
+                    }
+                } else {
+                    best = RankedMove(selection: selection, destination: destination, priority: priority)
                 }
             }
         }
-        return best.map { ($0.selection, $0.destination) }
+        return best.map { Move(selection: $0.selection, destination: $0.destination) }
     }
 
     /// A card is safe to send to the foundation when doing so can never cost the game:
@@ -68,6 +81,17 @@ enum TapMovePolicy {
 }
 
 private extension TapMovePolicy {
+    struct RankedDestination {
+        let destination: Destination
+        let priority: Priority
+    }
+
+    struct RankedMove {
+        let selection: Selection
+        let destination: Destination
+        let priority: Priority
+    }
+
     struct Priority {
         let tier: Int
         let buildLength: Int

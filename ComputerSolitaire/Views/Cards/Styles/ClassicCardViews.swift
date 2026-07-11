@@ -69,6 +69,7 @@ struct ClassicCardFrontView: View {
             Spacer(minLength: 0)
             Image(systemName: card.suit.symbolName)
                 .font(.system(size: cardSize.width * 0.2, weight: .semibold))
+                .accessibilityHidden(true)
         }
 
         ZStack {
@@ -114,6 +115,7 @@ struct ClassicCardFrontView: View {
                 .foregroundStyle(inkColor.opacity(0.12))
                 .rotationEffect(.degrees(8))
                 .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.center)
+                .accessibilityHidden(true)
         }
     }
 }
@@ -203,22 +205,22 @@ private struct ClassicCardBackPattern: View {
                     .stroke(Color.white.opacity(0.18), lineWidth: 1)
                 Path { path in
                     let step: CGFloat = 10
-                    var x: CGFloat = 0
-                    while x < size.width {
-                        path.move(to: CGPoint(x: x, y: 0))
-                        path.addLine(to: CGPoint(x: x, y: size.height))
-                        x += step
+                    var horizontalPosition: CGFloat = 0
+                    while horizontalPosition < size.width {
+                        path.move(to: CGPoint(x: horizontalPosition, y: 0))
+                        path.addLine(to: CGPoint(x: horizontalPosition, y: size.height))
+                        horizontalPosition += step
                     }
                 }
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
 
                 Path { path in
                     let step: CGFloat = 10
-                    var y: CGFloat = 0
-                    while y < size.height {
-                        path.move(to: CGPoint(x: 0, y: y))
-                        path.addLine(to: CGPoint(x: size.width, y: y))
-                        y += step
+                    var verticalPosition: CGFloat = 0
+                    while verticalPosition < size.height {
+                        path.move(to: CGPoint(x: 0, y: verticalPosition))
+                        path.addLine(to: CGPoint(x: size.width, y: verticalPosition))
+                        verticalPosition += step
                     }
                 }
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)

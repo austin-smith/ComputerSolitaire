@@ -1,0 +1,26 @@
+included:
+  - ComputerSolitaire
+  - ComputerSolitaireTests
+  - ComputerSolitaireUITests
+
+file_length:
+  warning: 800
+  error: 1000
+
+# Files temporarily exempt from file_length only:
+# - ComputerSolitaire/Views/Shared/ContentView.swift
+# - ComputerSolitaire/Views/Cards/Styles/PixelCardViews.swift
+
+disabled_rules:
+  - todo
+
+opt_in_rules:
+  - accessibility_label_for_image
+  - accessibility_trait_for_button
+  - async_without_await
+  - balanced_xctest_lifecycle
+  - discarded_notification_center_observer
+  - force_unwrapping
+  - unhandled_throwing_task
+
+reporter: xcode

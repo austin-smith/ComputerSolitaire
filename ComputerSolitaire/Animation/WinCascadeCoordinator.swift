@@ -77,10 +77,10 @@ enum WinCascadeCoordinator {
         guard !states.isEmpty else { return }
         guard boardBounds.width > 0, boardBounds.height > 0 else { return }
 
-        let dt = CGFloat(max(1.0 / 120.0, min(1.0 / 30.0, deltaTime)))
+        let timeStep = CGFloat(max(1.0 / 120.0, min(1.0 / 30.0, deltaTime)))
 
         for index in states.indices {
-            states[index].elapsed += TimeInterval(dt)
+            states[index].elapsed += TimeInterval(timeStep)
             if states[index].elapsed < states[index].activationDelay {
                 continue
             }
@@ -88,49 +88,8 @@ enum WinCascadeCoordinator {
                 continue
             }
 
-            var item = states[index]
-
-            item.velocity.dy += gravity * dt
-            item.position.x += item.velocity.dx * dt
-            item.position.y += item.velocity.dy * dt
-            item.rotationDegrees += item.angularVelocityDegreesPerSecond * Double(dt)
-
-            let halfWidth = item.size.width * 0.5
-            let halfHeight = item.size.height * 0.5
-            var bounced = false
-
-            if item.position.x - halfWidth < boardBounds.minX {
-                item.position.x = boardBounds.minX + halfWidth
-                item.velocity.dx = abs(item.velocity.dx) * sideBounceDamping
-                bounced = true
-            }
-            if item.position.x + halfWidth > boardBounds.maxX {
-                item.position.x = boardBounds.maxX - halfWidth
-                item.velocity.dx = -abs(item.velocity.dx) * sideBounceDamping
-                bounced = true
-            }
-            if item.position.y - halfHeight < boardBounds.minY {
-                item.position.y = boardBounds.minY + halfHeight
-                item.velocity.dy = abs(item.velocity.dy) * topBounceDamping
-                bounced = true
-            }
-            if item.position.y + halfHeight > boardBounds.maxY {
-                item.position.y = boardBounds.maxY - halfHeight
-                let reboundSpeed = abs(item.velocity.dy) * floorBounceDamping
-                if reboundSpeed < floorSettleVerticalSpeed {
-                    // Snap low-energy impacts to a settle state to avoid endless micro-bouncing.
-                    item.velocity.dy = 0
-                    item.velocity.dx = 0
-                    item.angularVelocityDegreesPerSecond = 0
-                    item.isSettled = true
-                } else {
-                    item.velocity.dy = -reboundSpeed
-                    item.velocity.dx *= floorHorizontalFriction
-                }
-                bounced = true
-            }
-
-            if bounced {
+            var item = advanced(states[index], timeStep: timeStep)
+            if resolveBoundaryCollisions(for: &item, in: boardBounds) {
                 item.bounceCount += 1
                 item.angularVelocityDegreesPerSecond *= angularVelocityDampingOnBounce
             }
@@ -138,10 +97,68 @@ enum WinCascadeCoordinator {
             states[index] = item
         }
 
+        settleExpiredStates(&states, in: boardBounds)
+    }
+
+    private static func advanced(_ state: WinCascadeCardState, timeStep: CGFloat) -> WinCascadeCardState {
+        var result = state
+        result.velocity.dy += gravity * timeStep
+        result.position.x += result.velocity.dx * timeStep
+        result.position.y += result.velocity.dy * timeStep
+        result.rotationDegrees += result.angularVelocityDegreesPerSecond * Double(timeStep)
+        return result
+    }
+
+    private static func resolveBoundaryCollisions(
+        for item: inout WinCascadeCardState,
+        in bounds: CGRect
+    ) -> Bool {
+        let halfWidth = item.size.width * 0.5
+        let halfHeight = item.size.height * 0.5
+        var bounced = false
+        if item.position.x - halfWidth < bounds.minX {
+            item.position.x = bounds.minX + halfWidth
+            item.velocity.dx = abs(item.velocity.dx) * sideBounceDamping
+            bounced = true
+        }
+        if item.position.x + halfWidth > bounds.maxX {
+            item.position.x = bounds.maxX - halfWidth
+            item.velocity.dx = -abs(item.velocity.dx) * sideBounceDamping
+            bounced = true
+        }
+        if item.position.y - halfHeight < bounds.minY {
+            item.position.y = bounds.minY + halfHeight
+            item.velocity.dy = abs(item.velocity.dy) * topBounceDamping
+            bounced = true
+        }
+        if item.position.y + halfHeight > bounds.maxY {
+            resolveFloorCollision(for: &item, floor: bounds.maxY - halfHeight)
+            bounced = true
+        }
+        return bounced
+    }
+
+    private static func resolveFloorCollision(for item: inout WinCascadeCardState, floor: CGFloat) {
+        item.position.y = floor
+        let reboundSpeed = abs(item.velocity.dy) * floorBounceDamping
+        if reboundSpeed < floorSettleVerticalSpeed {
+            item.velocity = .zero
+            item.angularVelocityDegreesPerSecond = 0
+            item.isSettled = true
+        } else {
+            item.velocity.dy = -reboundSpeed
+            item.velocity.dx *= floorHorizontalFriction
+        }
+    }
+
+    private static func settleExpiredStates(
+        _ states: inout [WinCascadeCardState],
+        in bounds: CGRect
+    ) {
         for index in states.indices where !states[index].isSettled {
             let activeAge = max(0, states[index].elapsed - states[index].activationDelay)
             guard activeAge > maxActiveLifetime else { continue }
-            states[index].position.y = boardBounds.maxY - states[index].size.height * 0.5
+            states[index].position.y = bounds.maxY - states[index].size.height * 0.5
             states[index].velocity = .zero
             states[index].angularVelocityDegreesPerSecond = 0
             states[index].isSettled = true

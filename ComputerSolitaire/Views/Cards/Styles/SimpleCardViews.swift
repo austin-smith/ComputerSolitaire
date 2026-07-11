@@ -11,22 +11,23 @@ enum SimpleCardStyle {
 /// Royal artwork anchored to the bottom-right corner of the face, replacing
 /// the center suit glyph. Cards without art keep the plain glyph face.
 private enum SimpleCardArt {
+    private static let imageNames: [Rank: [Suit: String]] = [
+        .queen: [
+            .hearts: "Simple/QueenOfHearts", .clubs: "Simple/QueenOfClubs",
+            .spades: "Simple/QueenOfSpades", .diamonds: "Simple/QueenOfDiamonds"
+        ],
+        .jack: [
+            .hearts: "Simple/JackOfHearts", .clubs: "Simple/JackOfClubs",
+            .spades: "Simple/JackOfSpades", .diamonds: "Simple/JackOfDiamonds"
+        ],
+        .king: [
+            .hearts: "Simple/KingOfHearts", .clubs: "Simple/KingOfClubs",
+            .spades: "Simple/KingOfSpades", .diamonds: "Simple/KingOfDiamonds"
+        ]
+    ]
+
     static func imageName(for card: Card) -> String? {
-        switch (card.rank, card.suit) {
-        case (.queen, .hearts): "Simple/QueenOfHearts"
-        case (.queen, .clubs): "Simple/QueenOfClubs"
-        case (.queen, .spades): "Simple/QueenOfSpades"
-        case (.queen, .diamonds): "Simple/QueenOfDiamonds"
-        case (.jack, .hearts): "Simple/JackOfHearts"
-        case (.jack, .clubs): "Simple/JackOfClubs"
-        case (.jack, .spades): "Simple/JackOfSpades"
-        case (.jack, .diamonds): "Simple/JackOfDiamonds"
-        case (.king, .hearts): "Simple/KingOfHearts"
-        case (.king, .clubs): "Simple/KingOfClubs"
-        case (.king, .spades): "Simple/KingOfSpades"
-        case (.king, .diamonds): "Simple/KingOfDiamonds"
-        default: nil
-        }
+        imageNames[card.rank]?[card.suit]
     }
 }
 
@@ -91,7 +92,8 @@ struct SimpleCardFrontView: View {
             }
             .foregroundStyle(inkColor)
             .padding(cardSize.width * 0.08)
-            .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.top)
+                .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.top)
+                .accessibilityHidden(true)
 
             if let artName = SimpleCardArt.imageName(for: card) {
                 // Royal figure planted in the bottom-right corner, dress and
@@ -108,6 +110,7 @@ struct SimpleCardFrontView: View {
                             y: cardSize.width * (isJack ? 0.36 : 0.32))
                     .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.bottomTrailing)
                     .clipShape(RoundedRectangle(cornerRadius: chrome.cornerRadius, style: .continuous))
+                    .accessibilityHidden(true)
             } else {
                 // Optically centered in the region below the top marks, not
                 // the full card, so the face doesn't read bottom-heavy.
@@ -116,6 +119,7 @@ struct SimpleCardFrontView: View {
                     .foregroundStyle(inkColor)
                     .offset(y: cardSize.width * 0.14)
                     .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.center)
+                    .accessibilityHidden(true)
             }
         }
     }

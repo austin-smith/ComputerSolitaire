@@ -28,77 +28,135 @@ enum KlondikePlanner {
         limits: Limits = Limits()
     ) -> HintAdvisor.Hint? {
         guard state.variant == .klondike else { return nil }
-
         let rootScore = score(state)
-        var nodes: [Node] = [Node(state: state, parent: -1, action: nil, depth: 0, score: rootScore)]
-        var visited: Set<UInt64> = [stateHash(state)]
-        var heap = Heap()
-        heap.push(HeapEntry(priority: rootScore, order: 0, index: 0))
-        var order = 0
-        var expansions = 0
-        var best: (index: Int, score: Int, depth: Int)?
-
-        while let entry = heap.pop() {
-            let nodeIndex = entry.index
-            let node = nodes[nodeIndex]
-
-            if node.score > rootScore {
-                if best == nil
-                    || node.score > best!.score
-                    || (node.score == best!.score && node.depth < best!.depth) {
-                    best = (nodeIndex, node.score, node.depth)
-                }
-                if isWon(node.state) { break }
-            }
-
-            guard node.depth < limits.maxDepth else { continue }
-            expansions += 1
-            if nodes.count >= limits.maxNodes { break }
-            if expansions % 64 == 0, let deadline = limits.deadline, Date() > deadline {
-                break
-            }
-            // A line that reveals a card or banks a foundation card is a solid hint;
-            // once one is in hand, cap how long we keep hunting for something better.
-            if let best, best.score - rootScore >= 20, expansions >= 768 {
-                break
-            }
-
-            for action in actions(from: node.state, stockDrawCount: stockDrawCount) {
-                guard let nextState = apply(action, to: node.state, stockDrawCount: stockDrawCount) else {
-                    continue
-                }
-                guard visited.insert(stateHash(nextState)).inserted else { continue }
-
-                let nextScore = score(nextState)
-                nodes.append(
-                    Node(
-                        state: nextState,
-                        parent: nodeIndex,
-                        action: action,
-                        depth: node.depth + 1,
-                        score: nextScore
-                    )
-                )
-                order += 1
-                // Best-first on score, shallow bias so equal outcomes prefer short lines.
-                heap.push(
-                    HeapEntry(
-                        priority: nextScore * 4 - (node.depth + 1),
-                        order: order,
-                        index: nodes.count - 1
-                    )
-                )
-            }
-        }
-
-        guard let best else { return nil }
-        return firstAction(leadingTo: best.index, nodes: nodes)
+        let result = search(
+            from: state,
+            stockDrawCount: stockDrawCount,
+            rootScore: rootScore,
+            limits: limits
+        )
+        guard let best = result.best else { return nil }
+        return firstAction(leadingTo: best.index, nodes: result.nodes)
     }
 }
 
 // MARK: - Search internals
 
 private extension KlondikePlanner {
+    struct BestNode {
+        let index: Int
+        let score: Int
+        let depth: Int
+
+        func isBetter(than other: BestNode?) -> Bool {
+            guard let other else { return true }
+            return score > other.score || (score == other.score && depth < other.depth)
+        }
+    }
+
+    struct SearchResult {
+        let nodes: [Node]
+        let best: BestNode?
+    }
+
+    struct SearchStorage {
+        var nodes: [Node]
+        var visited: Set<UInt64>
+        var heap: Heap
+        var order: Int
+    }
+
+    static func search(
+        from state: GameState,
+        stockDrawCount: Int,
+        rootScore: Int,
+        limits: Limits
+    ) -> SearchResult {
+        let rootNode = Node(state: state, parent: -1, action: nil, depth: 0, score: rootScore)
+        var heap = Heap()
+        heap.push(HeapEntry(priority: rootScore, order: 0, index: 0))
+        var storage = SearchStorage(
+            nodes: [rootNode],
+            visited: [stateHash(state)],
+            heap: heap,
+            order: 0
+        )
+        var expansions = 0
+        var best: BestNode?
+
+        while let entry = storage.heap.pop() {
+            let nodeIndex = entry.index
+            let node = storage.nodes[nodeIndex]
+
+            if node.score > rootScore {
+                let candidate = BestNode(index: nodeIndex, score: node.score, depth: node.depth)
+                if candidate.isBetter(than: best) {
+                    best = candidate
+                }
+                if isWon(node.state) { break }
+            }
+
+            guard node.depth < limits.maxDepth else { continue }
+            expansions += 1
+            if shouldStop(
+                nodeCount: storage.nodes.count,
+                expansions: expansions,
+                best: best,
+                rootScore: rootScore,
+                limits: limits
+            ) { break }
+            appendChildren(
+                of: node,
+                nodeIndex: nodeIndex,
+                stockDrawCount: stockDrawCount,
+                storage: &storage
+            )
+        }
+        return SearchResult(nodes: storage.nodes, best: best)
+    }
+
+    static func shouldStop(
+        nodeCount: Int,
+        expansions: Int,
+        best: BestNode?,
+        rootScore: Int,
+        limits: Limits
+    ) -> Bool {
+        if nodeCount >= limits.maxNodes { return true }
+        if expansions % 64 == 0, let deadline = limits.deadline, Date() > deadline { return true }
+        return best.map { $0.score - rootScore >= 20 && expansions >= 768 } ?? false
+    }
+
+    static func appendChildren(
+        of node: Node,
+        nodeIndex: Int,
+        stockDrawCount: Int,
+        storage: inout SearchStorage
+    ) {
+        for action in actions(from: node.state, stockDrawCount: stockDrawCount) {
+            guard let nextState = apply(action, to: node.state, stockDrawCount: stockDrawCount),
+                  storage.visited.insert(stateHash(nextState)).inserted else { continue }
+            let nextScore = score(nextState)
+            storage.nodes.append(
+                Node(
+                    state: nextState,
+                    parent: nodeIndex,
+                    action: action,
+                    depth: node.depth + 1,
+                    score: nextScore
+                )
+            )
+            storage.order += 1
+            storage.heap.push(
+                HeapEntry(
+                    priority: nextScore * 4 - (node.depth + 1),
+                    order: storage.order,
+                    index: storage.nodes.count - 1
+                )
+            )
+        }
+    }
+
     enum Action {
         case move(Selection, Destination)
         case stockTap
@@ -201,39 +259,45 @@ private extension KlondikePlanner {
         switch action {
         case .move(let selection, let destination):
             var nextState = state
-            switch selection.source {
-            case .waste:
-                _ = nextState.waste.popLast()
-                if stockDrawCount == DrawMode.one.rawValue {
-                    nextState.wasteDrawCount = min(1, nextState.waste.count)
-                } else {
-                    nextState.wasteDrawCount = max(0, nextState.wasteDrawCount - 1)
-                }
-            case .freeCell(let slot):
-                nextState.freeCells[slot] = nil
-            case .foundation(let pile):
-                _ = nextState.foundations[pile].popLast()
-            case .tableau(let pile, let index):
-                nextState.tableau[pile].removeSubrange(index..<nextState.tableau[pile].count)
-                if let topIndex = nextState.tableau[pile].indices.last,
-                   !nextState.tableau[pile][topIndex].isFaceUp {
-                    nextState.tableau[pile][topIndex].isFaceUp = true
-                }
-            }
-            switch destination {
-            case .foundation(let index):
-                guard selection.cards.count == 1, let card = selection.cards.first else { return nil }
-                nextState.foundations[index].append(card)
-            case .tableau(let index):
-                nextState.tableau[index].append(contentsOf: selection.cards)
-            case .freeCell(let index):
-                guard selection.cards.count == 1, let card = selection.cards.first else { return nil }
-                nextState.freeCells[index] = card
-            }
+            remove(selection, from: &nextState, stockDrawCount: stockDrawCount)
+            guard append(selection.cards, to: destination, in: &nextState) else { return nil }
             return nextState
         case .stockTap:
             return stockTapState(from: state, stockDrawCount: stockDrawCount)
         }
+    }
+
+    static func remove(_ selection: Selection, from state: inout GameState, stockDrawCount: Int) {
+        switch selection.source {
+        case .waste:
+            _ = state.waste.popLast()
+            state.wasteDrawCount = stockDrawCount == DrawMode.one.rawValue
+                ? min(1, state.waste.count)
+                : max(0, state.wasteDrawCount - 1)
+        case .freeCell(let slot):
+            state.freeCells[slot] = nil
+        case .foundation(let pile):
+            _ = state.foundations[pile].popLast()
+        case .tableau(let pile, let index):
+            state.tableau[pile].removeSubrange(index..<state.tableau[pile].count)
+            if let topIndex = state.tableau[pile].indices.last, !state.tableau[pile][topIndex].isFaceUp {
+                state.tableau[pile][topIndex].isFaceUp = true
+            }
+        }
+    }
+
+    static func append(_ cards: [Card], to destination: Destination, in state: inout GameState) -> Bool {
+        switch destination {
+        case .foundation(let index):
+            guard cards.count == 1, let card = cards.first else { return false }
+            state.foundations[index].append(card)
+        case .tableau(let index):
+            state.tableau[index].append(contentsOf: cards)
+        case .freeCell(let index):
+            guard cards.count == 1, let card = cards.first else { return false }
+            state.freeCells[index] = card
+        }
+        return true
     }
 
     /// Mirrors drawFromStock / recycleWaste in the session.

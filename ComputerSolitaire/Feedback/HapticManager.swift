@@ -19,7 +19,9 @@ final class HapticManager {
     private(set) var trigger: UInt64 = 0
     private var lastEvent: Event?
 
-    private init() {}
+    private init() {
+        // Shared instance only.
+    }
 
     func play(_ event: Event) {
 #if os(iOS)

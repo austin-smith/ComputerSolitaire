@@ -31,7 +31,8 @@ func snapshot(_ name: String, waitForLoadingIndicator: Bool) {
 
 /// - Parameters:
 ///   - name: The name of the snapshot
-///   - timeout: Amount of seconds to wait until the network loading indicator disappears. Pass `0` if you don't want to wait.
+///   - timeout: Seconds to wait for the network loading indicator to disappear.
+///     Pass `0` to skip waiting.
 @MainActor
 func snapshot(_ name: String, timeWaitingForIdle timeout: TimeInterval = 20) {
     Snapshot.snapshot(name, timeWaitingForIdle: timeout)
@@ -132,7 +133,11 @@ open class Snapshot: NSObject {
         do {
             let launchArguments = try String(contentsOf: path, encoding: String.Encoding.utf8)
             let regex = try NSRegularExpression(pattern: "(\\\".+?\\\"|\\S+)", options: [])
-            let matches = regex.matches(in: launchArguments, options: [], range: NSRange(location: 0, length: launchArguments.count))
+            let matches = regex.matches(
+                in: launchArguments,
+                options: [],
+                range: NSRange(location: 0, length: launchArguments.count)
+            )
             let results = matches.map { result -> String in
                 (launchArguments as NSString).substring(with: result.range)
             }
@@ -147,7 +152,8 @@ open class Snapshot: NSObject {
             waitForLoadingIndicatorToDisappear(within: timeout)
         }
 
-        NSLog("snapshot: \(name)") // more information about this, check out https://docs.fastlane.tools/actions/snapshot/#how-does-it-work
+        // More information: https://docs.fastlane.tools/actions/snapshot/#how-does-it-work
+        NSLog("snapshot: \(name)")
 
         if Snapshot.waitForAnimations {
             sleep(1) // Waiting for the animation to be finished (kind of)
@@ -170,15 +176,20 @@ open class Snapshot: NSObject {
 
             let screenshot = XCUIScreen.main.screenshot()
             #if os(iOS) && !targetEnvironment(macCatalyst)
-            let image = XCUIDevice.shared.orientation.isLandscape ?  fixLandscapeOrientation(image: screenshot.image) : screenshot.image
+            let image = XCUIDevice.shared.orientation.isLandscape
+                ? fixLandscapeOrientation(image: screenshot.image)
+                : screenshot.image
             #else
             let image = screenshot.image
             #endif
 
-            guard var simulator = ProcessInfo().environment["SIMULATOR_DEVICE_NAME"], let screenshotsDir = screenshotsDirectory else { return }
+            guard var simulator = ProcessInfo().environment["SIMULATOR_DEVICE_NAME"],
+                  let screenshotsDir = screenshotsDirectory else {
+                return
+            }
 
             do {
-                // The simulator name contains "Clone X of " inside the screenshot file when running parallelized UI Tests on concurrent devices
+                // Parallel UI tests prefix cloned simulator names with "Clone X of ".
                 let regex = try NSRegularExpression(pattern: "Clone [0-9]+ of ")
                 let range = NSRange(location: 0, length: simulator.count)
                 simulator = regex.stringByReplacingMatches(in: simulator, range: range, withTemplate: "")
@@ -207,7 +218,7 @@ open class Snapshot: NSObject {
                 let format = UIGraphicsImageRendererFormat()
                 format.scale = image.scale
                 let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
-                return renderer.image { context in
+                return renderer.image { _ in
                     image.draw(in: CGRect(x: 0, y: 0, width: image.size.width, height: image.size.height))
                 }
             } else {
@@ -228,7 +239,10 @@ open class Snapshot: NSObject {
         }
 
         let networkLoadingIndicator = app.otherElements.deviceStatusBars.networkLoadingIndicators.element
-        let networkLoadingIndicatorDisappeared = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: networkLoadingIndicator)
+        let networkLoadingIndicatorDisappeared = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"),
+            object: networkLoadingIndicator
+        )
         _ = XCTWaiter.wait(for: [networkLoadingIndicatorDisappeared], timeout: timeout)
     }
 
@@ -256,7 +270,8 @@ private extension XCUIElementAttributes {
         if hasAllowListedIdentifier { return false }
 
         let hasOldLoadingIndicatorSize = frame.size == CGSize(width: 10, height: 20)
-        let hasNewLoadingIndicatorSize = frame.size.width.isBetween(46, and: 47) && frame.size.height.isBetween(2, and: 3)
+        let hasNewLoadingIndicatorSize = frame.size.width.isBetween(46, and: 47) &&
+            frame.size.height.isBetween(2, and: 3)
 
         return hasOldLoadingIndicatorSize || hasNewLoadingIndicatorSize
     }

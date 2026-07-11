@@ -108,13 +108,13 @@ final class KlondikePlannerTests: XCTestCase {
     private func stockTap(_ state: GameState, drawCount: Int) -> GameState? {
         var next = state
         if !next.stock.isEmpty {
-            let n = min(drawCount, next.stock.count)
-            for _ in 0..<n {
+            let cardsToDraw = min(drawCount, next.stock.count)
+            for _ in 0..<cardsToDraw {
                 var card = next.stock.removeLast()
                 card.isFaceUp = true
                 next.waste.append(card)
             }
-            next.wasteDrawCount = n
+            next.wasteDrawCount = cardsToDraw
             return next
         }
         guard !next.waste.isEmpty else { return nil }

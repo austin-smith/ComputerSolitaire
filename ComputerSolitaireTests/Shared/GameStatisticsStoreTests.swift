@@ -6,7 +6,7 @@ final class GameStatisticsStoreTests: XCTestCase {
     func testRecordCompletedGameUpdatesBestTimeAndHighScoreByDrawMode() {
         var stats = GameStatistics()
 
-        stats.recordCompletedGame(
+        stats.recordCompletedGame(CompletedGame(
             didWin: true,
             elapsedSeconds: 200,
             finalScore: 300,
@@ -14,8 +14,8 @@ final class GameStatisticsStoreTests: XCTestCase {
             hintsUsedInGame: 0,
             undosUsedInGame: 0,
             usedRedealInGame: false
-        )
-        stats.recordCompletedGame(
+        ))
+        stats.recordCompletedGame(CompletedGame(
             didWin: true,
             elapsedSeconds: 150,
             finalScore: 250,
@@ -23,7 +23,7 @@ final class GameStatisticsStoreTests: XCTestCase {
             hintsUsedInGame: 1,
             undosUsedInGame: 0,
             usedRedealInGame: false
-        )
+        ))
 
         XCTAssertEqual(stats.gamesPlayed, 2)
         XCTAssertEqual(stats.gamesWon, 2)
@@ -41,7 +41,7 @@ final class GameStatisticsStoreTests: XCTestCase {
             cleanWins: Int.max
         )
 
-        stats.recordCompletedGame(
+        stats.recordCompletedGame(CompletedGame(
             didWin: true,
             elapsedSeconds: Int.max,
             finalScore: 100,
@@ -49,7 +49,7 @@ final class GameStatisticsStoreTests: XCTestCase {
             hintsUsedInGame: 0,
             undosUsedInGame: 0,
             usedRedealInGame: false
-        )
+        ))
 
         XCTAssertEqual(stats.gamesPlayed, Int.max)
         XCTAssertEqual(stats.gamesWon, Int.max)
@@ -93,7 +93,7 @@ final class GameStatisticsStoreTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
 
         GameStatisticsStore.update(for: .klondike, userDefaults: defaults) { stats in
-            stats.recordCompletedGame(
+            stats.recordCompletedGame(CompletedGame(
                 didWin: true,
                 elapsedSeconds: 123,
                 finalScore: 456,
@@ -101,7 +101,7 @@ final class GameStatisticsStoreTests: XCTestCase {
                 hintsUsedInGame: 0,
                 undosUsedInGame: 0,
                 usedRedealInGame: false
-            )
+            ))
         }
 
         let loaded = GameStatisticsStore.load(for: .klondike, userDefaults: defaults)
@@ -115,7 +115,7 @@ final class GameStatisticsStoreTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
 
         GameStatisticsStore.update(for: .klondike, userDefaults: defaults) { stats in
-            stats.recordCompletedGame(
+            stats.recordCompletedGame(CompletedGame(
                 didWin: true,
                 elapsedSeconds: 100,
                 finalScore: 200,
@@ -123,7 +123,7 @@ final class GameStatisticsStoreTests: XCTestCase {
                 hintsUsedInGame: 0,
                 undosUsedInGame: 0,
                 usedRedealInGame: false
-            )
+            ))
         }
 
         let klondikeStats = GameStatisticsStore.load(for: .klondike, userDefaults: defaults)
@@ -194,7 +194,9 @@ final class GameStatisticsStoreTests: XCTestCase {
     private let defaultsSuiteName = "ComputerSolitaire.GameStatisticsStoreTests"
 
     private func makeIsolatedDefaults() -> UserDefaults {
-        let defaults = UserDefaults(suiteName: defaultsSuiteName)!
+        guard let defaults = UserDefaults(suiteName: defaultsSuiteName) else {
+            preconditionFailure("Unable to create isolated user defaults")
+        }
         defaults.removePersistentDomain(forName: defaultsSuiteName)
         return defaults
     }

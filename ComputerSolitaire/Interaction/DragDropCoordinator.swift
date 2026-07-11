@@ -15,9 +15,10 @@ enum DragDropCoordinator {
             guard geometry.hitFrame.contains(location) else { continue }
 
             let candidateCanDrop = canDrop(target)
-            let dx = geometry.snapFrame.midX - location.x
-            let dy = geometry.snapFrame.midY - location.y
-            let candidateDistanceSquared = dx * dx + dy * dy
+            let horizontalDistance = geometry.snapFrame.midX - location.x
+            let verticalDistance = geometry.snapFrame.midY - location.y
+            let candidateDistanceSquared = horizontalDistance * horizontalDistance
+                + verticalDistance * verticalDistance
             let candidateSortKey = dropTargetSortKey(target)
 
             let shouldReplaceBest: Bool

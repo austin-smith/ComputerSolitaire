@@ -51,14 +51,39 @@ enum Layout {
         return max(minHeightFittedCardWidth, cardHeight / 1.45)
     }
 
+#if os(iOS)
+    private struct IOSOffsetContext {
+        let boardSize: CGSize
+        let cardSize: CGSize
+        let tableauMaxHeight: CGFloat
+        let isCompactBoard: Bool
+        let isPadLandscape: Bool
+    }
+#endif
+
     static func metrics(
         for boardSize: CGSize,
         isRegularWidth: Bool = false,
         tableauColumnCount: Int = 7
     ) -> Metrics {
-        let columnCount = max(1, tableauColumnCount)
-        let boardWidth = boardSize.width
 #if os(iOS)
+        iOSMetrics(
+            for: boardSize,
+            isRegularWidth: isRegularWidth,
+            columnCount: max(1, tableauColumnCount)
+        )
+#else
+        macOSMetrics(for: boardSize, columnCount: max(1, tableauColumnCount))
+#endif
+    }
+
+#if os(iOS)
+    private static func iOSMetrics(
+        for boardSize: CGSize,
+        isRegularWidth: Bool,
+        columnCount: Int
+    ) -> Metrics {
+        let boardWidth = boardSize.width
         let isCompactBoard = boardWidth <= 430
         let isMediumBoard = boardWidth > 430 && boardWidth < 760
         let isPadLandscape = isRegularWidth && boardSize.width > boardSize.height
@@ -95,26 +120,15 @@ enum Layout {
             cardHeight: cardSize.height
         )
 
-        let baseFaceDownOffset = max(isCompactBoard ? 10 : 16, cardSize.height * faceDownFraction)
-        let baseFaceUpOffset = max(isCompactBoard ? 14 : 22, cardSize.height * faceUpFraction)
-
-        let faceUpOffset: CGFloat
-        let faceDownOffset: CGFloat
-        if isPadLandscape {
-            faceUpOffset = max(22, baseFaceUpOffset * landscapeOffsetScale)
-            faceDownOffset = max(14, baseFaceDownOffset * landscapeOffsetScale)
-        } else if isCompactBoard && boardSize.height > boardSize.width {
-            // Portrait phones have far more height than the width-fitted cards
-            // use; spread the worst-case pile into it, capped for readability.
-            let fittedFaceUp = (tableauMaxHeight - cardSize.height - maxFaceDownGaps * baseFaceDownOffset) / maxFaceUpGaps
-            faceUpOffset = min(max(baseFaceUpOffset, fittedFaceUp), cardSize.height * 0.38)
-            faceDownOffset = baseFaceDownOffset
-        } else {
-            faceUpOffset = baseFaceUpOffset
-            faceDownOffset = baseFaceDownOffset
-        }
-
-        let wasteFanSpacing = cardSize.width * (isCompactBoard ? 0.18 : (isPadLandscape ? 0.2 : 0.25))
+        let offsets = iOSTableauOffsets(
+            context: IOSOffsetContext(
+                boardSize: boardSize,
+                cardSize: cardSize,
+                tableauMaxHeight: tableauMaxHeight,
+                isCompactBoard: isCompactBoard,
+                isPadLandscape: isPadLandscape
+            )
+        )
 
         return Metrics(
             horizontalPadding: horizontalPadding,
@@ -122,12 +136,38 @@ enum Layout {
             rowSpacing: rowSpacing,
             columnSpacing: columnSpacing,
             cardSize: cardSize,
-            tableauFaceDownOffset: faceDownOffset,
-            tableauFaceUpOffset: faceUpOffset,
-            wasteFanSpacing: wasteFanSpacing,
+            tableauFaceDownOffset: offsets.faceDown,
+            tableauFaceUpOffset: offsets.faceUp,
+            wasteFanSpacing: cardSize.width * (isCompactBoard ? 0.18 : (isPadLandscape ? 0.2 : 0.25)),
             tableauMaxHeight: tableauMaxHeight
         )
+    }
+
+    private static func iOSTableauOffsets(context: IOSOffsetContext) -> (faceDown: CGFloat, faceUp: CGFloat) {
+        let faceDownFraction: CGFloat = context.isCompactBoard ? 0.16 : 0.18
+        let faceUpFraction: CGFloat = context.isCompactBoard ? 0.24 : 0.28
+        let baseFaceDown = max(
+            context.isCompactBoard ? 10 : 16,
+            context.cardSize.height * faceDownFraction
+        )
+        let baseFaceUp = max(context.isCompactBoard ? 14 : 22, context.cardSize.height * faceUpFraction)
+        if context.isPadLandscape {
+            return (
+                max(14, baseFaceDown * 0.8),
+                max(22, baseFaceUp * 0.8)
+            )
+        }
+        guard context.isCompactBoard, context.boardSize.height > context.boardSize.width else {
+            return (baseFaceDown, baseFaceUp)
+        }
+        let fittedFaceUp = (
+            context.tableauMaxHeight - context.cardSize.height - maxFaceDownGaps * baseFaceDown
+        ) / maxFaceUpGaps
+        return (baseFaceDown, min(max(baseFaceUp, fittedFaceUp), context.cardSize.height * 0.38))
+    }
 #else
+    private static func macOSMetrics(for boardSize: CGSize, columnCount: Int) -> Metrics {
+        let boardWidth = boardSize.width
         let horizontalPadding = min(24, max(14, boardWidth * 0.018))
         let verticalPadding = min(22, max(14, boardWidth * 0.015))
         let columnSpacing = min(18, max(10, boardWidth * 0.013))
@@ -173,8 +213,8 @@ enum Layout {
             wasteFanSpacing: wasteFanSpacing,
             tableauMaxHeight: tableauMaxHeight
         )
-#endif
     }
+#endif
 
     private static func tableauHeightBudget(
         boardHeight: CGFloat,
@@ -482,6 +522,7 @@ struct FoundationView: View {
         )
         .zIndex(isDragSource ? 10 : 0)
         .accessibilityLabel("Foundation \(index + 1)")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -537,6 +578,7 @@ struct TableauPileView: View {
                     .onTapGesture {
                         viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: nil)
                     }
+                    .accessibilityAddTraits(.isButton)
 
                 PilePlaceholderView(cardSize: cardSize)
                 DropHighlightView(
@@ -567,6 +609,7 @@ struct TableauPileView: View {
                     .onTapGesture {
                         viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
                     }
+                    .accessibilityAddTraits(.isButton)
                     .cardFramePreference(card.id, yOffset: yOffset)
 
                     cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
@@ -685,11 +728,13 @@ struct DropHighlightView: View {
 }
 
 struct TableBackground: View {
-    @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
+    @AppStorage(SettingsKey.tableBackgroundColor)
+    private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.feltEffectEnabled) private var feltEffectEnabled = true
 
     var body: some View {
-        let baseColor = (TableBackgroundColor(rawValue: tableBackgroundColorRawValue) ?? TableBackgroundColor.defaultValue).color
+        let selectedColor = TableBackgroundColor(rawValue: tableBackgroundColorRawValue) ?? .defaultValue
+        let baseColor = selectedColor.color
         Group {
             if feltEffectEnabled {
                 GeometryReader { proxy in
@@ -740,5 +785,7 @@ struct WinOverlay: View {
 }
 
 #Preview("Win Overlay") {
-    WinOverlay(score: 1240) {}
+    WinOverlay(score: 1240) {
+        // Preview action.
+    }
 }

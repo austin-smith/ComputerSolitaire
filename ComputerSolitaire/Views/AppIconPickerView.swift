@@ -52,6 +52,7 @@ struct AppIconPreviewView: View {
             .overlay {
                 shape.stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
             }
+            .accessibilityHidden(true)
     }
 }
 
@@ -86,67 +87,69 @@ struct AppIconPickerView: View {
         let isSelected = selection == icon
 
         return Button {
-            guard !isSelected else { return }
-            HapticManager.shared.play(.settingsSelection)
-            let previous = selection
-            withAnimation(.smooth(duration: 0.3)) {
-                selection = icon
-            }
-            UIApplication.shared.setAlternateIconName(icon.alternateIconName) { error in
-                guard error != nil else { return }
-                Task { @MainActor in
-                    withAnimation(.smooth(duration: 0.3)) {
-                        selection = previous
-                    }
-                }
-            }
+            select(icon, isSelected: isSelected)
         } label: {
-            VStack(spacing: 6) {
-                AppIconPreviewView(icon: icon)
-
-                Text(icon.name)
-                    .font(.caption.weight(.bold))
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? .thickMaterial : .thinMaterial)
-                    .shadow(
-                        color: .black.opacity(isSelected ? 0.12 : 0.04),
-                        radius: isSelected ? 8 : 2,
-                        y: isSelected ? 4 : 1
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        Color.accentColor.opacity(isSelected ? 1 : 0),
-                        lineWidth: 2.5
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        Color.primary.opacity(isSelected ? 0 : 0.1),
-                        lineWidth: 1
-                    )
-            }
-            .overlay(alignment: .topTrailing) {
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, Color.accentColor)
-                        .padding(6)
-                }
-            }
-            .contentShape(Rectangle())
+            iconTileContent(icon, isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(icon.name) app icon")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func iconTileContent(_ icon: AppIcon, isSelected: Bool) -> some View {
+        VStack(spacing: 6) {
+            AppIconPreviewView(icon: icon)
+            Text(icon.name)
+                .font(.caption.weight(.bold))
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(isSelected ? .thickMaterial : .thinMaterial)
+                .shadow(
+                    color: .black.opacity(isSelected ? 0.12 : 0.04),
+                    radius: isSelected ? 8 : 2,
+                    y: isSelected ? 4 : 1
+                )
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.accentColor.opacity(isSelected ? 1 : 0), lineWidth: 2.5)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(isSelected ? 0 : 0.1), lineWidth: 1)
+        }
+        .overlay(alignment: .topTrailing) {
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, Color.accentColor)
+                    .padding(6)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func select(_ icon: AppIcon, isSelected: Bool) {
+        guard !isSelected else { return }
+        HapticManager.shared.play(.settingsSelection)
+        let previous = selection
+        withAnimation(.smooth(duration: 0.3)) {
+            selection = icon
+        }
+        UIApplication.shared.setAlternateIconName(icon.alternateIconName) { error in
+            guard error != nil else { return }
+            Task { @MainActor in
+                withAnimation(.smooth(duration: 0.3)) {
+                    selection = previous
+                }
+            }
+        }
     }
 }
 

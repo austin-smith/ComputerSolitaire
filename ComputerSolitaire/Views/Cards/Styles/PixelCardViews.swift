@@ -1,5 +1,9 @@
 import SwiftUI
 
+// TODO: Separate the static sprite catalog from the pixel renderer without
+// fragmenting the card-style UI, then remove this exception.
+// swiftlint:disable file_length
+
 enum PixelCardStyle {
     static let info = CardStyleInfo(title: "Pixel", subtitle: "8-bit Retro")
 }
@@ -89,13 +93,13 @@ extension PixelPalette {
 
 struct PixelCardShape: InsettableShape {
     /// One virtual pixel unit (card width / PixelCardArt.gridWidth).
-    let px: CGFloat
+    let pixelSize: CGFloat
     var insetAmount: CGFloat = 0
 
     func path(in rect: CGRect) -> Path {
         let insetRect = rect.insetBy(dx: insetAmount, dy: insetAmount)
         let maxCorner = min(insetRect.width, insetRect.height) / 2
-        let step = max(1, min(px, floor(maxCorner / 3)))
+        let step = max(1, min(pixelSize, floor(maxCorner / 3)))
         let corner = step * 3
 
         var path = Path()
@@ -159,16 +163,16 @@ struct PixelSprite {
     init(_ art: String) {
         let map: [Character: UInt8] = [
             ".": 0, "#": 1, "+": 2, "K": 3, "S": 4, "s": 5,
-            "G": 6, "R": 7, "D": 8, "H": 9, "W": 10, "A": 11, "B": 12,
+            "G": 6, "R": 7, "D": 8, "H": 9, "W": 10, "A": 11, "B": 12
         ]
         let lines = art.split(separator: "\n").map(String.init)
-        let w = lines.map(\.count).max() ?? 0
+        let spriteWidth = lines.map(\.count).max() ?? 0
         cells = lines.map { line in
             var row = line.map { map[$0] ?? 0 }
-            while row.count < w { row.append(0) }
+            while row.count < spriteWidth { row.append(0) }
             return row
         }
-        width = w
+        width = spriteWidth
         height = cells.count
     }
 }
@@ -386,14 +390,20 @@ enum PixelSprites {
         #.#..
         #..#.
         #...#
-        """),
+        """)
     ]
 
     static func rank(_ rank: Rank) -> PixelSprite {
-        ranks[rank.label] ?? ranks["A"]!
+        guard let sprite = ranks[rank.label] else {
+            preconditionFailure("Missing pixel-art glyph for rank \(rank.label)")
+        }
+        return sprite
     }
 
-    // Face card portraits — 28x35, outlined forms in the classic style.
+}
+
+// Face card portraits — 28x35, outlined forms in the classic style.
+extension PixelSprites {
     static let king = PixelSprite("""
     ........G..G..G..G..G.......
     .......KGGGGGGGGGGGGGGK.....
@@ -525,23 +535,41 @@ enum PixelCardArt {
     /// aspect ratio this yields an exact 40x58 pixel grid.
     static let gridWidth: CGFloat = 40
 
+    struct SpritePlacement {
+        let origin: CGPoint
+        let unit: CGFloat
+        var scale: CGFloat = 1
+        var flipped = false
+    }
+
+    private static func placement(
+        x horizontalPosition: CGFloat,
+        y verticalPosition: CGFloat,
+        unit: CGFloat,
+        scale: CGFloat = 1,
+        flipped: Bool = false
+    ) -> SpritePlacement {
+        SpritePlacement(
+            origin: CGPoint(x: horizontalPosition, y: verticalPosition),
+            unit: unit,
+            scale: scale,
+            flipped: flipped
+        )
+    }
+
     /// Draws a sprite whose origin is given in grid units. `scale` is an
     /// integer multiplier that keeps the art on the same pixel grid.
     static func draw(
         _ sprite: PixelSprite,
         in context: GraphicsContext,
-        x: CGFloat,
-        y: CGFloat,
-        unit: CGFloat,
-        scale: CGFloat = 1,
-        flipped: Bool = false,
+        placement: SpritePlacement,
         color: (PixelInk) -> Color?
     ) {
         for row in 0..<sprite.height {
-            let srcRow = flipped ? sprite.height - 1 - row : row
+            let srcRow = placement.flipped ? sprite.height - 1 - row : row
             var col = 0
             while col < sprite.width {
-                let srcCol = flipped ? sprite.width - 1 - col : col
+                let srcCol = placement.flipped ? sprite.width - 1 - col : col
                 let value = sprite.cells[srcRow][srcCol]
                 guard value != 0, let ink = PixelInk(rawValue: value), let fill = color(ink) else {
                     col += 1
@@ -549,15 +577,15 @@ enum PixelCardArt {
                 }
                 var run = 1
                 while col + run < sprite.width {
-                    let nextCol = flipped ? sprite.width - 1 - (col + run) : col + run
+                    let nextCol = placement.flipped ? sprite.width - 1 - (col + run) : col + run
                     guard sprite.cells[srcRow][nextCol] == value else { break }
                     run += 1
                 }
                 let rect = CGRect(
-                    x: (x + CGFloat(col) * scale) * unit,
-                    y: (y + CGFloat(row) * scale) * unit,
-                    width: CGFloat(run) * scale * unit,
-                    height: scale * unit
+                    x: (placement.origin.x + CGFloat(col) * placement.scale) * placement.unit,
+                    y: (placement.origin.y + CGFloat(row) * placement.scale) * placement.unit,
+                    width: CGFloat(run) * placement.scale * placement.unit,
+                    height: placement.scale * placement.unit
                 ).insetBy(dx: -0.2, dy: -0.2)
                 context.fill(Path(rect), with: .color(fill))
                 col += run
@@ -567,11 +595,16 @@ enum PixelCardArt {
 
     static func fillCells(
         _ context: GraphicsContext,
-        x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat,
+        gridRect: CGRect,
         unit: CGFloat,
         color: Color
     ) {
-        let rect = CGRect(x: x * unit, y: y * unit, width: w * unit, height: h * unit)
+        let rect = CGRect(
+            x: gridRect.origin.x * unit,
+            y: gridRect.origin.y * unit,
+            width: gridRect.width * unit,
+            height: gridRect.height * unit
+        )
             .insetBy(dx: -0.2, dy: -0.2)
         context.fill(Path(rect), with: .color(color))
     }
@@ -583,7 +616,6 @@ enum PixelCardArt {
         let centerY = gridH / 2
         let ink = PixelPalette.suitColor(for: card.suit)
         let suitSprite = PixelSprites.suit(card.suit)
-        let rankSprite = PixelSprites.rank(card.rank)
 
         let solid: (PixelInk) -> Color? = { pixelInk in
             switch pixelInk {
@@ -592,15 +624,7 @@ enum PixelCardArt {
             }
         }
 
-        // Corner indices: rank top-left / suit top-right, mirrored below.
-        draw(rankSprite, in: context, x: 3, y: 3, unit: unit, color: solid)
-        draw(suitSprite, in: context, x: gridWidth - 3 - 7, y: 3, unit: unit, color: solid)
-        draw(
-            rankSprite, in: context,
-            x: gridWidth - 3 - CGFloat(rankSprite.width), y: gridH - 3 - 7,
-            unit: unit, flipped: true, color: solid
-        )
-        draw(suitSprite, in: context, x: 3, y: gridH - 3 - 7, unit: unit, flipped: true, color: solid)
+        drawCornerIndices(card: card, in: context, gridHeight: gridH, unit: unit)
 
         if let portrait = PixelSprites.portrait(for: card.rank) {
             drawPortrait(portrait, card: card, in: context, centerY: centerY, unit: unit)
@@ -614,19 +638,60 @@ enum PixelCardArt {
             }
             draw(
                 suitSprite, in: context,
-                x: (gridWidth - 14) / 2, y: centerY - 7,
-                unit: unit, scale: 2, color: shaded
+                placement: placement(x: (gridWidth - 14) / 2, y: centerY - 7, unit: unit, scale: 2),
+                color: shaded
             )
         } else {
             let pipSprite = PixelSprites.pipSuit(card.suit)
             for pip in pipPlacements(count: card.rank.rawValue) {
                 draw(
                     pipSprite, in: context,
-                    x: pip.x, y: centerY + pip.dy - 2.5,
-                    unit: unit, flipped: pip.dy > 0, color: solid
+                    placement: placement(
+                        x: pip.originX,
+                        y: centerY + pip.verticalOffset - 2.5,
+                        unit: unit,
+                        flipped: pip.verticalOffset > 0
+                    ),
+                    color: solid
                 )
             }
         }
+    }
+
+    private static func drawCornerIndices(
+        card: Card,
+        in context: GraphicsContext,
+        gridHeight: CGFloat,
+        unit: CGFloat
+    ) {
+        let rankSprite = PixelSprites.rank(card.rank)
+        let suitSprite = PixelSprites.suit(card.suit)
+        let ink = PixelPalette.suitColor(for: card.suit)
+        let solid: (PixelInk) -> Color? = { $0 == .ink || $0 == .inkHi ? ink : nil }
+        draw(rankSprite, in: context, placement: placement(x: 3, y: 3, unit: unit), color: solid)
+        draw(
+            suitSprite,
+            in: context,
+            placement: placement(x: gridWidth - 10, y: 3, unit: unit),
+            color: solid
+        )
+        draw(
+            rankSprite,
+            in: context,
+            placement: placement(
+                x: gridWidth - 3 - CGFloat(rankSprite.width),
+                y: gridHeight - 10,
+                unit: unit,
+                flipped: true
+            ),
+            color: solid
+        )
+        draw(
+            suitSprite,
+            in: context,
+            placement: placement(x: 3, y: gridHeight - 10, unit: unit, flipped: true),
+            color: solid
+        )
     }
 
     private static func drawPortrait(
@@ -640,28 +705,31 @@ enum PixelCardArt {
         let originX = (gridWidth - CGFloat(portrait.width)) / 2
         let originY = centerY - CGFloat(portrait.height) / 2
 
-        draw(portrait, in: context, x: originX, y: originY, unit: unit) { pixelInk in
-            switch pixelInk {
-            case .outlineDark: return PixelPalette.outline
-            case .skin: return PixelPalette.skinTone
-            case .skinShade: return PixelPalette.skinShadow
-            case .gold: return PixelPalette.gold
-            case .robe: return isRed ? PixelPalette.robeRed : PixelPalette.robeBlue
-            case .robeDark: return isRed ? PixelPalette.robeRedDark : PixelPalette.robeBlueDark
-            case .hair: return PixelPalette.hair
-            case .white: return PixelPalette.ermine
-            case .accent: return PixelPalette.accent
-            case .altRobe: return isRed ? PixelPalette.robeBlue : PixelPalette.robeRed
-            case .ink, .inkHi, .none: return nil
-            }
-        }
+        let colors: [PixelInk: Color] = [
+            .outlineDark: PixelPalette.outline,
+            .skin: PixelPalette.skinTone,
+            .skinShade: PixelPalette.skinShadow,
+            .gold: PixelPalette.gold,
+            .robe: isRed ? PixelPalette.robeRed : PixelPalette.robeBlue,
+            .robeDark: isRed ? PixelPalette.robeRedDark : PixelPalette.robeBlueDark,
+            .hair: PixelPalette.hair,
+            .white: PixelPalette.ermine,
+            .accent: PixelPalette.accent,
+            .altRobe: isRed ? PixelPalette.robeBlue : PixelPalette.robeRed
+        ]
+        draw(
+            portrait,
+            in: context,
+            placement: placement(x: originX, y: originY, unit: unit),
+            color: { colors[$0] }
+        )
     }
 
     // MARK: Pips
 
     struct PipPlacement {
-        let x: CGFloat  // sprite origin column
-        let dy: CGFloat // sprite center offset from card center
+        let originX: CGFloat
+        let verticalOffset: CGFloat
     }
 
     private static let leftCol: CGFloat = 10.5
@@ -669,30 +737,37 @@ enum PixelCardArt {
     private static let rightCol: CGFloat = 24.5
 
     static func pipPlacements(count: Int) -> [PipPlacement] {
-        func cols(_ dys: [CGFloat]) -> [PipPlacement] {
-            dys.flatMap { dy in
-                [PipPlacement(x: leftCol, dy: dy), PipPlacement(x: rightCol, dy: dy)]
+        func columns(_ verticalOffsets: [CGFloat]) -> [PipPlacement] {
+            verticalOffsets.flatMap { verticalOffset in
+                [
+                    PipPlacement(originX: leftCol, verticalOffset: verticalOffset),
+                    PipPlacement(originX: rightCol, verticalOffset: verticalOffset)
+                ]
             }
         }
-        func mid(_ dys: [CGFloat]) -> [PipPlacement] {
-            dys.map { PipPlacement(x: midCol, dy: $0) }
+        func middle(_ verticalOffsets: [CGFloat]) -> [PipPlacement] {
+            verticalOffsets.map { PipPlacement(originX: midCol, verticalOffset: $0) }
         }
 
         switch count {
-        case 2: return mid([-10, 10])
-        case 3: return mid([-12, 0, 12])
-        case 4: return cols([-11, 11])
-        case 5: return cols([-11, 11]) + mid([0])
-        case 6: return cols([-11, 0, 11])
-        case 7: return cols([-11, 0, 11]) + mid([-5.5])
-        case 8: return cols([-12, -4, 4, 12])
-        case 9: return cols([-12, -4, 4, 12]) + mid([0])
-        case 10: return cols([-12, -4, 4, 12]) + mid([-8, 8])
+        case 2: return middle([-10, 10])
+        case 3: return middle([-12, 0, 12])
+        case 4: return columns([-11, 11])
+        case 5: return columns([-11, 11]) + middle([0])
+        case 6: return columns([-11, 0, 11])
+        case 7: return columns([-11, 0, 11]) + middle([-5.5])
+        case 8: return columns([-12, -4, 4, 12])
+        case 9: return columns([-12, -4, 4, 12]) + middle([0])
+        case 10: return columns([-12, -4, 4, 12]) + middle([-8, 8])
         default: return []
         }
     }
 
-    // MARK: Back
+}
+
+// MARK: Back
+
+extension PixelCardArt {
 
     /// Woven-lattice card back: a bright single-pixel frame around a diagonal
     /// weave in the colorway's muted tone with mid-tone intersections.
@@ -703,34 +778,50 @@ enum PixelCardArt {
         let gridH = size.height / unit
         let lastRow = Int(gridH.rounded(.down)) - 3
 
-        // Inner bright frame, one unit thick, inset 2 from the edge.
-        let frame = colorway.bright
-        fillCells(context, x: 2, y: 2, w: gridWidth - 4, h: 1, unit: unit, color: frame)
-        fillCells(context, x: 2, y: gridH - 3, w: gridWidth - 4, h: 1, unit: unit, color: frame)
-        fillCells(context, x: 2, y: 3, w: 1, h: gridH - 6, unit: unit, color: frame)
-        fillCells(context, x: gridWidth - 3, y: 3, w: 1, h: gridH - 6, unit: unit, color: frame)
+        drawBackFrame(in: context, gridHeight: gridH, unit: unit, color: colorway.bright)
 
         // Diagonal weave, phase-locked to the card center.
         let centerX = Int(gridWidth) / 2
         let centerYCell = Int((gridH / 2).rounded(.down))
-        for cy in 4...(lastRow - 1) {
-            for cx in 4...Int(gridWidth) - 5 {
-                let sum = (cx - centerX) + (cy - centerYCell)
-                let diff = (cx - centerX) - (cy - centerYCell)
+        for row in 4...(lastRow - 1) {
+            for column in 4...Int(gridWidth) - 5 {
+                let sum = (column - centerX) + (row - centerYCell)
+                let diff = (column - centerX) - (row - centerYCell)
                 let onSum = ((sum % 6) + 6) % 6 == 0
                 let onDiff = ((diff % 6) + 6) % 6 == 0
                 if onSum && onDiff {
                     fillCells(
-                        context, x: CGFloat(cx), y: CGFloat(cy), w: 1, h: 1,
-                        unit: unit, color: colorway.mid
+                        context,
+                        gridRect: CGRect(x: CGFloat(column), y: CGFloat(row), width: 1, height: 1),
+                        unit: unit,
+                        color: colorway.mid
                     )
                 } else if onSum || onDiff {
                     fillCells(
-                        context, x: CGFloat(cx), y: CGFloat(cy), w: 1, h: 1,
-                        unit: unit, color: colorway.muted
+                        context,
+                        gridRect: CGRect(x: CGFloat(column), y: CGFloat(row), width: 1, height: 1),
+                        unit: unit,
+                        color: colorway.muted
                     )
                 }
             }
+        }
+    }
+
+    private static func drawBackFrame(
+        in context: GraphicsContext,
+        gridHeight: CGFloat,
+        unit: CGFloat,
+        color: Color
+    ) {
+        let frameRects = [
+            CGRect(x: 2, y: 2, width: gridWidth - 4, height: 1),
+            CGRect(x: 2, y: gridHeight - 3, width: gridWidth - 4, height: 1),
+            CGRect(x: 2, y: 3, width: 1, height: gridHeight - 6),
+            CGRect(x: gridWidth - 3, y: 3, width: 1, height: gridHeight - 6)
+        ]
+        for gridRect in frameRects {
+            fillCells(context, gridRect: gridRect, unit: unit, color: color)
         }
     }
 }
@@ -744,7 +835,7 @@ struct PixelCardFrontView: View {
 
     var body: some View {
         let unit = cardSize.width / PixelCardArt.gridWidth
-        let shape = PixelCardShape(px: unit)
+        let shape = PixelCardShape(pixelSize: unit)
         let borderColor = isSelected ? Color.yellow.opacity(0.92) : PixelPalette.outline
         let borderWidth = isSelected ? max(2, unit * 1.6) : max(0.8, unit)
 
@@ -783,7 +874,7 @@ struct PixelCardBackView: View {
 
     var body: some View {
         let unit = cardSize.width / PixelCardArt.gridWidth
-        let shape = PixelCardShape(px: unit)
+        let shape = PixelCardShape(pixelSize: unit)
         let borderColor = isSelected ? Color.yellow.opacity(0.88) : PixelPalette.outline
         let borderWidth = isSelected ? max(2, unit * 1.6) : max(0.8, unit)
         let colorway = PixelBackColorway.matching(.from(rawValue: cardBackColorRawValue))

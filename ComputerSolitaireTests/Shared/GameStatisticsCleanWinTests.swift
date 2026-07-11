@@ -6,7 +6,7 @@ final class GameStatisticsCleanWinTests: XCTestCase {
     func testCleanWinIncrementsWhenNoHintUndoOrRedealWasUsed() {
         var stats = GameStatistics()
 
-        stats.recordCompletedGame(
+        stats.recordCompletedGame(CompletedGame(
             didWin: true,
             elapsedSeconds: 120,
             finalScore: 200,
@@ -14,7 +14,7 @@ final class GameStatisticsCleanWinTests: XCTestCase {
             hintsUsedInGame: 0,
             undosUsedInGame: 0,
             usedRedealInGame: false
-        )
+        ))
 
         XCTAssertEqual(stats.gamesPlayed, 1)
         XCTAssertEqual(stats.gamesWon, 1)
@@ -25,7 +25,7 @@ final class GameStatisticsCleanWinTests: XCTestCase {
     func testWinWithHintIsNotCleanWin() {
         var stats = GameStatistics()
 
-        stats.recordCompletedGame(
+        stats.recordCompletedGame(CompletedGame(
             didWin: true,
             elapsedSeconds: 180,
             finalScore: 250,
@@ -33,7 +33,7 @@ final class GameStatisticsCleanWinTests: XCTestCase {
             hintsUsedInGame: 1,
             undosUsedInGame: 0,
             usedRedealInGame: false
-        )
+        ))
 
         XCTAssertEqual(stats.gamesWon, 1)
         XCTAssertEqual(stats.cleanWins, 0)
@@ -42,7 +42,7 @@ final class GameStatisticsCleanWinTests: XCTestCase {
     func testWinWithUndoIsNotCleanWin() {
         var stats = GameStatistics()
 
-        stats.recordCompletedGame(
+        stats.recordCompletedGame(CompletedGame(
             didWin: true,
             elapsedSeconds: 180,
             finalScore: 250,
@@ -50,7 +50,7 @@ final class GameStatisticsCleanWinTests: XCTestCase {
             hintsUsedInGame: 0,
             undosUsedInGame: 2,
             usedRedealInGame: false
-        )
+        ))
 
         XCTAssertEqual(stats.gamesWon, 1)
         XCTAssertEqual(stats.cleanWins, 0)
@@ -59,7 +59,7 @@ final class GameStatisticsCleanWinTests: XCTestCase {
     func testWinWithRedealIsNotCleanWin() {
         var stats = GameStatistics()
 
-        stats.recordCompletedGame(
+        stats.recordCompletedGame(CompletedGame(
             didWin: true,
             elapsedSeconds: 180,
             finalScore: 250,
@@ -67,7 +67,7 @@ final class GameStatisticsCleanWinTests: XCTestCase {
             hintsUsedInGame: 0,
             undosUsedInGame: 0,
             usedRedealInGame: true
-        )
+        ))
 
         XCTAssertEqual(stats.gamesWon, 1)
         XCTAssertEqual(stats.cleanWins, 0)
@@ -76,7 +76,7 @@ final class GameStatisticsCleanWinTests: XCTestCase {
     func testLossNeverCountsAsCleanWin() {
         var stats = GameStatistics()
 
-        stats.recordCompletedGame(
+        stats.recordCompletedGame(CompletedGame(
             didWin: false,
             elapsedSeconds: 300,
             finalScore: 150,
@@ -84,7 +84,7 @@ final class GameStatisticsCleanWinTests: XCTestCase {
             hintsUsedInGame: 2,
             undosUsedInGame: 3,
             usedRedealInGame: false
-        )
+        ))
 
         XCTAssertEqual(stats.gamesPlayed, 1)
         XCTAssertEqual(stats.gamesWon, 0)

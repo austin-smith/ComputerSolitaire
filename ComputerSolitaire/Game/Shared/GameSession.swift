@@ -213,6 +213,9 @@ final class SolitaireViewModel {
         return true
     }
 
+}
+
+extension SolitaireViewModel {
     func newGame(variant: GameVariant? = nil, drawMode: DrawMode = .three) {
         finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: dateProvider.now)
         clearHint()
@@ -559,66 +562,30 @@ extension SolitaireViewModel {
 
     func tryMoveSelection(to destination: Destination) -> Bool {
         guard let selection, let movingCard = selection.cards.first else { return false }
-
+        guard canDrop(to: destination) else { return false }
+        clearHint()
+        pushHistory(
+            undoContext: UndoAnimationContext(
+                action: .moveSelection,
+                cardIDs: selection.cards.map(\.id)
+            )
+        )
+        removeSelection(selection)
         switch destination {
         case .foundation(let index):
-            guard selection.cards.count == 1 else { return false }
-            guard GameRules.canMoveToFoundation(card: movingCard, foundation: state.foundations[index]) else { return false }
-            clearHint()
-            pushHistory(
-                undoContext: UndoAnimationContext(
-                    action: .moveSelection,
-                    cardIDs: selection.cards.map(\.id)
-                )
-            )
-            removeSelection(selection)
             state.foundations[index].append(movingCard)
-            movesCount += 1
-            applyScore(for: selection.source, destination: .foundation(index))
-            applyTimeBonusIfWon()
-            self.selection = nil
-            SoundManager.shared.play(.cardPlaced)
-            refreshAutoFinishAvailability()
-            return true
-
         case .tableau(let index):
-            guard canDrop(to: destination) else { return false }
-            clearHint()
-            pushHistory(
-                undoContext: UndoAnimationContext(
-                    action: .moveSelection,
-                    cardIDs: selection.cards.map(\.id)
-                )
-            )
-            removeSelection(selection)
             state.tableau[index].append(contentsOf: selection.cards)
-            movesCount += 1
-            applyScore(for: selection.source, destination: .tableau(index))
-            applyTimeBonusIfWon()
-            self.selection = nil
-            SoundManager.shared.play(.cardPlaced)
-            refreshAutoFinishAvailability()
-            return true
-
         case .freeCell(let index):
-            guard canDrop(to: destination) else { return false }
-            clearHint()
-            pushHistory(
-                undoContext: UndoAnimationContext(
-                    action: .moveSelection,
-                    cardIDs: selection.cards.map(\.id)
-                )
-            )
-            removeSelection(selection)
             state.freeCells[index] = movingCard
-            movesCount += 1
-            applyScore(for: selection.source, destination: .freeCell(index))
-            applyTimeBonusIfWon()
-            self.selection = nil
-            SoundManager.shared.play(.cardPlaced)
-            refreshAutoFinishAvailability()
-            return true
         }
+        movesCount += 1
+        applyScore(for: selection.source, destination: destination)
+        applyTimeBonusIfWon()
+        self.selection = nil
+        SoundManager.shared.play(.cardPlaced)
+        refreshAutoFinishAvailability()
+        return true
     }
 
     func removeSelection(_ selection: Selection) {
@@ -701,13 +668,15 @@ extension SolitaireViewModel {
         let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
         GameStatisticsStore.update(for: state.variant) { stats in
             stats.recordCompletedGame(
-                didWin: didWin,
-                elapsedSeconds: elapsedSeconds,
-                finalScore: score,
-                drawCount: statisticsDrawCountForCurrentVariant(),
-                hintsUsedInGame: hintRequestsInCurrentGame,
-                undosUsedInGame: undosUsedInCurrentGame,
-                usedRedealInGame: usedRedealInCurrentGame
+                CompletedGame(
+                    didWin: didWin,
+                    elapsedSeconds: elapsedSeconds,
+                    finalScore: score,
+                    drawCount: statisticsDrawCountForCurrentVariant(),
+                    hintsUsedInGame: hintRequestsInCurrentGame,
+                    undosUsedInGame: undosUsedInCurrentGame,
+                    usedRedealInGame: usedRedealInCurrentGame
+                )
             )
         }
         isCurrentGameFinalized = true

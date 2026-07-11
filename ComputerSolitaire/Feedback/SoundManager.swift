@@ -19,7 +19,9 @@ final class SoundManager {
     private var players: [GameSound: AVAudioPlayer] = [:]
     private var hasConfiguredAudioSession = false
 
-    private init() {}
+    private init() {
+        // Shared instance only.
+    }
 
     func play(_ sound: GameSound) {
         guard isSoundEffectsEnabled else { return }
@@ -48,7 +50,11 @@ private extension SoundManager {
             try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setActive(true)
             hasConfiguredAudioSession = true
-        } catch {}
+        } catch {
+#if DEBUG
+            print("Failed to configure the audio session: \(error)")
+#endif
+        }
 #endif
     }
 

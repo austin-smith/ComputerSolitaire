@@ -43,6 +43,7 @@ struct StockView: View {
         .onTapGesture {
             viewModel.handleStockTap()
         }
+        .accessibilityAddTraits(.isButton)
         .accessibilityLabel("Stock")
     }
 }
@@ -114,6 +115,7 @@ struct WasteView: View {
         .onTapGesture {
             viewModel.handleWasteTap()
         }
+        .accessibilityAddTraits(.isButton)
         .zIndex(isDragSource || isSelected ? 10 : 0)
         .accessibilityLabel("Waste")
     }

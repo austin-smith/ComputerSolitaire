@@ -11,19 +11,20 @@ enum FreeCellSolver {
     /// A card is `suitIndex << 4 | rank` (rank 1...13); suit order follows `Suit.allCases`.
     typealias Code = UInt8
 
-    struct Move: Equatable {
-        enum Source: Equatable {
-            case cascade(pile: Int, count: Int)
-            case cell(Int)
-        }
-        enum Target: Equatable {
-            case cascade(Int)
-            case cell(Int)
-            case foundation
-        }
+    enum MoveSource: Equatable {
+        case cascade(pile: Int, count: Int)
+        case cell(Int)
+    }
 
-        let source: Source
-        let target: Target
+    enum MoveTarget: Equatable {
+        case cascade(Int)
+        case cell(Int)
+        case foundation
+    }
+
+    struct Move: Equatable {
+        let source: MoveSource
+        let target: MoveTarget
     }
 
     struct Solution {
@@ -45,46 +46,35 @@ enum FreeCellSolver {
         guard var rootBoard = Board(state: state) else { return nil }
         let rootAutoplay = applySafeAutoplay(&rootBoard)
 
-        var nodes: [Node] = [Node(board: rootBoard, parent: -1, movesFromParent: rootAutoplay, g: rootAutoplay.count)]
-        var visited: Set<Board> = [rootBoard.canonical()]
-        var heap = Heap()
-        heap.push(HeapEntry(f: heuristic(rootBoard), order: 0, index: 0))
-        var order = 0
+        var search = SearchStorage(
+            nodes: [Node(board: rootBoard, parent: -1, movesFromParent: rootAutoplay, cost: rootAutoplay.count)],
+            visited: [rootBoard.canonical()],
+            heap: Heap(),
+            order: 0
+        )
+        search.heap.push(HeapEntry(priority: heuristic(rootBoard), order: 0, index: 0))
         var expansions = 0
 
-        while let entry = heap.pop() {
+        while let entry = search.heap.pop() {
             let nodeIndex = entry.index
-            let board = nodes[nodeIndex].board
+            let board = search.nodes[nodeIndex].board
 
             if board.isWon {
-                return Solution(moves: reconstructMoves(endingAt: nodeIndex, nodes: nodes))
+                return Solution(moves: reconstructMoves(endingAt: nodeIndex, nodes: search.nodes))
             }
 
             expansions += 1
-            if nodes.count >= limits.maxNodes { return nil }
+            if search.nodes.count >= limits.maxNodes { return nil }
             if expansions % 128 == 0, let deadline = limits.deadline, Date() > deadline {
                 return nil
             }
 
             for move in generateMoves(from: board) {
-                var nextBoard = board
-                applyMove(move, to: &nextBoard)
-                let autoplay = applySafeAutoplay(&nextBoard)
-
-                let canonical = nextBoard.canonical()
-                guard visited.insert(canonical).inserted else { continue }
-
-                let g = nodes[nodeIndex].g + 1 + autoplay.count
-                nodes.append(
-                    Node(board: nextBoard, parent: nodeIndex, movesFromParent: [move] + autoplay, g: g)
-                )
-                order += 1
-                heap.push(
-                    HeapEntry(
-                        f: g + heuristicWeight * heuristic(nextBoard),
-                        order: order,
-                        index: nodes.count - 1
-                    )
+                appendSearchNode(
+                    applying: move,
+                    to: board,
+                    parentIndex: nodeIndex,
+                    search: &search
                 )
             }
         }
@@ -125,36 +115,44 @@ enum FreeCellSolver {
         _ move: Move,
         in state: GameState
     ) -> (selection: Selection, destination: Destination)? {
-        let selection: Selection
-        switch move.source {
+        guard let selection = selection(for: move.source, in: state) else { return nil }
+        guard let destination = destination(for: move.target, selection: selection, in: state) else { return nil }
+        return (selection, destination)
+    }
+
+    private static func selection(for source: MoveSource, in state: GameState) -> Selection? {
+        switch source {
         case .cascade(let pile, let count):
             guard state.tableau.indices.contains(pile) else { return nil }
             let cards = state.tableau[pile]
             guard count >= 1, count <= cards.count else { return nil }
-            selection = Selection(
+            return Selection(
                 source: .tableau(pile: pile, index: cards.count - count),
                 cards: Array(cards[(cards.count - count)...])
             )
         case .cell(let slot):
             guard state.freeCells.indices.contains(slot), let card = state.freeCells[slot] else { return nil }
-            selection = Selection(source: .freeCell(slot: slot), cards: [card])
+            return Selection(source: .freeCell(slot: slot), cards: [card])
         }
+    }
 
-        let destination: Destination
-        switch move.target {
+    private static func destination(
+        for target: MoveTarget,
+        selection: Selection,
+        in state: GameState
+    ) -> Destination? {
+        switch target {
         case .cascade(let pile):
             guard state.tableau.indices.contains(pile) else { return nil }
-            destination = .tableau(pile)
+            return .tableau(pile)
         case .cell(let slot):
             guard state.freeCells.indices.contains(slot), state.freeCells[slot] == nil else { return nil }
-            destination = .freeCell(slot)
+            return .freeCell(slot)
         case .foundation:
             guard let card = selection.cards.first, selection.cards.count == 1 else { return nil }
             guard let index = foundationPileIndex(for: card, in: state) else { return nil }
-            destination = .foundation(index)
+            return .foundation(index)
         }
-
-        return (selection, destination)
     }
 
     static func foundationPileIndex(for card: Card, in state: GameState) -> Int? {
@@ -197,7 +195,9 @@ extension FreeCellSolver {
             var canonicalBoard = self
             canonicalBoard.cells.sort()
             canonicalBoard.cascades.sort { lhs, rhs in
-                for (a, b) in zip(lhs, rhs) where a != b { return a < b }
+                for (leftCode, rightCode) in zip(lhs, rhs) where leftCode != rightCode {
+                    return leftCode < rightCode
+                }
                 return lhs.count < rhs.count
             }
             return canonicalBoard
@@ -235,16 +235,16 @@ private extension FreeCellSolver {
         let board: Board
         let parent: Int
         let movesFromParent: [Move]
-        let g: Int
+        let cost: Int
     }
 
     struct HeapEntry {
-        let f: Int
+        let priority: Int
         let order: Int
         let index: Int
 
         func takesPriority(over other: HeapEntry) -> Bool {
-            f != other.f ? f < other.f : order < other.order
+            priority != other.priority ? priority < other.priority : order < other.order
         }
     }
 
@@ -285,6 +285,38 @@ private extension FreeCellSolver {
             }
             return top
         }
+    }
+
+    struct SearchStorage {
+        var nodes: [Node]
+        var visited: Set<Board>
+        var heap: Heap
+        var order: Int
+    }
+
+    static func appendSearchNode(
+        applying move: Move,
+        to board: Board,
+        parentIndex: Int,
+        search: inout SearchStorage
+    ) {
+        var nextBoard = board
+        applyMove(move, to: &nextBoard)
+        let autoplay = applySafeAutoplay(&nextBoard)
+        guard search.visited.insert(nextBoard.canonical()).inserted else { return }
+
+        let cost = search.nodes[parentIndex].cost + 1 + autoplay.count
+        search.nodes.append(
+            Node(board: nextBoard, parent: parentIndex, movesFromParent: [move] + autoplay, cost: cost)
+        )
+        search.order += 1
+        search.heap.push(
+            HeapEntry(
+                priority: cost + heuristicWeight * heuristic(nextBoard),
+                order: search.order,
+                index: search.nodes.count - 1
+            )
+        )
     }
 
     static func heuristic(_ board: Board) -> Int {
@@ -415,76 +447,80 @@ private extension FreeCellSolver {
     }
 
     static func generateMoves(from board: Board) -> [Move] {
-        var moves: [Move] = []
-        let firstEmptyCell = board.cells.firstIndex(of: 0)
-        let firstEmptyCascade = board.cascades.firstIndex(where: \.isEmpty)
-        let transferCap = maxTransferCount(in: board, toEmptyCascade: false)
-        let transferCapToEmpty = maxTransferCount(in: board, toEmptyCascade: true)
+        foundationMoves(from: board) +
+            cellToCascadeMoves(from: board) +
+            cascadeToCascadeMoves(from: board) +
+            cascadeToCellMoves(from: board)
+    }
 
-        // Foundation moves (including unsafe ones; safety is only for autoplay).
+    static func foundationMoves(from board: Board) -> [Move] {
+        var moves: [Move] = []
         for pile in board.cascades.indices {
-            if let top = board.cascades[pile].last, isFoundationEligible(top, in: board) {
-                moves.append(Move(source: .cascade(pile: pile, count: 1), target: .foundation))
-            }
+            guard let top = board.cascades[pile].last, isFoundationEligible(top, in: board) else { continue }
+            moves.append(Move(source: .cascade(pile: pile, count: 1), target: .foundation))
         }
         for slot in board.cells.indices where board.cells[slot] != 0 {
-            if isFoundationEligible(board.cells[slot], in: board) {
-                moves.append(Move(source: .cell(slot), target: .foundation))
-            }
+            guard isFoundationEligible(board.cells[slot], in: board) else { continue }
+            moves.append(Move(source: .cell(slot), target: .foundation))
         }
+        return moves
+    }
 
-        // Cell → cascade.
+    static func cellToCascadeMoves(from board: Board) -> [Move] {
+        var moves: [Move] = []
+        let firstEmptyCascade = board.cascades.firstIndex(where: \.isEmpty)
         for slot in board.cells.indices {
             let code = board.cells[slot]
             guard code != 0 else { continue }
             for pile in board.cascades.indices {
                 guard let top = board.cascades[pile].last else { continue }
-                if rank(code) == rank(top) - 1, isRed(code) != isRed(top) {
-                    moves.append(Move(source: .cell(slot), target: .cascade(pile)))
-                }
+                guard rank(code) == rank(top) - 1, isRed(code) != isRed(top) else { continue }
+                moves.append(Move(source: .cell(slot), target: .cascade(pile)))
             }
-            if let emptyPile = firstEmptyCascade {
-                moves.append(Move(source: .cell(slot), target: .cascade(emptyPile)))
+            if let firstEmptyCascade {
+                moves.append(Move(source: .cell(slot), target: .cascade(firstEmptyCascade)))
             }
         }
+        return moves
+    }
 
-        // Cascade → cascade (supermoves included; the fitting length is unique per pair).
+    static func cascadeToCascadeMoves(from board: Board) -> [Move] {
+        var moves: [Move] = []
+        let firstEmptyCascade = board.cascades.firstIndex(where: \.isEmpty)
+        let transferCap = maxTransferCount(in: board, toEmptyCascade: false)
+        let transferCapToEmpty = maxTransferCount(in: board, toEmptyCascade: true)
         for source in board.cascades.indices {
             let cascade = board.cascades[source]
-            guard !cascade.isEmpty else { continue }
+            guard let sourceTop = cascade.last else { continue }
             let runLength = topRunLength(of: cascade)
-
             for destination in board.cascades.indices where destination != source {
                 guard let top = board.cascades[destination].last else { continue }
-                let neededCount = rank(top) - rank(cascade.last!)
+                let neededCount = rank(top) - rank(sourceTop)
                 guard neededCount >= 1, neededCount <= runLength, neededCount <= transferCap else { continue }
                 let bottomMoving = cascade[cascade.count - neededCount]
-                if rank(bottomMoving) == rank(top) - 1, isRed(bottomMoving) != isRed(top) {
-                    moves.append(
-                        Move(source: .cascade(pile: source, count: neededCount), target: .cascade(destination))
-                    )
-                }
+                guard rank(bottomMoving) == rank(top) - 1, isRed(bottomMoving) != isRed(top) else { continue }
+                moves.append(
+                    Move(source: .cascade(pile: source, count: neededCount), target: .cascade(destination))
+                )
             }
-
-            // Only the first empty cascade: the rest are symmetric. Relocating an entire
-            // cascade into another empty column is a no-op, so skip that count.
-            if let emptyPile = firstEmptyCascade {
-                let cap = min(runLength, transferCapToEmpty)
-                for count in stride(from: cap, through: 1, by: -1) where count < cascade.count {
+            if let firstEmptyCascade {
+                let transferLimit = min(runLength, transferCapToEmpty)
+                for count in stride(from: transferLimit, through: 1, by: -1) where count < cascade.count {
                     moves.append(
-                        Move(source: .cascade(pile: source, count: count), target: .cascade(emptyPile))
+                        Move(source: .cascade(pile: source, count: count), target: .cascade(firstEmptyCascade))
                     )
                 }
             }
         }
+        return moves
+    }
 
-        // Cascade top → first empty cell.
-        if let cellSlot = firstEmptyCell {
-            for pile in board.cascades.indices where !board.cascades[pile].isEmpty {
-                moves.append(Move(source: .cascade(pile: pile, count: 1), target: .cell(cellSlot)))
-            }
+    static func cascadeToCellMoves(from board: Board) -> [Move] {
+        guard let cellSlot = board.cells.firstIndex(of: 0) else { return [] }
+        var moves: [Move] = []
+        for pile in board.cascades.indices where !board.cascades[pile].isEmpty {
+            moves.append(Move(source: .cascade(pile: pile, count: 1), target: .cell(cellSlot)))
         }
-
         return moves
     }
 }
