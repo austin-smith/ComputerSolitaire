@@ -20,50 +20,18 @@ body:
     id: reproduction
     attributes:
       label: Steps to reproduce
-      description: Provide the smallest reliable reproduction you have. If the problem is intermittent, explain when it occurs.
+      description: Provide the smallest reliable reproduction you have.
       placeholder: |
         1.
         2.
         3.
-    validations:
-      required: true
-
-  - type: dropdown
-    id: platform
-    attributes:
-      label: Platform
-      options:
-        - macOS
-        - iPhone
-        - iPad
-    validations:
-      required: true
 
   - type: input
     id: environment
     attributes:
       label: Environment
-      description: Include the OS version and Computer Solitaire version when known.
+      description: Include the platform, OS version, and Computer Solitaire version when known.
       placeholder: macOS 26.2, Computer Solitaire 1.0
-    validations:
-      required: true
-
-  - type: dropdown
-    id: game
-    attributes:
-      label: Game variant
-      options:
-        - Klondike
-        - FreeCell
-        - Not game-specific
-    validations:
-      required: true
-
-  - type: textarea
-    id: game-context
-    attributes:
-      label: Game settings or context
-      description: Include relevant settings such as draw mode or scoring mode, and describe the state of the game when the problem occurred.
 
   - type: textarea
     id: evidence

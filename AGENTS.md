@@ -53,7 +53,7 @@ This file defines hard project constraints for any coding agent working in this 
 - Keep each issue focused on one problem or change.
 - Use a concise, specific, sentence-case title without type prefixes.
 - Give enough context to understand the issue without first inspecting the code.
-- For bugs, describe the current and expected behavior. Include reproduction steps, environment details, the game variant and relevant settings, and supporting evidence when available.
+- For bugs, describe the current and expected behavior. Include reproduction steps, environment details, and supporting evidence when available.
 - For enhancements, explain the problem or goal, the desired outcome, and clear acceptance criteria.
 - For UI issues, include screenshots. Include a short video when motion or interaction is relevant.
 - Link any related issues and pull requests.
@@ -70,6 +70,8 @@ When in doubt, choose the simplest modern SwiftUI-first solution.
 
 ## Build Workflow
 
+This command builds the macOS destination only.
+
 From repo root (`/Users/austinsmith/Developer/Repos/ComputerSolitaire`), run:
 
 ```bash
@@ -78,19 +80,6 @@ From repo root (`/Users/austinsmith/Developer/Repos/ComputerSolitaire`), run:
   -scheme ComputerSolitaire \
   -configuration Debug \
   -destination 'generic/platform=macOS' \
-  build
-```
-
-For an iOS Simulator compile check without signing, run:
-
-```bash
-/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild \
-  -project ComputerSolitaire.xcodeproj \
-  -scheme ComputerSolitaire \
-  -configuration Debug \
-  -destination 'generic/platform=iOS Simulator' \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO \
   build
 ```
 
@@ -104,13 +93,5 @@ From repo root (`/Users/austinsmith/Developer/Repos/ComputerSolitaire`), run:
   -scheme ComputerSolitaire \
   -configuration Debug \
   -destination 'platform=macOS' \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO \
   test
 ```
-
-Testing guidance:
-
-- Add tests when they protect game rules, persistence, scoring, solver behavior, meaningful user-visible behavior, cross-file integration, bug regressions, or non-trivial logic that is easy to break.
-- Do not add dedicated tests for every small helper extraction, straightforward computed property, or internal refactor unless the change introduces real behavioral risk.
-- Prefer a small number of high-signal tests over many narrow tests that only restate the implementation.

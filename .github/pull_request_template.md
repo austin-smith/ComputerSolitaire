@@ -14,5 +14,5 @@
 
 ## Validation
 
-<!-- List the builds, tests, and manual checks performed, including results.
+<!-- List the builds, tests, lint checks, and manual checks performed, including results.
      If none were performed, explain why. -->
