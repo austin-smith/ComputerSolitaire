@@ -88,6 +88,10 @@ struct SettingsView: View {
 #endif
 
             helpSection
+
+#if os(iOS)
+            aboutSection
+#endif
         }
         .navigationTitle("Settings")
 #if os(iOS)
@@ -286,6 +290,26 @@ struct SettingsView: View {
             Text("Help")
         }
     }
+
+#if os(iOS)
+    private var aboutSection: some View {
+        Section {
+            NavigationLink {
+                AboutView()
+            } label: {
+                HStack {
+                    Text("Computer Solitaire")
+                    Spacer()
+                    Text(AppInfo.version)
+                        .fontDesign(.monospaced)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("About")
+        }
+    }
+#endif
 
     // MARK: - Custom controls
 

@@ -1,6 +1,84 @@
-#if os(macOS)
+import Foundation
 import SwiftUI
 
+#if os(iOS)
+enum AppInfo {
+    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+    static let copyrightYear = String(Calendar.current.component(.year, from: Date()))
+    static let githubURL = URL(string: "https://github.com/austin-smith/ComputerSolitaire")!
+}
+
+struct AboutView: View {
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                Image("AppIconPreviewDefault")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 100, height: 100)
+                    .clipShape(.rect(cornerRadius: 22, style: .continuous))
+                    .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
+                    .accessibilityHidden(true)
+
+                VStack(spacing: 4) {
+                    Text("Computer Solitaire")
+                        .font(.system(size: 24, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.primary)
+
+                    Text("Solitaire game for your computer")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Computer Solitaire is a low-frills, ad-free solitaire game for your computer. Includes Klondike, FreeCell, and other things you enjoy.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 24)
+
+                VStack(spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text("Version")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Text(AppInfo.version)
+                            .font(.system(size: 14, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.primary)
+                    }
+
+                    Text("© \(AppInfo.copyrightYear) Austin Smith")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 12)
+                }
+                .accessibilityElement(children: .combine)
+
+                VStack(spacing: 8) {
+                    Divider()
+                        .padding(.horizontal, 24)
+
+                    Link("GitHub", destination: AppInfo.githubURL)
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 32)
+            .padding(.bottom, 40)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .navigationTitle("About")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+#Preview("About") {
+    NavigationStack {
+        AboutView()
+    }
+}
+#else
 struct AboutView: View {
     @Environment(\.openURL) private var openURL
 
@@ -16,47 +94,51 @@ struct AboutView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 128, height: 128)
+                    .frame(width: 100, height: 100)
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
 
-                VStack(spacing: 4) {
+                VStack(spacing: 3) {
                     Text("Computer Solitaire")
                         .font(.system(size: 22, weight: .bold, design: .monospaced))
                         .foregroundStyle(.primary)
+
+                    Text("Solitaire game for your computer")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
                 }
             }
 
-            VStack(spacing: 16) {
-                Text("Fully native solitaire game for your computer.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text("Computer Solitaire is a low-frills, ad-free solitaire game for your computer. Includes Klondike, FreeCell, and other things you enjoy.")
+                .font(.system(size: 11))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
-                VStack(spacing: 2) {
-                    HStack(spacing: 8) {
-                        Text("Version")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Text(appVersion)
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.primary)
-                    }
-
-                    Text("© \(copyrightYear) Austin Smith")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, 12)
+            VStack(spacing: 2) {
+                HStack(spacing: 8) {
+                    Text("Version")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(appVersion)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.primary)
                 }
+
+                Text("© \(copyrightYear) Austin Smith")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 8)
             }
 
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
+                Divider()
+                    .padding(.horizontal, 24)
+
                 Button {
                     guard let url = URL(string: "https://github.com/austin-smith/ComputerSolitaire") else { return }
                     openURL(url)
@@ -66,10 +148,9 @@ struct AboutView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
             }
-
         }
         .padding(.horizontal, 28)
-        .padding(.vertical, 24)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 0))
     }
@@ -79,5 +160,4 @@ struct AboutView: View {
     AboutView()
         .frame(width: 320, height: 380)
 }
-
 #endif
