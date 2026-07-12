@@ -47,7 +47,7 @@ enum FreeCellSolver {
 
         var nodes: [Node] = [Node(board: rootBoard, parent: -1, movesFromParent: rootAutoplay, g: rootAutoplay.count)]
         var visited: Set<Board> = [rootBoard.canonical()]
-        var heap = Heap()
+        var heap = BinaryHeap<HeapEntry>()
         heap.push(HeapEntry(f: heuristic(rootBoard), order: 0, index: 0))
         var order = 0
         var expansions = 0
@@ -238,52 +238,13 @@ private extension FreeCellSolver {
         let g: Int
     }
 
-    struct HeapEntry {
+    struct HeapEntry: HeapPrioritizable {
         let f: Int
         let order: Int
         let index: Int
 
         func takesPriority(over other: HeapEntry) -> Bool {
             f != other.f ? f < other.f : order < other.order
-        }
-    }
-
-    struct Heap {
-        private var entries: [HeapEntry] = []
-
-        mutating func push(_ entry: HeapEntry) {
-            entries.append(entry)
-            var child = entries.count - 1
-            while child > 0 {
-                let parent = (child - 1) / 2
-                guard entries[child].takesPriority(over: entries[parent]) else { break }
-                entries.swapAt(child, parent)
-                child = parent
-            }
-        }
-
-        mutating func pop() -> HeapEntry? {
-            guard let top = entries.first else { return nil }
-            let last = entries.removeLast()
-            if !entries.isEmpty {
-                entries[0] = last
-                var parent = 0
-                while true {
-                    let left = parent * 2 + 1
-                    let right = left + 1
-                    var candidate = parent
-                    if left < entries.count, entries[left].takesPriority(over: entries[candidate]) {
-                        candidate = left
-                    }
-                    if right < entries.count, entries[right].takesPriority(over: entries[candidate]) {
-                        candidate = right
-                    }
-                    guard candidate != parent else { break }
-                    entries.swapAt(parent, candidate)
-                    parent = candidate
-                }
-            }
-            return top
         }
     }
 
