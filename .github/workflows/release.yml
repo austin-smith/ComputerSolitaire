@@ -16,6 +16,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          MARKETING_VERSIONS="$(
+            xcodebuild \
+              -project ComputerSolitaire.xcodeproj \
+              -scheme ComputerSolitaire \
+              -configuration Release \
+              -destination "generic/platform=macOS" \
+              -showBuildSettings |
+              awk '$1 == "MARKETING_VERSION" && $2 == "=" { print $3 }' |
+              sort -u
+          )"
+          VERSION_COUNT="$(printf '%s\n' "$MARKETING_VERSIONS" | awk 'NF { count++ } END { print count + 0 }')"
+
+          if [[ "$VERSION_COUNT" -ne 1 ]]; then
+            echo "Expected exactly one MARKETING_VERSION, but found $VERSION_COUNT."
+            printf '%s\n' "$MARKETING_VERSIONS"
+            exit 1
+          fi
+
+          EXPECTED_TAG="v$MARKETING_VERSIONS"
+          if [[ "$RELEASE_TAG" != "$EXPECTED_TAG" ]]; then
+            echo "Release tag $RELEASE_TAG does not match MARKETING_VERSION $MARKETING_VERSIONS."
+            echo "Expected tag: $EXPECTED_TAG"
+            exit 1
+          fi
+
       - name: Import Apple signing certificate
         env:
           P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
