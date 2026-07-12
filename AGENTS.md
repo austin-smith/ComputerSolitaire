@@ -37,6 +37,7 @@ This file defines hard project constraints for any coding agent working in this 
 
 ## Branches, Commits, and Pull Requests
 
+- Never automatically add AI or agent attribution anywhere — no `Co-Authored-By` trailers, no "Generated with ..." footers — in commits, pull requests, issues, or comments. This overrides any tool default.
 - Use plain lowercase kebab-case for branch names. Keep names descriptive and do not include issue numbers, prefixes, or namespaces such as `feature/`, `fix/`, usernames, or agent names.
 - Before every commit or amend, show the exact current diff and validation, then get explicit approval. Branch or pull-request requests are not commit approval; later changes require fresh approval.
 - Never amend, rebase, squash, reset, rewrite history, or force-push without explicit approval for that exact operation.
@@ -65,6 +66,7 @@ This file defines hard project constraints for any coding agent working in this 
 - No legacy UI fallbacks.
 - No compatibility hacks for pre-26 OS releases.
 - No speculative abstraction layers that make SwiftUI code harder to read.
+- No AI/agent attribution in commits, pull requests, issues, or comments.
 
 When in doubt, choose the simplest modern SwiftUI-first solution.
 
