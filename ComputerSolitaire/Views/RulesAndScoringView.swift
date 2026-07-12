@@ -359,6 +359,11 @@ struct RulesAndScoringView: View {
                 ),
                 ScoringRow(move: "Any move or stock deal", points: Scoring.delta(for: .spiderMove), note: nil),
                 ScoringRow(move: "Complete a run", points: Scoring.delta(for: .spiderCompletedRun), note: nil),
+                ScoringRow(
+                    move: "Win time bonus",
+                    points: Scoring.timedMaxBonusDrawThree,
+                    note: "Reduced by elapsed time."
+                )
             ]
         case .pyramid:
             return [
