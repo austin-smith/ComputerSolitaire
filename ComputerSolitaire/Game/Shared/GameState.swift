@@ -49,6 +49,11 @@ struct GameState: Equatable, Codable {
         tableau = try container.decode([[Card]].self, forKey: .tableau)
     }
 
+    /// The game is won once every foundation holds a full Ace-to-King run.
+    var isWon: Bool {
+        foundations.allSatisfy { $0.count == Rank.allCases.count }
+    }
+
     static func newGame() -> GameState {
         newGame(variant: .klondike)
     }
@@ -59,6 +64,8 @@ struct GameState: Equatable, Codable {
             return newKlondikeGame()
         case .freecell:
             return newFreeCellGame()
+        case .yukon:
+            return newYukonGame()
         }
     }
 }

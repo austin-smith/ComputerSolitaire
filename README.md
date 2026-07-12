@@ -13,7 +13,7 @@ Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 ## Features
 
 - Fully native apps for iOS, iPadOS, and macOS
-- Multiple game variants: **Klondike** (both 1-card and 3-card draw) and **FreeCell**
+- Multiple game variants: **Klondike** (both 1-card and 3-card draw), **FreeCell**, and **Yukon**
 - Automatic game persistence and resume
 - Customizable table appearance
 - Other things you enjoy
@@ -24,3 +24,4 @@ Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 |---------|-------------|-------|
 | **Klondike** | Classic Solitaire, with 1-card and 3-card draw modes | [Rules](docs/solitaire-rules-klondike.md) |
 | **FreeCell** | Strategy-focused variant where every card is visible from the start | [Rules](docs/solitaire-rules-freecell.md) |
+| **Yukon** | Klondike's wilder sibling — no stock, and any face-up card moves with everything stacked on it | [Rules](docs/solitaire-rules-yukon.md) |

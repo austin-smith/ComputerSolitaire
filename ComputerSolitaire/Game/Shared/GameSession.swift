@@ -78,7 +78,7 @@ final class SolitaireViewModel {
     }
 
     var isWin: Bool {
-        state.foundations.allSatisfy { $0.count == Rank.allCases.count }
+        state.isWon
     }
 
     var canUndo: Bool {
@@ -468,8 +468,8 @@ final class SolitaireViewModel {
         switch variant {
         case .klondike:
             configureKlondikeNewGame(drawMode: drawMode)
-        case .freecell:
-            configureFreeCellNewGame()
+        case .freecell, .yukon:
+            configureStocklessNewGame()
         }
     }
 
@@ -477,8 +477,8 @@ final class SolitaireViewModel {
         switch state.variant {
         case .klondike:
             configureKlondikeRedeal()
-        case .freecell:
-            configureFreeCellRedeal()
+        case .freecell, .yukon:
+            configureStocklessRedeal()
         }
     }
 
@@ -489,9 +489,29 @@ final class SolitaireViewModel {
         switch state.variant {
         case .klondike:
             return sanitizeKlondikeRedealState(state, stockDrawCount: stockDrawCount)
-        case .freecell:
-            return sanitizeFreeCellRedealState(state)
+        case .freecell, .yukon:
+            return sanitizeStocklessRedealState(state)
         }
+    }
+
+    /// New-game configuration shared by the variants without a stock: draw counts
+    /// stay at the draw-three defaults so time-bonus scoring has a defined basis,
+    /// and no waste cards are ever fanned.
+    func configureStocklessNewGame() {
+        setStockDrawCount(DrawMode.three.rawValue)
+        setScoringDrawCount(DrawMode.three.rawValue)
+        setWasteDrawCount(0)
+    }
+
+    func configureStocklessRedeal() {
+        setScoringDrawCount(stockDrawCount)
+        setWasteDrawCount(0)
+    }
+
+    func sanitizeStocklessRedealState(_ baseState: GameState) -> GameState {
+        var sanitizedState = baseState
+        sanitizedState.wasteDrawCount = 0
+        return sanitizedState
     }
 
     private func handleVariantTableauTapIfNeeded(
@@ -501,8 +521,8 @@ final class SolitaireViewModel {
         card: Card
     ) -> Bool {
         switch state.variant {
-        case .klondike:
-            return handleKlondikeTableauFaceDownTap(
+        case .klondike, .yukon:
+            return handleFaceDownTableauTap(
                 pile: pile,
                 pileIndex: pileIndex,
                 cardIndex: cardIndex,
@@ -513,9 +533,43 @@ final class SolitaireViewModel {
         }
     }
 
-    private func canSelectTableauCards(_ cards: [Card]) -> Bool {
+    /// Tap handling shared by the variants that deal face-down tableau cards:
+    /// tapping an exposed face-down top flips it (a scored move); tapping a buried
+    /// face-down card just clears the selection.
+    @discardableResult
+    private func handleFaceDownTableauTap(
+        pile: [Card],
+        pileIndex: Int,
+        cardIndex: Int,
+        card: Card
+    ) -> Bool {
+        guard !card.isFaceUp else { return false }
+        guard cardIndex == pile.count - 1 else {
+            selection = nil
+            return true
+        }
+        clearHint()
+        pushHistory(
+            undoContext: UndoAnimationContext(
+                action: .flipTableauTop,
+                cardIDs: [card.id]
+            )
+        )
+        state.tableau[pileIndex][cardIndex].isFaceUp = true
+        incrementMovesCount()
+        applyScore(.turnOverTableauCard)
+        SoundManager.shared.play(.cardFlipFaceUp)
+        HapticManager.shared.play(.cardFlipFaceUp)
+        refreshAutoFinishAvailability()
+        selection = nil
+        return true
+    }
+
+    /// Whether the given face-up run/group may be picked up under the current
+    /// variant's rules. Also drives which tableau cards are accessibility elements.
+    func canSelectTableauCards(_ cards: [Card]) -> Bool {
         switch state.variant {
-        case .klondike:
+        case .klondike, .yukon:
             return true
         case .freecell:
             return canSelectFreeCellTableauCards(cards)
@@ -526,7 +580,7 @@ final class SolitaireViewModel {
         switch state.variant {
         case .klondike:
             return scoringDrawCount
-        case .freecell:
+        case .freecell, .yukon:
             return 0
         }
     }
@@ -647,11 +701,22 @@ extension SolitaireViewModel {
 
     func flipTopCardIfNeeded(in pileIndex: Int) {
         switch state.variant {
-        case .klondike:
-            flipKlondikeTopCardIfNeeded(in: pileIndex)
+        case .klondike, .yukon:
+            flipFaceDownTopCardIfNeeded(in: pileIndex)
         case .freecell:
             break
         }
+    }
+
+    /// Flips a face-down card exposed at the top of a pile (a scored reveal),
+    /// shared by the variants that deal face-down tableau cards.
+    private func flipFaceDownTopCardIfNeeded(in pileIndex: Int) {
+        guard let lastIndex = state.tableau[pileIndex].indices.last else { return }
+        guard !state.tableau[pileIndex][lastIndex].isFaceUp else { return }
+        state.tableau[pileIndex][lastIndex].isFaceUp = true
+        applyScore(.turnOverTableauCard)
+        SoundManager.shared.play(.cardFlipFaceUp)
+        HapticManager.shared.play(.cardFlipFaceUp)
     }
 
     func pushHistory(undoContext: UndoAnimationContext? = nil) {
@@ -675,6 +740,8 @@ extension SolitaireViewModel {
             applyKlondikeMoveScore(for: source, destination: destination)
         case .freecell:
             break
+        case .yukon:
+            applyYukonMoveScore(for: source, destination: destination)
         }
     }
 

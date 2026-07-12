@@ -1,23 +1,6 @@
 import Foundation
 
 extension SolitaireViewModel {
-    func configureFreeCellNewGame() {
-        setStockDrawCount(DrawMode.three.rawValue)
-        setScoringDrawCount(DrawMode.three.rawValue)
-        setWasteDrawCount(0)
-    }
-
-    func configureFreeCellRedeal() {
-        setScoringDrawCount(stockDrawCount)
-        setWasteDrawCount(0)
-    }
-
-    func sanitizeFreeCellRedealState(_ baseState: GameState) -> GameState {
-        var sanitizedState = baseState
-        sanitizedState.wasteDrawCount = 0
-        return sanitizedState
-    }
-
     func canSelectFreeCellTableauCards(_ cards: [Card]) -> Bool {
         GameRules.isValidDescendingAlternatingSequence(cards)
     }

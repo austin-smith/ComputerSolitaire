@@ -63,6 +63,47 @@ final class TapMovePolicyTests: XCTestCase {
         XCTAssertEqual(TapMovePolicy.bestDestination(for: selection, in: state), .tableau(1))
     }
 
+    // MARK: - Yukon destination preferences
+
+    func testYukonSafeFoundationMoveBeatsTableauBuild() {
+        // 2♠ can go to foundation (safe: rank <= 2) or onto the red 3.
+        let twoSpades = TestCards.make(.spades, .two)
+        let threeHearts = TestCards.make(.hearts, .three)
+        let state = GameState(
+            variant: .yukon,
+            stock: [],
+            waste: [],
+            wasteDrawCount: 0,
+            foundations: [[TestCards.make(.spades, .ace)], [], [], []],
+            tableau: [[twoSpades], [threeHearts], [], [], [], [], []]
+        )
+        let selection = Selection(source: .tableau(pile: 0, index: 0), cards: [twoSpades])
+
+        XCTAssertEqual(TapMovePolicy.bestDestination(for: selection, in: state), .foundation(0))
+    }
+
+    func testYukonUnsafeFoundationMoveLosesToTableauBuild() {
+        // 5♠ is foundation-eligible but unsafe (red foundations far behind); with no
+        // stock to refill the board, the tap should prefer keeping it on the red 6.
+        let fiveSpades = TestCards.make(.spades, .five)
+        let sixHearts = TestCards.make(.hearts, .six)
+        let state = GameState(
+            variant: .yukon,
+            stock: [],
+            waste: [],
+            wasteDrawCount: 0,
+            foundations: [
+                [TestCards.make(.spades, .ace), TestCards.make(.spades, .two),
+                 TestCards.make(.spades, .three), TestCards.make(.spades, .four)],
+                [], [], []
+            ],
+            tableau: [[fiveSpades], [sixHearts], [], [], [], [], []]
+        )
+        let selection = Selection(source: .tableau(pile: 0, index: 0), cards: [fiveSpades])
+
+        XCTAssertEqual(TapMovePolicy.bestDestination(for: selection, in: state), .tableau(1))
+    }
+
     func testFreeCellFreeCellIsLastResort() {
         // King with no tableau fit: only free cells remain, and the tap should use one.
         let kingSpades = TestCards.make(.spades, .king)

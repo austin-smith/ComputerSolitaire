@@ -29,6 +29,13 @@ extension SolitaireViewModel {
                 foundation: state.foundations[index]
             )
         case .tableau(let index):
+            // Dropping a stack back onto its own pile is a cancel, not a move. The
+            // destination pile still contains the lifted cards here, so in Yukon an
+            // unordered group could otherwise "land" on itself and flip the exposed
+            // face-down card without any real move being made.
+            if case .tableau(let sourcePile, _) = selection.source, sourcePile == index {
+                return false
+            }
             guard GameRules.canMoveToTableau(
                 card: movingCard,
                 destinationPile: state.tableau[index],

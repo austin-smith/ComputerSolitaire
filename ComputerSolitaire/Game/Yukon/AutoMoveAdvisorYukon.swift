@@ -1,8 +1,10 @@
 import Foundation
 
-enum KlondikeAutoMoveAdvisor {
+enum YukonAutoMoveAdvisor {
     static func allowsTableauPickup(of cards: [Card], in state: GameState) -> Bool {
-        AutoMoveAdvisor.isValidTableauSequence(cards)
+        // Yukon's defining rule: any face-up card can be picked up together with
+        // every card above it, regardless of whether they form a sequence.
+        true
     }
 
     static func allowsTableauTransfer(
@@ -30,11 +32,10 @@ enum KlondikeAutoMoveAdvisor {
         in state: GameState,
         destinations: inout [Destination]
     ) {
-        // Klondike has no auxiliary destination type beyond tableau/foundation.
+        // Yukon has no auxiliary destination type beyond tableau/foundation.
     }
 
     static func applyTableauSourceRemovalEffects(on state: inout GameState, pileIndex: Int) {
         AutoMoveAdvisor.flipExposedFaceDownTop(on: &state, pileIndex: pileIndex)
     }
-
 }

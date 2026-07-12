@@ -17,6 +17,8 @@ enum GameRules {
             return KlondikeGameRules.canMoveToTableau(card: card, destinationPile: destinationPile)
         case .freecell:
             return FreeCellGameRules.canMoveToTableau(card: card, destinationPile: destinationPile)
+        case .yukon:
+            return YukonGameRules.canMoveToTableau(card: card, destinationPile: destinationPile)
         }
     }
 
@@ -46,6 +48,19 @@ enum GameRules {
 }
 
 enum SharedGameRules {
+    /// Tableau landing rule shared by Klondike and Yukon: empty piles take Kings
+    /// only; otherwise the moving card goes on a face-up top of the opposite color,
+    /// one rank higher.
+    static func canMoveToKingAnchoredTableau(card: Card, destinationPile: [Card]) -> Bool {
+        if destinationPile.isEmpty {
+            return card.rank == .king
+        }
+        guard let top = destinationPile.last else { return false }
+        return top.isFaceUp
+            && top.suit.isRed != card.suit.isRed
+            && card.rank.rawValue == top.rank.rawValue - 1
+    }
+
     static func isValidDescendingAlternatingSequence(_ cards: [Card]) -> Bool {
         guard cards.count > 1 else { return true }
         for index in 0..<(cards.count - 1) {

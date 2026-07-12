@@ -1,6 +1,10 @@
 import Foundation
 
 enum FreeCellAutoMoveAdvisor {
+    static func allowsTableauPickup(of cards: [Card], in state: GameState) -> Bool {
+        AutoMoveAdvisor.isValidTableauSequence(cards)
+    }
+
     static func allowsTableauTransfer(
         selection: Selection,
         destinationTableauIndex: Int,

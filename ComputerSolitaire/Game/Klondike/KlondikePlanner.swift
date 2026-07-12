@@ -49,7 +49,7 @@ enum KlondikePlanner {
                 if improvesBest {
                     best = (nodeIndex, node.score, node.depth)
                 }
-                if isWon(node.state) { break }
+                if node.state.isWon { break }
             }
 
             guard node.depth < limits.maxDepth else { continue }
@@ -121,10 +121,6 @@ private extension KlondikePlanner {
         func takesPriority(over other: HeapEntry) -> Bool {
             priority != other.priority ? priority > other.priority : order < other.order
         }
-    }
-
-    static func isWon(_ state: GameState) -> Bool {
-        state.foundations.allSatisfy { $0.count == Rank.allCases.count }
     }
 
     static func score(_ state: GameState) -> Int {

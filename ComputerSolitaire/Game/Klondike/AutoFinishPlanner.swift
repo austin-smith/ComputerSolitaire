@@ -3,8 +3,8 @@ import Foundation
 /// Detects when the remaining game is a pure foundation run and produces the moves.
 ///
 /// Klondike qualifies once the stock/waste are empty and every tableau card is face up;
-/// FreeCell qualifies whenever repeatedly playing eligible cards (from cascade tops and
-/// free cells) reaches a win in simulation.
+/// Yukon once every tableau card is face up; FreeCell qualifies whenever repeatedly
+/// playing eligible cards (from cascade tops and free cells) reaches a win in simulation.
 enum AutoFinishPlanner {
     struct AutoFinishMove {
         let selection: Selection
@@ -19,7 +19,7 @@ enum AutoFinishPlanner {
         } + simulatedState.freeCells.count
 
         for _ in 0..<maxSteps {
-            if isWin(simulatedState) {
+            if simulatedState.isWon {
                 return true
             }
             guard let move = nextAutoFinishMoveInternal(in: simulatedState),
@@ -28,7 +28,7 @@ enum AutoFinishPlanner {
             }
         }
 
-        return isWin(simulatedState)
+        return simulatedState.isWon
     }
 
     static func nextAutoFinishMove(in state: GameState) -> AutoFinishMove? {
@@ -39,18 +39,16 @@ enum AutoFinishPlanner {
 
 private extension AutoFinishPlanner {
     static func isAutoFinishCandidateState(_ state: GameState) -> Bool {
-        guard !isWin(state) else { return false }
+        guard !state.isWon else { return false }
         switch state.variant {
         case .klondike:
             guard state.stock.isEmpty, state.waste.isEmpty else { return false }
             return !state.tableau.joined().contains(where: { !$0.isFaceUp })
         case .freecell:
             return true
+        case .yukon:
+            return !state.tableau.joined().contains(where: { !$0.isFaceUp })
         }
-    }
-
-    static func isWin(_ state: GameState) -> Bool {
-        state.foundations.allSatisfy { $0.count == Rank.allCases.count }
     }
 
     static func nextAutoFinishMoveInternal(in state: GameState) -> AutoFinishMove? {

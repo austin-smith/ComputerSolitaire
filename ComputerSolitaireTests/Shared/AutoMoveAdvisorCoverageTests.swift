@@ -34,6 +34,42 @@ final class AutoMoveAdvisorCoverageTests: XCTestCase {
         )
     }
 
+    func testTableauPickupRuleIsVariantSpecific() {
+        // The same unordered face-up group: pickable in Yukon, never in Klondike or
+        // FreeCell (their grabs must be descending alternating sequences).
+        let unorderedGroup = [
+            TestCards.make(.hearts, .seven, isFaceUp: true),
+            TestCards.make(.spades, .two, isFaceUp: true)
+        ]
+
+        func selections(for variant: GameVariant) -> [Selection] {
+            var tableau: [[Card]] = [unorderedGroup, [], [], [], [], [], []]
+            if variant == .freecell {
+                tableau.append([])
+            }
+            let state = GameState(
+                variant: variant,
+                stock: [],
+                waste: [],
+                wasteDrawCount: 0,
+                foundations: Array(repeating: [], count: 4),
+                tableau: tableau
+            )
+            return AutoMoveAdvisor.candidateSelections(in: state)
+        }
+
+        func containsUnorderedGrab(_ selections: [Selection]) -> Bool {
+            selections.contains(where: {
+                if case .tableau(pile: 0, index: 0) = $0.source { return $0.cards.count == 2 }
+                return false
+            })
+        }
+
+        XCTAssertTrue(containsUnorderedGrab(selections(for: .yukon)))
+        XCTAssertFalse(containsUnorderedGrab(selections(for: .klondike)))
+        XCTAssertFalse(containsUnorderedGrab(selections(for: .freecell)))
+    }
+
     func testLegalDestinationsRejectsRedundantKingTransferBetweenEmptyColumns() {
         let kingSpades = TestCards.make(.spades, .king, isFaceUp: true)
         let state = GameState(
