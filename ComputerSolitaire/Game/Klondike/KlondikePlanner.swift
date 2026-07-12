@@ -32,7 +32,7 @@ enum KlondikePlanner {
         let rootScore = score(state)
         var nodes: [Node] = [Node(state: state, parent: -1, action: nil, depth: 0, score: rootScore)]
         var visited: Set<UInt64> = [stateHash(state)]
-        var heap = Heap()
+        var heap = BinaryHeap<HeapEntry>()
         heap.push(HeapEntry(priority: rootScore, order: 0, index: 0))
         var order = 0
         var expansions = 0
@@ -49,7 +49,7 @@ enum KlondikePlanner {
                 if improvesBest {
                     best = (nodeIndex, node.score, node.depth)
                 }
-                if isWon(node.state) { break }
+                if node.state.isWon { break }
             }
 
             guard node.depth < limits.maxDepth else { continue }
@@ -113,7 +113,7 @@ private extension KlondikePlanner {
         let score: Int
     }
 
-    struct HeapEntry {
+    struct HeapEntry: HeapPrioritizable {
         let priority: Int
         let order: Int
         let index: Int
@@ -121,49 +121,6 @@ private extension KlondikePlanner {
         func takesPriority(over other: HeapEntry) -> Bool {
             priority != other.priority ? priority > other.priority : order < other.order
         }
-    }
-
-    struct Heap {
-        private var entries: [HeapEntry] = []
-
-        mutating func push(_ entry: HeapEntry) {
-            entries.append(entry)
-            var child = entries.count - 1
-            while child > 0 {
-                let parent = (child - 1) / 2
-                guard entries[child].takesPriority(over: entries[parent]) else { break }
-                entries.swapAt(child, parent)
-                child = parent
-            }
-        }
-
-        mutating func pop() -> HeapEntry? {
-            guard let top = entries.first else { return nil }
-            let last = entries.removeLast()
-            if !entries.isEmpty {
-                entries[0] = last
-                var parent = 0
-                while true {
-                    let left = parent * 2 + 1
-                    let right = left + 1
-                    var candidate = parent
-                    if left < entries.count, entries[left].takesPriority(over: entries[candidate]) {
-                        candidate = left
-                    }
-                    if right < entries.count, entries[right].takesPriority(over: entries[candidate]) {
-                        candidate = right
-                    }
-                    guard candidate != parent else { break }
-                    entries.swapAt(parent, candidate)
-                    parent = candidate
-                }
-            }
-            return top
-        }
-    }
-
-    static func isWon(_ state: GameState) -> Bool {
-        state.foundations.allSatisfy { $0.count == Rank.allCases.count }
     }
 
     static func score(_ state: GameState) -> Int {

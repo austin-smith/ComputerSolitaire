@@ -94,7 +94,9 @@ private extension TapMovePolicy {
             switch state.variant {
             case .klondike:
                 tier = 100
-            case .freecell:
+            case .freecell, .yukon:
+                // No stock to refill the board: an eager unsafe foundation move can
+                // strand a card another pile still needs as a landing spot.
                 tier = isSafeFoundationMove(card: card, in: state) ? 100 : 60
             }
             return Priority(tier: tier, buildLength: 0, pileOrder: -index)

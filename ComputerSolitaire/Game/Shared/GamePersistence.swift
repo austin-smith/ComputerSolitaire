@@ -280,6 +280,9 @@ struct GameStatistics: Codable, Equatable {
     var bestTimeSeconds: Int?
     var highScoreDrawThree: Int?
     var highScoreDrawOne: Int?
+    /// High score for variants without a draw mode (FreeCell, Yukon). Klondike wins
+    /// record into the per-draw-mode fields above instead.
+    var highScore: Int?
     var cleanWins: Int
 
     enum CodingKeys: String, CodingKey {
@@ -291,6 +294,7 @@ struct GameStatistics: Codable, Equatable {
         case bestTimeSeconds
         case highScoreDrawThree
         case highScoreDrawOne
+        case highScore
         case cleanWins
     }
 
@@ -303,6 +307,7 @@ struct GameStatistics: Codable, Equatable {
         bestTimeSeconds: Int? = nil,
         highScoreDrawThree: Int? = nil,
         highScoreDrawOne: Int? = nil,
+        highScore: Int? = nil,
         cleanWins: Int = 0
     ) {
         self.schemaVersion = schemaVersion
@@ -313,6 +318,7 @@ struct GameStatistics: Codable, Equatable {
         self.bestTimeSeconds = bestTimeSeconds.map { max(0, $0) }
         self.highScoreDrawThree = highScoreDrawThree.map { max(0, $0) }
         self.highScoreDrawOne = highScoreDrawOne.map { max(0, $0) }
+        self.highScore = highScore.map { max(0, $0) }
         self.cleanWins = max(0, min(cleanWins, self.gamesWon))
     }
 
@@ -340,6 +346,7 @@ struct GameStatistics: Codable, Equatable {
         bestTimeSeconds = try container.decodeIfPresent(Int.self, forKey: .bestTimeSeconds).map { max(0, $0) }
         highScoreDrawThree = try container.decodeIfPresent(Int.self, forKey: .highScoreDrawThree).map { max(0, $0) }
         highScoreDrawOne = try container.decodeIfPresent(Int.self, forKey: .highScoreDrawOne).map { max(0, $0) }
+        highScore = try container.decodeIfPresent(Int.self, forKey: .highScore).map { max(0, $0) }
         cleanWins = max(
             0,
             min(
@@ -373,6 +380,7 @@ struct GameStatistics: Codable, Equatable {
         var bestTimeSeconds: Int?
         var highScoreDrawThree: Int?
         var highScoreDrawOne: Int?
+        var highScore: Int?
 
         for stats in statsByVariant {
             gamesPlayed = addingSafely(gamesPlayed, stats.gamesPlayed)
@@ -402,6 +410,9 @@ struct GameStatistics: Codable, Equatable {
             if let candidate = stats.highScoreDrawOne {
                 highScoreDrawOne = max(highScoreDrawOne ?? 0, candidate)
             }
+            if let candidate = stats.highScore {
+                highScore = max(highScore ?? 0, candidate)
+            }
         }
 
         gamesWon = min(gamesWon, gamesPlayed)
@@ -415,6 +426,7 @@ struct GameStatistics: Codable, Equatable {
             bestTimeSeconds: bestTimeSeconds,
             highScoreDrawThree: highScoreDrawThree,
             highScoreDrawOne: highScoreDrawOne,
+            highScore: highScore,
             cleanWins: cleanWins
         )
     }
@@ -449,6 +461,9 @@ struct GameStatistics: Codable, Equatable {
             highScoreDrawOne = max(highScoreDrawOne ?? 0, sanitizedScore)
         } else if drawCount == DrawMode.three.rawValue {
             highScoreDrawThree = max(highScoreDrawThree ?? 0, sanitizedScore)
+        } else {
+            // Variants without a draw mode (FreeCell, Yukon) keep a single high score.
+            highScore = max(highScore ?? 0, sanitizedScore)
         }
 
         let isCleanWin = sanitizedHintsUsedInGame == 0
@@ -563,6 +578,8 @@ private extension GameState {
             return KlondikePersistenceRules.hasValidLayout(state: self)
         case .freecell:
             return FreeCellPersistenceRules.hasValidLayout(state: self)
+        case .yukon:
+            return YukonPersistenceRules.hasValidLayout(state: self)
         }
     }
 }

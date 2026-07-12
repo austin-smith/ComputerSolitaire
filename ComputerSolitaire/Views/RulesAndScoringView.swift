@@ -232,6 +232,15 @@ struct RulesAndScoringView: View {
                     definition: "A multi-card move enabled by available free cells and empty cascades."
                 )
             ]
+        case .yukon:
+            return [
+                TermRow(term: "Tableau", definition: "The seven play piles where you build down in alternating colors."),
+                TermRow(term: "Foundations", definition: "Four suit piles built up from Ace to King."),
+                TermRow(
+                    term: "Group move",
+                    definition: "Any face-up card together with every card stacked on top of it, moved as one, even out of order."
+                )
+            ]
         }
     }
 
@@ -255,6 +264,16 @@ struct RulesAndScoringView: View {
                 "Any card may move to an empty cascade.",
                 "You win by moving all 52 cards to foundations."
             ]
+        case .yukon:
+            return [
+                "Deal seven tableau piles: the first holds one face-up card; each pile after adds one more face-down card beneath five face-up cards. All 52 cards are dealt — there is no stock.",
+                "Move any face-up card along with all cards on top of it, even if they are not in sequence.",
+                "The moving group's bottom card must land on a card of the opposite color, one rank higher.",
+                "Build foundations by suit from Ace to King.",
+                "Only Kings (with any cards stacked on them) can fill an empty pile.",
+                "Face-down cards turn face up when they become the top of a pile.",
+                "You win by moving all 52 cards to foundations."
+            ]
         }
     }
 
@@ -265,6 +284,17 @@ struct RulesAndScoringView: View {
         case .freecell:
             return [
                 ScoringRow(move: "Move cards", points: 0, note: "FreeCell currently tracks time and completion."),
+                ScoringRow(
+                    move: "Win time bonus",
+                    points: Scoring.timedMaxBonusDrawThree,
+                    note: "Reduced by elapsed time."
+                )
+            ]
+        case .yukon:
+            return [
+                ScoringRow(move: "Tableau to Foundation", points: Scoring.delta(for: .tableauToFoundation), note: nil),
+                ScoringRow(move: "Turn over Tableau card", points: Scoring.delta(for: .turnOverTableauCard), note: nil),
+                ScoringRow(move: "Foundation to Tableau", points: Scoring.delta(for: .foundationToTableau), note: nil),
                 ScoringRow(
                     move: "Win time bonus",
                     points: Scoring.timedMaxBonusDrawThree,

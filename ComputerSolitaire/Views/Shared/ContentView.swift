@@ -421,7 +421,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private func boardRoot(for geometry: GeometryProxy) -> some View {
-        let boardColumnCount = max(viewModel.state.tableau.count, viewModel.gameVariant == .freecell ? 8 : 7)
+        let boardColumnCount = max(viewModel.state.tableau.count, viewModel.gameVariant.boardColumnCount)
 #if os(iOS)
         let metrics = Layout.metrics(
             for: geometry.size,

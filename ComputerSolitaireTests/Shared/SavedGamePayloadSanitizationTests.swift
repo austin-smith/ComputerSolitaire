@@ -13,6 +13,14 @@ final class SavedGamePayloadSanitizationTests: XCTestCase {
         XCTAssertNil(payload.sanitizedForRestore())
     }
 
+    func testSanitizedForRestoreRejectsKlondikeStateWithStrandedFreeCellCard() {
+        // Klondike renders no free-cell slots, so a card stranded there would be
+        // invisible and the game unwinnable.
+        var state = GameStateFixtures.validPersistenceState()
+        state.freeCells[0] = state.stock.removeLast()
+        XCTAssertNil(makePayload(state: state).sanitizedForRestore())
+    }
+
     func testSanitizedForRestoreClampsDrawModesCountsAndHistory() {
         let validState = GameStateFixtures.validPersistenceState()
         let validSnapshot = GameSnapshot(

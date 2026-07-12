@@ -22,35 +22,6 @@ extension SolitaireViewModel {
         return sanitizedState
     }
 
-    @discardableResult
-    func handleKlondikeTableauFaceDownTap(
-        pile: [Card],
-        pileIndex: Int,
-        cardIndex: Int,
-        card: Card
-    ) -> Bool {
-        guard !card.isFaceUp else { return false }
-        guard cardIndex == pile.count - 1 else {
-            selection = nil
-            return true
-        }
-        clearHint()
-        pushHistory(
-            undoContext: UndoAnimationContext(
-                action: .flipTableauTop,
-                cardIDs: [card.id]
-            )
-        )
-        state.tableau[pileIndex][cardIndex].isFaceUp = true
-        incrementMovesCount()
-        applyScore(.turnOverTableauCard)
-        SoundManager.shared.play(.cardFlipFaceUp)
-        HapticManager.shared.play(.cardFlipFaceUp)
-        refreshAutoFinishAvailability()
-        selection = nil
-        return true
-    }
-
     var supportsDrawMode: Bool {
         state.variant == .klondike
     }
@@ -168,15 +139,6 @@ extension SolitaireViewModel {
         SoundManager.shared.play(.wasteRecycleToStock)
         HapticManager.shared.play(.wasteRecycle)
         refreshAutoFinishAvailability()
-    }
-
-    func flipKlondikeTopCardIfNeeded(in pileIndex: Int) {
-        guard let lastIndex = state.tableau[pileIndex].indices.last else { return }
-        guard !state.tableau[pileIndex][lastIndex].isFaceUp else { return }
-        state.tableau[pileIndex][lastIndex].isFaceUp = true
-        applyScore(.turnOverTableauCard)
-        SoundManager.shared.play(.cardFlipFaceUp)
-        HapticManager.shared.play(.cardFlipFaceUp)
     }
 
     func applyKlondikeMoveScore(for source: Selection.Source, destination: Destination) {

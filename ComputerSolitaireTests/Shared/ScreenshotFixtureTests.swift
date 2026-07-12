@@ -124,7 +124,7 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
 
         let viewModel = SolitaireViewModel()
         viewModel.state = GameStateFixtures.seededFreeCellDeal(seed: seed)
-        viewModel.configureFreeCellNewGame()
+        viewModel.configureStocklessNewGame()
 
         let savedAt = DateFixtures.reference
         let payload = SavedGamePayload(
@@ -154,6 +154,56 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         print("FreeCell fixture — seed \(seed), photogenic \(bestScore)")
     }
 
+    /// The staged Yukon board is a fresh deal — face-down ramps under five-card
+    /// face-up fans. Seeds are scanned for the most photogenic spread across the
+    /// fan tails (the cards the eye lands on).
+    func testGenerateYukonFixture() throws {
+        try skipUnlessGenerating()
+
+        var bestSeed: UInt64?
+        var bestScore = Int.min
+        for seed in Self.candidateSeeds {
+            let deal = GameStateFixtures.seededYukonDeal(seed: seed)
+            let score = yukonDealScore(of: deal)
+            if score > bestScore {
+                bestScore = score
+                bestSeed = seed
+            }
+        }
+        let seed = try XCTUnwrap(bestSeed)
+
+        let viewModel = SolitaireViewModel()
+        viewModel.state = GameStateFixtures.seededYukonDeal(seed: seed)
+        viewModel.configureStocklessNewGame()
+
+        let savedAt = DateFixtures.reference
+        let payload = SavedGamePayload(
+            savedAt: savedAt,
+            state: viewModel.state,
+            movesCount: viewModel.movesCount,
+            score: viewModel.score,
+            gameStartedAt: savedAt.addingTimeInterval(-Self.stagedElapsedSeconds),
+            stockDrawCount: DrawMode.three.rawValue,
+            history: [],
+            hasStartedTrackedGame: false
+        )
+
+        XCTAssertNotNil(payload.sanitizedForRestore(), "Generated fixture failed the validity gate")
+        let restoredViewModel = SolitaireViewModel()
+        XCTAssertTrue(restoredViewModel.restore(from: payload), "Generated fixture failed to restore")
+        XCTAssertEqual(restoredViewModel.gameVariant, .yukon, "Fixture did not restore as Yukon")
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yukon.json")
+        try data.write(to: outputURL)
+
+        print("SCREENSHOT-FIXTURE-OUTPUT: \(outputURL.path)")
+        print("Yukon fixture — seed \(seed), photogenic \(bestScore)")
+    }
+
     // MARK: - Photogenic scoring
 
     private struct Candidate {
@@ -169,6 +219,21 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
     /// a few face cards, and an ace on a tail read well.
     private func freeCellDealScore(of deal: GameState) -> Int {
         let visible = deal.tableau.flatMap { $0.suffix(2) }
+        var score = 0
+        score += Set(visible.map(\.rank)).count * 6
+        let redCount = visible.count(where: { $0.suit.isRed })
+        score -= abs(redCount * 2 - visible.count) * 4
+        score += Set(visible.map(\.suit)).count == Suit.allCases.count ? 8 : 0
+        score += visible.count(where: { $0.rank >= .jack }) >= 3 ? 6 : 0
+        score += deal.tableau.compactMap { $0.last }.contains(where: { $0.rank == .ace }) ? 6 : 0
+        return score
+    }
+
+    /// Scores a fresh Yukon deal by the cards on the fan tails (the last two
+    /// face-up cards of each pile): rank variety, red/black balance, all four
+    /// suits, a few face cards, and an ace on a tail read well.
+    private func yukonDealScore(of deal: GameState) -> Int {
+        let visible = deal.tableau.flatMap { $0.suffix(2).filter(\.isFaceUp) }
         var score = 0
         score += Set(visible.map(\.rank)).count * 6
         let redCount = visible.count(where: { $0.suit.isRed })
