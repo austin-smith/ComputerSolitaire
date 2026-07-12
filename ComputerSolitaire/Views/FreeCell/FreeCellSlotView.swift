@@ -17,6 +17,14 @@ struct FreeCellView: View {
 
     var body: some View {
         let card = viewModel.state.freeCells[index]
+        let accessibleCard: Card? = card.flatMap { card in
+            let isHidden = hiddenCardIDs.contains(card.id)
+            let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+            return isHidden || isDragged ? nil : card
+        }
+        let isAccessibleCardSelected = accessibleCard.map {
+            viewModel.isSelected(card: $0)
+        } ?? false
         let isDragSource: Bool = {
             guard viewModel.isDragging, let selection = viewModel.selection else { return false }
             if case .freeCell(let slot) = selection.source {
@@ -40,9 +48,13 @@ struct FreeCellView: View {
                     cardSize: cardSize,
                     isCardTiltEnabled: isCardTiltEnabled,
                     cardTilts: $cardTilts,
-                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
+                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
+                    isAccessibilityElement: false
                 )
-                .opacity((viewModel.isDragging && viewModel.isSelected(card: card)) || hiddenCardIDs.contains(card.id) ? 0 : 1)
+                .opacity(
+                    (viewModel.isDragging && viewModel.isSelected(card: card))
+                        || hiddenCardIDs.contains(card.id) ? 0 : 1
+                )
                 .gesture(dragGesture(.freeCell(index)))
                 .cardFramePreference(card.id)
             }
@@ -50,6 +62,9 @@ struct FreeCellView: View {
         .onTapGesture {
             viewModel.handleFreeCellTap(index: index)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isAccessibleCardSelected ? .isSelected : [])
         .background(
             GeometryReader { proxy in
                 let boardFrame = proxy.frame(in: .named("board"))
@@ -72,5 +87,6 @@ struct FreeCellView: View {
         )
         .zIndex(isDragSource ? 10 : 0)
         .accessibilityLabel("Free Cell \(index + 1)")
+        .accessibilityValue(accessibleCard?.accessibilityName ?? "Empty")
     }
 }

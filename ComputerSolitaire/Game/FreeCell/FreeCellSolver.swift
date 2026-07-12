@@ -451,12 +451,12 @@ private extension FreeCellSolver {
         // Cascade → cascade (supermoves included; the fitting length is unique per pair).
         for source in board.cascades.indices {
             let cascade = board.cascades[source]
-            guard !cascade.isEmpty else { continue }
+            guard let sourceTop = cascade.last else { continue }
             let runLength = topRunLength(of: cascade)
 
             for destination in board.cascades.indices where destination != source {
                 guard let top = board.cascades[destination].last else { continue }
-                let neededCount = rank(top) - rank(cascade.last!)
+                let neededCount = rank(top) - rank(sourceTop)
                 guard neededCount >= 1, neededCount <= runLength, neededCount <= transferCap else { continue }
                 let bottomMoving = cascade[cascade.count - neededCount]
                 if rank(bottomMoving) == rank(top) - 1, isRed(bottomMoving) != isRed(top) {

@@ -73,7 +73,6 @@ extension View {
     }
 }
 
-
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -439,7 +438,10 @@ struct ContentView: View {
             availableWidth: geometry.size.width,
             requiredWidth: boardContentWidth + (metrics.horizontalPadding * 2)
         )
-        let effectiveCardSize = CGSize(width: cardSize.width * boardScaleFactor, height: cardSize.height * boardScaleFactor)
+        let effectiveCardSize = CGSize(
+            width: cardSize.width * boardScaleFactor,
+            height: cardSize.height * boardScaleFactor
+        )
         let isBoardReady = hasLoadedGame && !isHydratingGame
         let hintedTarget: DropTarget? = {
             guard let destination = viewModel.hintedDestination else { return nil }
@@ -1091,7 +1093,11 @@ struct ContentView: View {
             return
         }
 
-        let (startingItems, targets, needsPostUndoFrames): ([UndoAnimationItem], [UUID: UndoAnimationEndTarget], Bool) = {
+        let (startingItems, targets, needsPostUndoFrames): (
+            [UndoAnimationItem],
+            [UUID: UndoAnimationEndTarget],
+            Bool
+        ) = {
             if let context = snapshot.undoContext {
                 return buildUndoAnimationPlan(
                     context: context,
@@ -1180,7 +1186,8 @@ struct ContentView: View {
 
     private func resolveUndoAnimationTargets(attemptsRemaining: Int) {
         let resolvedItems = undoAnimationItems.compactMap { item -> UndoAnimationItem? in
-            guard let target = undoAnimationTargets[item.id], let endFrame = resolveUndoTargetFrame(target) else { return nil }
+            guard let target = undoAnimationTargets[item.id],
+                  let endFrame = resolveUndoTargetFrame(target) else { return nil }
             return UndoAnimationItem(id: item.id, card: item.card, startFrame: item.startFrame, endFrame: endFrame)
         }
 

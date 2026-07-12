@@ -39,7 +39,12 @@ enum UndoAnimationCoordinator {
         case .drawFromStock:
             for (index, id) in cardIDs.enumerated() {
                 guard let card = beforeCards[id] ?? afterCards[id] else { continue }
-                guard let startFrame = cardFrames[id] ?? wasteAnchorFrame(for: index, totalCards: cardIDs.count, stockFrame: stockFrame, wasteFrame: wasteFrame) else {
+                guard let startFrame = cardFrames[id] ?? wasteAnchorFrame(
+                    for: index,
+                    totalCards: cardIDs.count,
+                    stockFrame: stockFrame,
+                    wasteFrame: wasteFrame
+                ) else {
                     continue
                 }
                 items.append(UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame))
@@ -49,7 +54,8 @@ enum UndoAnimationCoordinator {
 
         case .recycleWaste:
             for (index, id) in cardIDs.enumerated() {
-                guard let card = afterCards[id] ?? beforeCards[id], let startFrame = stockAnchorFrame(for: index, stockFrame: stockFrame) else {
+                guard let card = afterCards[id] ?? beforeCards[id],
+                      let startFrame = stockAnchorFrame(for: index, stockFrame: stockFrame) else {
                     continue
                 }
                 items.append(UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame))

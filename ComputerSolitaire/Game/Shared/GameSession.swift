@@ -563,7 +563,10 @@ extension SolitaireViewModel {
         switch destination {
         case .foundation(let index):
             guard selection.cards.count == 1 else { return false }
-            guard GameRules.canMoveToFoundation(card: movingCard, foundation: state.foundations[index]) else { return false }
+            guard GameRules.canMoveToFoundation(
+                card: movingCard,
+                foundation: state.foundations[index]
+            ) else { return false }
             clearHint()
             pushHistory(
                 undoContext: UndoAnimationContext(

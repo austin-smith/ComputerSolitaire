@@ -159,7 +159,7 @@ struct PixelSprite {
     init(_ art: String) {
         let map: [Character: UInt8] = [
             ".": 0, "#": 1, "+": 2, "K": 3, "S": 4, "s": 5,
-            "G": 6, "R": 7, "D": 8, "H": 9, "W": 10, "A": 11, "B": 12,
+            "G": 6, "R": 7, "D": 8, "H": 9, "W": 10, "A": 11, "B": 12
         ]
         let lines = art.split(separator: "\n").map(String.init)
         let w = lines.map(\.count).max() ?? 0
@@ -269,16 +269,18 @@ enum PixelSprites {
     }
 
     // Rank glyphs — 5x7 ("10" is 7 wide).
+    static let aceRank = PixelSprite("""
+    .###.
+    #...#
+    #...#
+    #####
+    #...#
+    #...#
+    #...#
+    """)
+
     static let ranks: [String: PixelSprite] = [
-        "A": PixelSprite("""
-        .###.
-        #...#
-        #...#
-        #####
-        #...#
-        #...#
-        #...#
-        """),
+        "A": aceRank,
         "2": PixelSprite("""
         .###.
         #...#
@@ -386,11 +388,11 @@ enum PixelSprites {
         #.#..
         #..#.
         #...#
-        """),
+        """)
     ]
 
     static func rank(_ rank: Rank) -> PixelSprite {
-        ranks[rank.label] ?? ranks["A"]!
+        ranks[rank.label] ?? aceRank
     }
 
     // Face card portraits — 28x35, outlined forms in the classic style.

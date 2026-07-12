@@ -27,6 +27,15 @@ enum Suit: CaseIterable, Codable {
             return "suit.club.fill"
         }
     }
+
+    var accessibilityName: String {
+        switch self {
+        case .spades: "Spades"
+        case .hearts: "Hearts"
+        case .diamonds: "Diamonds"
+        case .clubs: "Clubs"
+        }
+    }
 }
 
 enum Rank: Int, CaseIterable, Comparable, Codable {
@@ -62,6 +71,24 @@ enum Rank: Int, CaseIterable, Comparable, Codable {
             return String(rawValue)
         }
     }
+
+    var accessibilityName: String {
+        switch self {
+        case .ace: "Ace"
+        case .two: "Two"
+        case .three: "Three"
+        case .four: "Four"
+        case .five: "Five"
+        case .six: "Six"
+        case .seven: "Seven"
+        case .eight: "Eight"
+        case .nine: "Nine"
+        case .ten: "Ten"
+        case .jack: "Jack"
+        case .queen: "Queen"
+        case .king: "King"
+        }
+    }
 }
 
 struct Card: Identifiable, Equatable, Codable {
@@ -79,6 +106,11 @@ struct Card: Identifiable, Equatable, Codable {
 }
 
 extension Card {
+    var accessibilityName: String {
+        guard isFaceUp else { return "Face-down card" }
+        return "\(rank.accessibilityName) of \(suit.accessibilityName)"
+    }
+
     static func fullDeck() -> [Card] {
         var deck: [Card] = []
         for suit in Suit.allCases {

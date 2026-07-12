@@ -166,6 +166,7 @@ struct CardView: View {
     let hintWiggleToken: UUID?
     let flipOnAppear: Bool
     let flipDelay: Double
+    let isAccessibilityElement: Bool
     @State private var flipRotation: Double
     @State private var tiltAngle: Double = 0
     @Environment(\.cardStyle) private var cardStyle
@@ -178,7 +179,8 @@ struct CardView: View {
         cardTilts: Binding<[UUID: Double]>,
         hintWiggleToken: UUID? = nil,
         flipOnAppear: Bool = false,
-        flipDelay: Double = 0
+        flipDelay: Double = 0,
+        isAccessibilityElement: Bool = true
     ) {
         self.card = card
         self.isSelected = isSelected
@@ -188,6 +190,7 @@ struct CardView: View {
         self.hintWiggleToken = hintWiggleToken
         self.flipOnAppear = flipOnAppear
         self.flipDelay = flipDelay
+        self.isAccessibilityElement = isAccessibilityElement
         let startFaceDown = flipOnAppear && card.isFaceUp
         _flipRotation = State(initialValue: startFaceDown ? 180 : (card.isFaceUp ? 0 : 180))
     }
@@ -208,6 +211,9 @@ struct CardView: View {
                 .rotation3DEffect(.degrees(backAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.7)
         }
         .frame(width: cardSize.width, height: cardSize.height)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(card.accessibilityName)
+        .accessibilityHidden(!isAccessibilityElement)
         .rotationEffect(.degrees(tiltAngle))
         .hintWiggle(token: hintWiggleToken)
         .scaleEffect(isSelected ? 1.03 : 1)
