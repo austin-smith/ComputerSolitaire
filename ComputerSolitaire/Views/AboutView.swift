@@ -5,7 +5,7 @@ import SwiftUI
 enum AppInfo {
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
     static let copyrightYear = String(Calendar.current.component(.year, from: Date()))
-    static let githubURL = URL(string: "https://github.com/austin-smith/ComputerSolitaire")!
+    static let githubURL = URL(string: "https://github.com/austin-smith/ComputerSolitaire")
 }
 
 struct AboutView: View {
@@ -57,13 +57,15 @@ struct AboutView: View {
                 }
                 .accessibilityElement(children: .combine)
 
-                VStack(spacing: 8) {
-                    Divider()
-                        .padding(.horizontal, 24)
+                if let githubURL = AppInfo.githubURL {
+                    VStack(spacing: 8) {
+                        Divider()
+                            .padding(.horizontal, 24)
 
-                    Link("GitHub", destination: AppInfo.githubURL)
-                        .buttonStyle(.bordered)
-                        .controlSize(.regular)
+                        Link("GitHub", destination: githubURL)
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)
