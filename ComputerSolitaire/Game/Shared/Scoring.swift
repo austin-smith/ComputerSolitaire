@@ -7,6 +7,8 @@ enum ScoringAction {
     case turnOverTableauCard
     case foundationToTableau
     case recycleWasteInDrawOne
+    case removePyramidPair
+    case removePyramidKing
 }
 
 enum Scoring {
@@ -29,6 +31,10 @@ enum Scoring {
             return -15
         case .recycleWasteInDrawOne:
             return -100
+        case .removePyramidPair:
+            return 10
+        case .removePyramidKing:
+            return 5
         }
     }
 

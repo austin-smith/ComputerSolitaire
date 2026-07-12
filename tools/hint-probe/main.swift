@@ -93,6 +93,25 @@ func seededDeal(variant: GameVariant, seed: UInt64) -> GameState {
             foundations: Array(repeating: [], count: 4),
             tableau: tableau
         )
+
+    case .pyramid:
+        var deck = seededDeck(seed: seed, faceUp: false)
+        var pyramid: [Card?] = []
+        for _ in 0..<PyramidGeometry.cardCount {
+            var card = deck.removeLast()
+            card.isFaceUp = true
+            pyramid.append(card)
+        }
+        return GameState(
+            variant: .pyramid,
+            stock: deck,
+            waste: [],
+            wasteDrawCount: 0,
+            foundations: Array(repeating: [], count: 4),
+            tableau: [],
+            pyramid: pyramid,
+            discard: []
+        )
     }
 }
 
@@ -123,6 +142,15 @@ func fingerprint(_ state: GameState) -> UInt64 {
         mix(0xFD)
         for card in pile { mix(card: card) }
     }
+    for slot in state.pyramid {
+        mix(0xFB)
+        if let card = slot { mix(card: card) }
+    }
+    // Section separator: without it, clearing the last pyramid slot to the
+    // discard leaves the byte stream unchanged and reads as a false revisit.
+    mix(0xFA)
+    for card in state.discard { mix(card: card) }
+    mix(UInt8(min(255, max(0, state.wasteRecyclesUsed))))
     return hash
 }
 
@@ -138,6 +166,16 @@ func apply(
         in: state,
         stockDrawCount: stockDrawCount
     )
+}
+
+/// Mirrors handlePyramidStockTap / recyclePyramidWaste in the session: draw one,
+/// or recycle within the pass limit. The planner's apply is the same pure logic.
+func pyramidStockTap(_ state: GameState) -> GameState? {
+    PyramidPlanner.apply(state.stock.isEmpty ? .resetStock : .draw, to: state)
+}
+
+func pyramidCleared(_ state: GameState) -> Int {
+    state.pyramid.count(where: { $0 == nil })
 }
 
 /// Mirrors drawFromStock / recycleWaste in the session.
@@ -172,7 +210,8 @@ enum Outcome {
 }
 
 /// Yukon/FreeCell games finish or die well under this; Klondike needs headroom
-/// for stock cycling.
+/// for stock cycling. (Pyramid is structurally bounded near 100 actions: three
+/// 24-card passes, two resets, and at most 26 removal moves.)
 func actionCap(for variant: GameVariant) -> Int {
     variant == .klondike ? 1_200 : 600
 }
@@ -305,6 +344,56 @@ func playYukonFollowingHints(seed: UInt64) -> (outcome: Outcome, revisitEvents: 
     return (.actionCap(foundation: foundationCount(state)), revisitEvents)
 }
 
+func playPyramidFollowingHints(seed: UInt64) -> Outcome {
+    // Replicates HintPlanner's Pyramid path without its wall-clock deadline:
+    // follow each planned line — winning or max-clear — to its end, then replan;
+    // noProgress means not one more pyramid card is clearable. Every Pyramid move
+    // advances a monotone quantity, so for this deterministic follower any
+    // revisit is a proven infinite loop. The loss column records pyramid cards
+    // cleared (Pyramid banks no foundations).
+    var state = seededDeal(variant: .pyramid, seed: seed)
+    var plan: [String: PyramidPlanner.Move] = [:]
+    var seen: Set<UInt64> = [fingerprint(state)]
+    var actions = 0
+    while actions < actionCap(for: .pyramid) {
+        if state.isWon { return .win(moves: actions) }
+
+        let key = PyramidPlanner.stateKey(for: state)
+        var hint = plan[key].flatMap { PyramidPlanner.materialize($0, in: state) }
+        if hint == nil {
+            plan.removeAll()
+            switch PyramidPlanner.bestLine(in: state) {
+            case .winningLine(let line), .bestEffortLine(let line, _):
+                plan = PyramidPlanner.keyedMoves(along: line, from: state)
+            case .noProgress:
+                return .deadlock(foundation: pyramidCleared(state))
+            }
+            hint = plan[key].flatMap { PyramidPlanner.materialize($0, in: state) }
+        }
+        guard let hint else {
+            return .deadlock(foundation: pyramidCleared(state))
+        }
+
+        switch hint {
+        case .move(let move):
+            guard let next = apply(move.selection, move.destination, to: state, stockDrawCount: 1) else {
+                fatalError("Seed \(seed): illegal Pyramid hint")
+            }
+            state = next
+        case .stockTap:
+            guard let next = pyramidStockTap(state) else {
+                fatalError("Seed \(seed): pyramid stock tap with nothing to tap")
+            }
+            state = next
+        }
+        actions += 1
+        if !seen.insert(fingerprint(state)).inserted {
+            return .stalemateLoop(foundation: pyramidCleared(state))
+        }
+    }
+    return .actionCap(foundation: pyramidCleared(state))
+}
+
 // MARK: - Control player
 
 // The random-moves floor calibrates each variant's deal universe. Deliberately
@@ -320,6 +409,9 @@ func playRandom(variant: GameVariant, seed: UInt64, drawCount: Int) -> Outcome {
     // for them a revisit is a proven infinite loop.)
     var state = seededDeal(variant: variant, seed: seed)
     var generator = SeededRandomNumberGenerator(seed: seed ^ 0xDEADBEEF)
+    let lossProgress: (GameState) -> Int = variant == .pyramid
+        ? pyramidCleared
+        : foundationCount
     var actions = 0
     while actions < actionCap(for: variant) {
         if state.isWon { return .win(moves: actions) }
@@ -331,13 +423,24 @@ func playRandom(variant: GameVariant, seed: UInt64, drawCount: Int) -> Outcome {
                 legal.append((selection, destination))
             }
         }
-        let canTapStock = variant == .klondike && (!state.stock.isEmpty || !state.waste.isEmpty)
+        let canTapStock: Bool
+        switch variant {
+        case .klondike:
+            canTapStock = !state.stock.isEmpty || !state.waste.isEmpty
+        case .pyramid:
+            canTapStock = !state.stock.isEmpty || PyramidGameRules.canRecycleWaste(in: state)
+        case .freecell, .yukon:
+            canTapStock = false
+        }
         let choices = legal.count + (canTapStock ? 1 : 0)
-        guard choices > 0 else { return .deadlock(foundation: foundationCount(state)) }
+        guard choices > 0 else { return .deadlock(foundation: lossProgress(state)) }
 
         let pick = Int(generator.next() % UInt64(choices))
         if pick == legal.count {
-            guard let next = stockTap(state, drawCount: drawCount) else {
+            let tapped = variant == .pyramid
+                ? pyramidStockTap(state)
+                : stockTap(state, drawCount: drawCount)
+            guard let next = tapped else {
                 fatalError("Seed \(seed): random stock tap with nothing to tap")
             }
             state = next
@@ -349,12 +452,17 @@ func playRandom(variant: GameVariant, seed: UInt64, drawCount: Int) -> Outcome {
         }
         actions += 1
     }
-    return .actionCap(foundation: foundationCount(state))
+    return .actionCap(foundation: lossProgress(state))
 }
 
 // MARK: - Reporting
 
-func summarize(_ name: String, outcomes: [(UInt64, Outcome)]) {
+func summarize(
+    _ name: String,
+    outcomes: [(UInt64, Outcome)],
+    lossProgressLabel: String = "foundation-at-loss",
+    tracksOverBanking: Bool = true
+) {
     var wins = 0
     var deadlocks = 0
     var loops = 0
@@ -391,7 +499,11 @@ func summarize(_ name: String, outcomes: [(UInt64, Outcome)]) {
     }
     if !lossFoundations.isEmpty {
         let sorted = lossFoundations.sorted()
-        print("foundation-at-loss: median=\(sorted[sorted.count / 2]), losses with >=40 banked: \(highBankLosses)")
+        var line = "\(lossProgressLabel): median=\(sorted[sorted.count / 2])"
+        if tracksOverBanking {
+            line += ", losses with >=40 banked: \(highBankLosses)"
+        }
+        print(line)
     }
 }
 
@@ -441,7 +553,12 @@ func run(variant: GameVariant, seeds: UInt64, drawCount: Int) {
         label = "freecell"
     case .yukon:
         label = "yukon"
+    case .pyramid:
+        label = "pyramid"
     }
+    // Pyramid banks no foundations; its loss column records pyramid cards cleared.
+    let lossProgressLabel = variant == .pyramid ? "pyramid-cleared-at-loss" : "foundation-at-loss"
+    let tracksOverBanking = variant != .pyramid
 
     let start = DispatchTime.now()
     let followerResults = mapInParallel(
@@ -455,6 +572,8 @@ func run(variant: GameVariant, seeds: UInt64, drawCount: Int) {
             return (playFreeCellFollowingHints(seed: seed), 0)
         case .yukon:
             return playYukonFollowingHints(seed: seed)
+        case .pyramid:
+            return (playPyramidFollowingHints(seed: seed), 0)
         }
     }
     let seconds = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1e9
@@ -466,7 +585,12 @@ func run(variant: GameVariant, seeds: UInt64, drawCount: Int) {
         return false
     }
 
-    summarize("\(label) — following every hint", outcomes: followerOutcomes)
+    summarize(
+        "\(label) — following every hint",
+        outcomes: followerOutcomes,
+        lossProgressLabel: lossProgressLabel,
+        tracksOverBanking: tracksOverBanking
+    )
     print(String(format: "elapsed: %.1fs", seconds))
     if variant == .yukon {
         print("hint revisit events: \(revisitEvents)")
@@ -488,7 +612,9 @@ func run(variant: GameVariant, seeds: UInt64, drawCount: Int) {
     }
     summarize(
         "\(label) — random legal moves (control)",
-        outcomes: zip(1...seeds, randomResults).map { ($0, $1) }
+        outcomes: zip(1...seeds, randomResults).map { ($0, $1) },
+        lossProgressLabel: lossProgressLabel,
+        tracksOverBanking: tracksOverBanking
     )
 }
 
@@ -506,7 +632,7 @@ var gateViolations = 0
 setvbuf(stdout, nil, _IOLBF, 0)
 
 func exitWithUsage() -> Never {
-    print("usage: run.sh <yukon|klondike|freecell|all> [deals >= 1] [klondike draw count: 1 or 3]")
+    print("usage: run.sh <yukon|klondike|freecell|pyramid|all> [deals >= 1] [klondike draw count: 1 or 3]")
     exit(1)
 }
 
@@ -527,11 +653,14 @@ case "klondike":
     run(variant: .klondike, seeds: seeds, drawCount: draw)
 case "freecell":
     run(variant: .freecell, seeds: seeds, drawCount: 3)
+case "pyramid":
+    run(variant: .pyramid, seeds: seeds, drawCount: 1)
 case "all":
     run(variant: .yukon, seeds: seeds, drawCount: 3)
     run(variant: .klondike, seeds: seeds, drawCount: 1)
     run(variant: .klondike, seeds: seeds, drawCount: 3)
     run(variant: .freecell, seeds: seeds, drawCount: 3)
+    run(variant: .pyramid, seeds: seeds, drawCount: 1)
 default:
     exitWithUsage()
 }

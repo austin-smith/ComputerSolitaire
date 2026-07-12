@@ -241,6 +241,20 @@ struct RulesAndScoringView: View {
                     definition: "Any face-up card together with every card stacked on top of it, moved as one, even out of order."
                 )
             ]
+        case .pyramid:
+            return [
+                TermRow(
+                    term: "Pyramid",
+                    definition: "Twenty-eight face-up cards in seven overlapping rows; a card is exposed once both cards covering it are gone."
+                ),
+                TermRow(term: "Stock", definition: "The face-down draw pile."),
+                TermRow(term: "Waste", definition: "Face-up cards drawn from the stock; only the top card is playable."),
+                TermRow(term: "Discard", definition: "Where removed pairs and Kings go; cards there are out of play."),
+                TermRow(
+                    term: "Recycle",
+                    definition: "Turning the waste back into the stock. Pyramid allows two recycles (three passes)."
+                )
+            ]
         }
     }
 
@@ -274,6 +288,16 @@ struct RulesAndScoringView: View {
                 "Face-down cards turn face up when they become the top of a pile.",
                 "You win by moving all 52 cards to foundations."
             ]
+        case .pyramid:
+            return [
+                "Deal 28 cards face up into a seven-row pyramid; the remaining 24 form the stock.",
+                "Remove exposed pairs whose ranks total 13: Ace is 1, Jack 11, Queen 12.",
+                "Kings count 13 alone and are removed singly.",
+                "A card is exposed once neither card covering it remains. A card whose only cover is its matching partner may be removed together with it.",
+                "Tap the stock to draw one card to the waste; the top waste card can pair with exposed pyramid cards.",
+                "When the stock runs out, recycle the waste back into it — at most twice.",
+                "You win by removing all 28 pyramid cards; stock and waste may keep cards."
+            ]
         }
     }
 
@@ -295,6 +319,16 @@ struct RulesAndScoringView: View {
                 ScoringRow(move: "Tableau to Foundation", points: Scoring.delta(for: .tableauToFoundation), note: nil),
                 ScoringRow(move: "Turn over Tableau card", points: Scoring.delta(for: .turnOverTableauCard), note: nil),
                 ScoringRow(move: "Foundation to Tableau", points: Scoring.delta(for: .foundationToTableau), note: nil),
+                ScoringRow(
+                    move: "Win time bonus",
+                    points: Scoring.timedMaxBonusDrawThree,
+                    note: "Reduced by elapsed time."
+                )
+            ]
+        case .pyramid:
+            return [
+                ScoringRow(move: "Remove a pair", points: Scoring.delta(for: .removePyramidPair), note: nil),
+                ScoringRow(move: "Remove a King", points: Scoring.delta(for: .removePyramidKing), note: nil),
                 ScoringRow(
                     move: "Win time bonus",
                     points: Scoring.timedMaxBonusDrawThree,

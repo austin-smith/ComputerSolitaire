@@ -201,6 +201,47 @@ final class TapMovePolicyTests: XCTestCase {
         XCTAssertTrue(TapMovePolicy.isSafeFoundationMove(card: TestCards.make(.hearts, .ace), in: state))
     }
 
+    // MARK: - Pyramid destination preferences
+
+    func testPyramidPairOnTheBoardBeatsAWastePair() {
+        // The 6 can pair with the exposed 7 on the board or the 7 on the waste;
+        // the board pair removes two pyramid cards, so it wins.
+        var slots = [Card?](repeating: nil, count: PyramidGeometry.cardCount)
+        let six = TestCards.make(.spades, .six)
+        slots[21] = six
+        slots[22] = TestCards.make(.hearts, .seven)
+        let state = GameStateFixtures.pyramidState(
+            slots: slots,
+            waste: [TestCards.make(.diamonds, .seven)]
+        )
+        let selection = Selection(source: .pyramid(index: 21), cards: [six])
+
+        XCTAssertEqual(TapMovePolicy.bestDestination(for: selection, in: state), .pyramid(22))
+    }
+
+    func testPyramidEqualPartnersPreferTheLowestSlot() {
+        var slots = [Card?](repeating: nil, count: PyramidGeometry.cardCount)
+        let six = TestCards.make(.spades, .six)
+        slots[21] = six
+        slots[22] = TestCards.make(.hearts, .seven)
+        slots[23] = TestCards.make(.clubs, .seven)
+        let state = GameStateFixtures.pyramidState(slots: slots)
+        let selection = Selection(source: .pyramid(index: 21), cards: [six])
+
+        XCTAssertEqual(TapMovePolicy.bestDestination(for: selection, in: state), .pyramid(22))
+    }
+
+    func testPyramidKingResolvesToTheDiscard() {
+        var slots = [Card?](repeating: nil, count: PyramidGeometry.cardCount)
+        let king = TestCards.make(.diamonds, .king)
+        slots[21] = king
+        slots[22] = TestCards.make(.hearts, .seven)
+        let state = GameStateFixtures.pyramidState(slots: slots)
+        let selection = Selection(source: .pyramid(index: 21), cards: [king])
+
+        XCTAssertEqual(TapMovePolicy.bestDestination(for: selection, in: state), .discard)
+    }
+
     // MARK: - Helpers
 
     private func freeCellState(

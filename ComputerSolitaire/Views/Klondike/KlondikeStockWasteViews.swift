@@ -16,10 +16,12 @@ struct StockView: View {
                 PilePlaceholderView(cardSize: cardSize)
                     .allowsHitTesting(false)
                 if viewModel.state.stock.isEmpty {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .accessibilityHidden(true)
+                    if viewModel.canInteractWithStock {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .accessibilityHidden(true)
+                    }
                 } else {
                     CardBackView(cardSize: cardSize)
                 }
@@ -46,20 +48,20 @@ struct StockView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isStockActionUnavailable)
+        .disabled(!viewModel.canInteractWithStock)
         .accessibilityLabel("Stock")
         .accessibilityValue(stockAccessibilityValue)
     }
 
-    private var isStockActionUnavailable: Bool {
-        viewModel.state.stock.isEmpty && viewModel.state.waste.isEmpty
-    }
-
     private var stockAccessibilityValue: String {
         if !viewModel.state.stock.isEmpty {
+            if viewModel.gameVariant == .pyramid {
+                let recycles = viewModel.pyramidWasteRecyclesRemaining
+                return "\(viewModel.state.stock.count) cards. \(recycles) recycles left"
+            }
             return "\(viewModel.state.stock.count) cards"
         }
-        if !viewModel.state.waste.isEmpty {
+        if viewModel.canInteractWithStock {
             return "Empty. Activate to recycle the waste pile"
         }
         return "Empty"
@@ -70,6 +72,7 @@ struct WasteView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
     let fanSpacing: CGFloat
+    var isTargeted: Bool = false
     let isHintTargeted: Bool
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
@@ -103,6 +106,14 @@ struct WasteView: View {
         ZStack(alignment: .topLeading) {
             PilePlaceholderView(cardSize: cardSize)
                 .hintWiggle(token: isHintTargeted ? hintWiggleToken : nil)
+            DropHighlightView(
+                cardSize: cardSize,
+                isTargeted: isTargeted,
+                isHintTargeted: false,
+                hintOpacity: 0
+            )
+            .zIndex(3)
+            .allowsHitTesting(false)
             ForEach(Array(visibleWaste.enumerated()), id: \.element.id) { index, card in
                 let isTopCard = index == visibleWaste.count - 1
                 let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)

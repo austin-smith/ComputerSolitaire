@@ -19,6 +19,9 @@ enum GameRules {
             return FreeCellGameRules.canMoveToTableau(card: card, destinationPile: destinationPile)
         case .yukon:
             return YukonGameRules.canMoveToTableau(card: card, destinationPile: destinationPile)
+        case .pyramid:
+            // Pyramid has no tableau piles; its pair moves flow through PyramidGameRules.
+            return false
         }
     }
 

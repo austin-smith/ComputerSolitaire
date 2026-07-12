@@ -21,15 +21,20 @@ final class WinCelebrationController {
         phase == .animating
     }
 
+    /// `launchPiles` are the piles the cascade erupts from, with `launchTargets`
+    /// naming each pile's on-board drop target (aligned by index): the four
+    /// foundations for the build-up variants, the discard for Pyramid.
     func beginIfNeededForWin(
-        foundations: [[Card]],
+        launchPiles: [[Card]],
+        launchTargets: [DropTarget],
         dropFrames: [DropTarget: DropTargetGeometry],
         boardViewportSize: CGSize
     ) {
         guard phase == .idle else { return }
         begin(
-            foundations: foundations,
-            hiddenFoundationCardIDs: Self.foundationCardIDs(from: foundations),
+            launchPiles: launchPiles,
+            launchTargets: launchTargets,
+            hiddenLaunchCardIDs: Self.launchCardIDs(from: launchPiles),
             dropFrames: dropFrames,
             boardViewportSize: boardViewportSize
         )
@@ -44,7 +49,8 @@ final class WinCelebrationController {
     }
 
     func syncForLoadedGame(
-        foundations: [[Card]],
+        launchPiles: [[Card]],
+        launchTargets: [DropTarget],
         isWin: Bool,
         dropFrames: [DropTarget: DropTargetGeometry],
         boardViewportSize: CGSize
@@ -53,14 +59,15 @@ final class WinCelebrationController {
         cascadeTask = nil
         if isWin {
             let completedCards = completedStatesForLoadedWin(
-                foundations: foundations,
+                launchPiles: launchPiles,
+                launchTargets: launchTargets,
                 dropFrames: dropFrames,
                 boardViewportSize: boardViewportSize
             )
             cards = completedCards
             hiddenFoundationCardIDs = completedCards.isEmpty
                 ? []
-                : Self.foundationCardIDs(from: foundations)
+                : Self.launchCardIDs(from: launchPiles)
             phase = .completed
         } else {
             cards = []
@@ -75,36 +82,27 @@ final class WinCelebrationController {
     }
 
     private func begin(
-        foundations: [[Card]],
-        hiddenFoundationCardIDs: Set<UUID>,
+        launchPiles: [[Card]],
+        launchTargets: [DropTarget],
+        hiddenLaunchCardIDs: Set<UUID>,
         dropFrames: [DropTarget: DropTargetGeometry],
         boardViewportSize: CGSize
     ) {
-        self.hiddenFoundationCardIDs = hiddenFoundationCardIDs
+        self.hiddenFoundationCardIDs = hiddenLaunchCardIDs
         let boardBounds = CGRect(origin: .zero, size: boardViewportSize)
         guard boardBounds.width > 0, boardBounds.height > 0 else {
             phase = .completed
             return
         }
 
-        var launchFrames: [Int: CGRect] = [:]
-        for index in 0..<4 {
-            if let frame = dropFrames[.foundation(index)]?.snapFrame, frame != .zero {
-                launchFrames[index] = frame
-            }
-        }
-
-        let fallbackLaunchFrame = launchFrames[0]
-            ?? launchFrames.values.first
-            ?? CGRect(
-                x: boardBounds.midX - 50,
-                y: max(0, boardBounds.height * 0.22 - 72),
-                width: 100,
-                height: 145
-            )
+        let launchFrames = Self.launchFrames(for: launchTargets, dropFrames: dropFrames)
+        let fallbackLaunchFrame = Self.fallbackLaunchFrame(
+            launchFrames: launchFrames,
+            boardBounds: boardBounds
+        )
 
         let initialStates = WinCascadeCoordinator.makeInitialStates(
-            foundations: foundations,
+            foundations: launchPiles,
             foundationFrames: launchFrames,
             fallbackLaunchFrame: fallbackLaunchFrame
         )
@@ -146,26 +144,28 @@ final class WinCelebrationController {
         phase = .completed
     }
 
-    private static func foundationCardIDs(from foundations: [[Card]]) -> Set<UUID> {
-        Set(foundations.flatMap { pile in pile.map(\.id) })
+    private static func launchCardIDs(from launchPiles: [[Card]]) -> Set<UUID> {
+        Set(launchPiles.flatMap { pile in pile.map(\.id) })
     }
 
-    private func completedStatesForLoadedWin(
-        foundations: [[Card]],
-        dropFrames: [DropTarget: DropTargetGeometry],
-        boardViewportSize: CGSize
-    ) -> [WinCascadeCardState] {
-        let boardBounds = CGRect(origin: .zero, size: boardViewportSize)
-        guard boardBounds.width > 0, boardBounds.height > 0 else { return [] }
-
+    private static func launchFrames(
+        for launchTargets: [DropTarget],
+        dropFrames: [DropTarget: DropTargetGeometry]
+    ) -> [Int: CGRect] {
         var launchFrames: [Int: CGRect] = [:]
-        for index in 0..<4 {
-            if let frame = dropFrames[.foundation(index)]?.snapFrame, frame != .zero {
+        for (index, target) in launchTargets.enumerated() {
+            if let frame = dropFrames[target]?.snapFrame, frame != .zero {
                 launchFrames[index] = frame
             }
         }
+        return launchFrames
+    }
 
-        let fallbackLaunchFrame = launchFrames[0]
+    private static func fallbackLaunchFrame(
+        launchFrames: [Int: CGRect],
+        boardBounds: CGRect
+    ) -> CGRect {
+        launchFrames[0]
             ?? launchFrames.values.first
             ?? CGRect(
                 x: boardBounds.midX - 50,
@@ -173,9 +173,25 @@ final class WinCelebrationController {
                 width: 100,
                 height: 145
             )
+    }
+
+    private func completedStatesForLoadedWin(
+        launchPiles: [[Card]],
+        launchTargets: [DropTarget],
+        dropFrames: [DropTarget: DropTargetGeometry],
+        boardViewportSize: CGSize
+    ) -> [WinCascadeCardState] {
+        let boardBounds = CGRect(origin: .zero, size: boardViewportSize)
+        guard boardBounds.width > 0, boardBounds.height > 0 else { return [] }
+
+        let launchFrames = Self.launchFrames(for: launchTargets, dropFrames: dropFrames)
+        let fallbackLaunchFrame = Self.fallbackLaunchFrame(
+            launchFrames: launchFrames,
+            boardBounds: boardBounds
+        )
 
         return WinCascadeCoordinator.makeCompletedStates(
-            foundations: foundations,
+            foundations: launchPiles,
             foundationFrames: launchFrames,
             fallbackLaunchFrame: fallbackLaunchFrame,
             boardBounds: boardBounds

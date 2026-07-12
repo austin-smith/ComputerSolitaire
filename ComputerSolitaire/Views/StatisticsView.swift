@@ -23,6 +23,7 @@ struct StatisticsView: View {
         case klondike
         case freecell
         case yukon
+        case pyramid
         case all
 
         var id: String { rawValue }
@@ -35,6 +36,8 @@ struct StatisticsView: View {
                 self = .freecell
             case .yukon:
                 self = .yukon
+            case .pyramid:
+                self = .pyramid
             }
         }
 
@@ -47,6 +50,8 @@ struct StatisticsView: View {
                 return .freecell
             case .yukon:
                 return .yukon
+            case .pyramid:
+                return .pyramid
             case .all:
                 return nil
             }
@@ -54,7 +59,7 @@ struct StatisticsView: View {
 
         var title: String {
             switch self {
-            case .klondike, .freecell, .yukon:
+            case .klondike, .freecell, .yukon, .pyramid:
                 return variant?.title ?? ""
             case .all:
                 return "All"
@@ -262,7 +267,7 @@ struct StatisticsView: View {
                 HighScoreRow(label: "High Score (3-card)", score: stats.highScoreDrawThree),
                 HighScoreRow(label: "High Score (1-card)", score: stats.highScoreDrawOne)
             ]
-        case .freecell, .yukon:
+        case .freecell, .yukon, .pyramid:
             return [HighScoreRow(label: "High Score", score: stats.highScore)]
         case .all:
             return []
@@ -409,6 +414,8 @@ struct StatisticsView: View {
             return "Reset FreeCell statistics?"
         case .yukon:
             return "Reset Yukon statistics?"
+        case .pyramid:
+            return "Reset Pyramid statistics?"
         case .all:
             return "Reset all statistics?"
         }
@@ -422,6 +429,8 @@ struct StatisticsView: View {
             return "Reset FreeCell Statistics"
         case .yukon:
             return "Reset Yukon Statistics"
+        case .pyramid:
+            return "Reset Pyramid Statistics"
         case .all:
             return "Reset All Statistics"
         }
@@ -435,8 +444,10 @@ struct StatisticsView: View {
             return "This will reset only FreeCell games, times, win rates, and high scores."
         case .yukon:
             return "This will reset only Yukon games, times, win rates, and high scores."
+        case .pyramid:
+            return "This will reset only Pyramid games, times, win rates, and high scores."
         case .all:
-            return "This will reset Klondike, FreeCell, and Yukon statistics."
+            return "This will reset Klondike, FreeCell, Yukon, and Pyramid statistics."
         }
     }
 

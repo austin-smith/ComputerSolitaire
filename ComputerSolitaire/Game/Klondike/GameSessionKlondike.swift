@@ -41,14 +41,7 @@ extension SolitaireViewModel {
         refreshAutoFinishAvailability()
     }
 
-    func visibleWasteCards() -> [Card] {
-        guard state.variant == .klondike else { return [] }
-        let count = min(state.wasteDrawCount, stockDrawCount)
-        return Array(state.waste.suffix(count))
-    }
-
-    func handleStockTap() {
-        guard state.variant == .klondike else { return }
+    func handleKlondikeStockTap() {
         clearHint()
         selection = nil
         isDragging = false
@@ -58,57 +51,6 @@ extension SolitaireViewModel {
         } else {
             drawFromStock()
         }
-    }
-
-    func handleWasteTap() {
-        guard state.variant == .klondike else { return }
-        guard let top = state.waste.last, state.wasteDrawCount > 0 else { return }
-        HapticManager.shared.play(.cardPickUp)
-        let wasteSelection = Selection(source: .waste, cards: [top])
-        if queueBestAutoMove(for: wasteSelection) {
-            return
-        }
-        if selection?.source == .waste {
-            selection = nil
-            return
-        }
-        isDragging = false
-        selection = wasteSelection
-    }
-
-    @discardableResult
-    func startDragFromWaste() -> Bool {
-        guard state.variant == .klondike else { return false }
-        guard let top = state.waste.last, state.wasteDrawCount > 0 else { return false }
-        clearHint()
-        selection = Selection(source: .waste, cards: [top])
-        isDragging = true
-        return true
-    }
-
-    func drawFromStock() {
-        guard !state.stock.isEmpty else { return }
-        clearHint()
-        let drawCount = min(stockDrawCount, state.stock.count)
-        let drawnCardIDs = (0..<drawCount).map { offset in
-            state.stock[state.stock.count - 1 - offset].id
-        }
-        pushHistory(
-            undoContext: UndoAnimationContext(
-                action: .drawFromStock,
-                cardIDs: drawnCardIDs
-            )
-        )
-        for _ in 0..<drawCount {
-            var card = state.stock.removeLast()
-            card.isFaceUp = true
-            state.waste.append(card)
-        }
-        setWasteDrawCount(drawCount)
-        incrementMovesCount()
-        SoundManager.shared.play(.cardDrawFromStock)
-        HapticManager.shared.play(.stockDraw)
-        refreshAutoFinishAvailability()
     }
 
     func recycleWaste() {

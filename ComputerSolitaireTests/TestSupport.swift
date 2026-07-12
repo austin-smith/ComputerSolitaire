@@ -104,6 +104,76 @@ enum GameStateFixtures {
         )
     }
 
+    /// A reproducible Pyramid deal matching the shape of `GameState.newPyramidGame`.
+    static func seededPyramidDeal(seed: UInt64) -> GameState {
+        var deck = seededDeck(seed: seed, faceUp: false)
+        var pyramid: [Card?] = []
+        for _ in 0..<PyramidGeometry.cardCount {
+            var card = deck.removeLast()
+            card.isFaceUp = true
+            pyramid.append(card)
+        }
+        return GameState(
+            variant: .pyramid,
+            stock: deck,
+            waste: [],
+            wasteDrawCount: 0,
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: Array(repeating: [], count: 4),
+            tableau: [],
+            pyramid: pyramid,
+            discard: []
+        )
+    }
+
+    /// Hand-constructed Pyramid position for rules and planner tests. `slots` fills
+    /// the pyramid top-down (nil = removed) and is padded with removed slots; any
+    /// cards not on the board, in the stock, or in the waste land on the discard so
+    /// persistence-facing tests still see 52 cards.
+    static func pyramidState(
+        slots: [Card?],
+        stock: [Card] = [],
+        waste: [Card] = [],
+        passesUsed: Int = 0,
+        fillDiscardFromRemainder: Bool = false
+    ) -> GameState {
+        var pyramid = slots
+        if pyramid.count < PyramidGeometry.cardCount {
+            pyramid.append(
+                contentsOf: [Card?](repeating: nil, count: PyramidGeometry.cardCount - pyramid.count)
+            )
+        }
+        pyramid = pyramid.map { card in
+            card.map { placed in
+                var faceUp = placed
+                faceUp.isFaceUp = true
+                return faceUp
+            }
+        }
+        var discard: [Card] = []
+        if fillDiscardFromRemainder {
+            func identity(_ card: Card) -> Int {
+                (Suit.allCases.firstIndex(of: card.suit) ?? 0) * 16 + card.rank.rawValue
+            }
+            let usedIdentities = Set((pyramid.compactMap { $0 } + stock + waste).map(identity))
+            discard = TestCards.fullDeck(faceUp: true).filter { card in
+                !usedIdentities.contains(identity(card))
+            }
+        }
+        return GameState(
+            variant: .pyramid,
+            stock: stock,
+            waste: waste,
+            wasteDrawCount: min(1, waste.count),
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: Array(repeating: [], count: 4),
+            tableau: [],
+            pyramid: pyramid,
+            discard: discard,
+            wasteRecyclesUsed: passesUsed
+        )
+    }
+
     private static func seededDeck(seed: UInt64, faceUp: Bool) -> [Card] {
         var generator = SeededRandomNumberGenerator(seed: seed)
         var deck = TestCards.fullDeck(faceUp: faceUp)

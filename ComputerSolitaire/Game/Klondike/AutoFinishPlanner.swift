@@ -48,6 +48,10 @@ private extension AutoFinishPlanner {
             return true
         case .yukon:
             return !state.tableau.joined().contains(where: { !$0.isFaceUp })
+        case .pyramid:
+            // Pyramid has no deterministic mop-up phase: which pair to remove
+            // matters to the last move, so the game never auto-finishes.
+            return false
         }
     }
 
@@ -144,7 +148,7 @@ private extension AutoFinishPlanner {
             }
             state.freeCells[slot] = nil
 
-        case .waste, .foundation:
+        case .waste, .foundation, .pyramid:
             return false
         }
 

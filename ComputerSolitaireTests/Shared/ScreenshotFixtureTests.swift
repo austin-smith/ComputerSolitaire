@@ -204,6 +204,57 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         print("Yukon fixture — seed \(seed), photogenic \(bestScore)")
     }
 
+    /// The staged Pyramid board is a fresh deal with the first card drawn to the
+    /// waste. All 28 pyramid cards are visible, but the eye lands on the bottom
+    /// two rows, so seeds are scanned for the most photogenic spread there.
+    func testGeneratePyramidFixture() throws {
+        try skipUnlessGenerating()
+
+        var bestSeed: UInt64?
+        var bestScore = Int.min
+        for seed in Self.candidateSeeds {
+            let deal = GameStateFixtures.seededPyramidDeal(seed: seed)
+            let score = pyramidDealScore(of: deal)
+            if score > bestScore {
+                bestScore = score
+                bestSeed = seed
+            }
+        }
+        let seed = try XCTUnwrap(bestSeed)
+
+        let viewModel = SolitaireViewModel()
+        viewModel.state = GameStateFixtures.seededPyramidDeal(seed: seed)
+        viewModel.configurePyramidNewGame()
+        viewModel.handleStockTap()
+
+        let savedAt = DateFixtures.reference
+        let payload = SavedGamePayload(
+            savedAt: savedAt,
+            state: viewModel.state,
+            movesCount: viewModel.movesCount,
+            score: viewModel.score,
+            gameStartedAt: savedAt.addingTimeInterval(-Self.stagedElapsedSeconds),
+            stockDrawCount: DrawMode.one.rawValue,
+            history: [],
+            hasStartedTrackedGame: false
+        )
+
+        XCTAssertNotNil(payload.sanitizedForRestore(), "Generated fixture failed the validity gate")
+        let restoredViewModel = SolitaireViewModel()
+        XCTAssertTrue(restoredViewModel.restore(from: payload), "Generated fixture failed to restore")
+        XCTAssertEqual(restoredViewModel.gameVariant, .pyramid, "Fixture did not restore as Pyramid")
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pyramid.json")
+        try data.write(to: outputURL)
+
+        print("SCREENSHOT-FIXTURE-OUTPUT: \(outputURL.path)")
+        print("Pyramid fixture — seed \(seed), photogenic \(bestScore)")
+    }
+
     // MARK: - Photogenic scoring
 
     private struct Candidate {
@@ -241,6 +292,28 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         score += Set(visible.map(\.suit)).count == Suit.allCases.count ? 8 : 0
         score += visible.count(where: { $0.rank >= .jack }) >= 3 ? 6 : 0
         score += deal.tableau.compactMap { $0.last }.contains(where: { $0.rank == .ace }) ? 6 : 0
+        return score
+    }
+
+    /// Scores a fresh Pyramid deal by the bottom two pyramid rows (the fully and
+    /// nearly exposed cards the eye lands on): rank variety, red/black balance,
+    /// all four suits, a few face cards, and an exposed pair or King to suggest a
+    /// first move.
+    private func pyramidDealScore(of deal: GameState) -> Int {
+        let visible = deal.pyramid.suffix(13).compactMap { $0 }
+        let exposed = deal.pyramid.indices
+            .filter { PyramidGeometry.isExposed($0, in: deal.pyramid) }
+            .compactMap { deal.pyramid[$0] }
+        var score = 0
+        score += Set(visible.map(\.rank)).count * 6
+        let redCount = visible.count(where: { $0.suit.isRed })
+        score -= abs(redCount * 2 - visible.count) * 4
+        score += Set(visible.map(\.suit)).count == Suit.allCases.count ? 8 : 0
+        score += visible.count(where: { $0.rank >= .jack }) >= 3 ? 6 : 0
+        let exposedRanks = Set(exposed.map(\.rank.rawValue))
+        let hasExposedPair = exposedRanks.contains { exposedRanks.contains(PyramidGameRules.pairSum - $0) }
+        score += hasExposedPair ? 8 : 0
+        score += exposed.contains(where: { $0.rank == .king }) ? 4 : 0
         return score
     }
 

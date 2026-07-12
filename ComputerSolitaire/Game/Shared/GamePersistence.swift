@@ -140,10 +140,15 @@ struct SavedGamePayload: Codable {
         guard state.isValidForPersistence else { return nil }
 
         let sanitizedStockDrawCount: Int = {
-            if state.variant == .klondike {
+            switch state.variant {
+            case .klondike:
                 return DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
+            case .pyramid:
+                // Pyramid always draws a single card to the waste.
+                return DrawMode.one.rawValue
+            case .freecell, .yukon:
+                return DrawMode.three.rawValue
             }
-            return DrawMode.three.rawValue
         }()
         let sanitizedMovesCount = max(0, movesCount)
         let sanitizedScore = Scoring.clamped(score)
@@ -153,6 +158,7 @@ struct SavedGamePayload: Codable {
             if state.variant == .klondike {
                 return DrawMode(rawValue: scoringDrawCount)?.rawValue ?? sanitizedStockDrawCount
             }
+            // Variants without a draw-mode choice score time bonuses on a fixed basis.
             return DrawMode.three.rawValue
         }()
         let sanitizedPauseStartedAt = pauseStartedAt
@@ -181,25 +187,17 @@ struct SavedGamePayload: Codable {
             .suffix(SolitaireViewModel.maxUndoHistoryCount)
 
         var sanitizedState = state
-        if sanitizedState.variant == .klondike {
-            sanitizedState.wasteDrawCount = min(
-                max(0, sanitizedState.wasteDrawCount),
-                min(sanitizedStockDrawCount, sanitizedState.waste.count)
-            )
-        } else {
-            sanitizedState.wasteDrawCount = 0
-        }
+        sanitizedState.wasteDrawCount = Self.sanitizedWasteDrawCount(
+            for: sanitizedState,
+            stockDrawCount: sanitizedStockDrawCount
+        )
 
         let sanitizedRedealState: GameState? = {
             guard var baseState = redealState, baseState.isValidForPersistence else { return nil }
-            if baseState.variant == .klondike {
-                baseState.wasteDrawCount = min(
-                    max(0, baseState.wasteDrawCount),
-                    min(sanitizedStockDrawCount, baseState.waste.count)
-                )
-            } else {
-                baseState.wasteDrawCount = 0
-            }
+            baseState.wasteDrawCount = Self.sanitizedWasteDrawCount(
+                for: baseState,
+                stockDrawCount: sanitizedStockDrawCount
+            )
             return baseState
         }()
 
@@ -223,6 +221,19 @@ struct SavedGamePayload: Codable {
             undosUsedInCurrentGame: sanitizedUndosUsedInCurrentGame,
             usedRedealInCurrentGame: sanitizedUsedRedealInCurrentGame
         )
+    }
+
+    /// Klondike fans up to a draw's worth of waste cards; Pyramid shows a single
+    /// waste card; the stockless variants keep no waste at all.
+    private static func sanitizedWasteDrawCount(for state: GameState, stockDrawCount: Int) -> Int {
+        switch state.variant {
+        case .klondike:
+            return min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
+        case .pyramid:
+            return min(max(0, state.wasteDrawCount), min(1, state.waste.count))
+        case .freecell, .yukon:
+            return 0
+        }
     }
 }
 
@@ -280,8 +291,8 @@ struct GameStatistics: Codable, Equatable {
     var bestTimeSeconds: Int?
     var highScoreDrawThree: Int?
     var highScoreDrawOne: Int?
-    /// High score for variants without a draw mode (FreeCell, Yukon). Klondike wins
-    /// record into the per-draw-mode fields above instead.
+    /// High score for variants without a draw mode (FreeCell, Yukon, Pyramid).
+    /// Klondike wins record into the per-draw-mode fields above instead.
     var highScore: Int?
     var cleanWins: Int
 
@@ -462,7 +473,8 @@ struct GameStatistics: Codable, Equatable {
         } else if drawCount == DrawMode.three.rawValue {
             highScoreDrawThree = max(highScoreDrawThree ?? 0, sanitizedScore)
         } else {
-            // Variants without a draw mode (FreeCell, Yukon) keep a single high score.
+            // Variants without a draw mode (FreeCell, Yukon, Pyramid) keep a single
+            // high score.
             highScore = max(highScore ?? 0, sanitizedScore)
         }
 
@@ -557,7 +569,8 @@ private struct CardIdentity: Hashable {
 
 private extension GameState {
     var allCards: [Card] {
-        stock + waste + freeCells.compactMap { $0 } + foundations.flatMap { $0 } + tableau.flatMap { $0 }
+        stock + waste + freeCells.compactMap { $0 } + foundations.flatMap { $0 }
+            + tableau.flatMap { $0 } + pyramid.compactMap { $0 } + discard
     }
 
     var isValidForPersistence: Bool {
@@ -580,6 +593,8 @@ private extension GameState {
             return FreeCellPersistenceRules.hasValidLayout(state: self)
         case .yukon:
             return YukonPersistenceRules.hasValidLayout(state: self)
+        case .pyramid:
+            return PyramidPersistenceRules.hasValidLayout(state: self)
         }
     }
 }

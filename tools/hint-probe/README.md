@@ -22,6 +22,7 @@ tools/hint-probe/run.sh yukon 500
 tools/hint-probe/run.sh klondike 500 1   # third arg is the draw count
 tools/hint-probe/run.sh klondike 500 3
 tools/hint-probe/run.sh freecell 500
+tools/hint-probe/run.sh pyramid 500
 ```
 
 The number is how many seeded deals the run plays (seeds 1 through N; default
@@ -58,6 +59,7 @@ consecutive runs, serial and parallel.
 | `klondike` draw-1 | **44.4%** | 39.4% |
 | `klondike` draw-3 | **24.0%** | 6.0% |
 | `freecell` | **99.8%** | 0.2% |
+| `pyramid` | **80.2%** | 15.2% |
 
 Reading the table honestly:
 
@@ -76,6 +78,14 @@ Reading the table honestly:
   within its node budget; the follower classifies it as a deadlock because the
   nudge fallback only circles there (a solved line is finite and cannot loop,
   so any plan-line revisit would be a real bug and trips the gate).
+- **Pyramid (80.2% vs 15.2%)**: the solver's own verdict sweep proves 79.5% of
+  deals winnable at its default budget (0.8% proved unwinnable, 19.8% undecided
+  — hard deals whose reachable graphs exceed the budget), so the follower
+  converts essentially every deal the search can prove. Losses record pyramid
+  cards cleared instead of foundation cards (Pyramid banks no foundations;
+  median 22 of 28 cleared on lost deals), and the over-banking detector does
+  not apply. Wins are efficient by structure — the whole game is bounded near
+  100 actions — so the hint value is the win-rate gap, not move count.
 - These figures use the planners' full node budgets. The app additionally
   clips each interactive search at a fraction of a second so the UI never
   hitches; that clip rarely binds, so in-app quality is at most a hair below

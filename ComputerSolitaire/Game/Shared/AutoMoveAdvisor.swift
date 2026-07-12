@@ -5,6 +5,12 @@ import Foundation
 /// state looks like after a move.
 enum AutoMoveAdvisor {
     static func legalDestinations(for selection: Selection, in state: GameState) -> [Destination] {
+        // Pyramid removes pairs instead of building piles, so its move set is
+        // generated wholesale rather than through the pile-oriented flow below.
+        if state.variant == .pyramid {
+            return PyramidAutoMoveAdvisor.legalDestinations(for: selection, in: state)
+        }
+
         guard selectionMatchesState(selection, in: state) else { return [] }
         guard let movingCard = selection.cards.first else { return [] }
 
@@ -53,6 +59,10 @@ enum AutoMoveAdvisor {
     }
 
     static func candidateSelections(in state: GameState) -> [Selection] {
+        if state.variant == .pyramid {
+            return PyramidAutoMoveAdvisor.candidateSelections(in: state)
+        }
+
         var selections: [Selection] = []
 
         if let topWasteCard = state.waste.last, state.wasteDrawCount > 0 {
@@ -93,6 +103,14 @@ enum AutoMoveAdvisor {
         in state: GameState,
         stockDrawCount: Int
     ) -> GameState? {
+        if state.variant == .pyramid {
+            return PyramidAutoMoveAdvisor.simulatedState(
+                afterMoving: selection,
+                to: destination,
+                in: state
+            )
+        }
+
         guard selectionMatchesState(selection, in: state) else { return nil }
         guard legalDestinations(for: selection, in: state).contains(destination) else { return nil }
 
@@ -113,6 +131,9 @@ enum AutoMoveAdvisor {
         case .tableau(let pile, let index):
             nextState.tableau[pile].removeSubrange(index..<nextState.tableau[pile].count)
             applyVariantTableauSourceRemovalEffects(on: &nextState, pileIndex: pile)
+        case .pyramid:
+            // Unreachable: Pyramid states dispatch wholesale above.
+            return nil
         }
 
         switch destination {
@@ -124,6 +145,9 @@ enum AutoMoveAdvisor {
         case .freeCell(let index):
             guard selection.cards.count == 1, let card = selection.cards.first else { return nil }
             nextState.freeCells[index] = card
+        case .pyramid, .waste, .discard:
+            // Unreachable: Pyramid states dispatch wholesale above.
+            return nil
         }
 
         return nextState
@@ -155,6 +179,12 @@ enum AutoMoveAdvisor {
             let selectedCards = Array(sourcePile[index...])
             guard selectedCards.count == selection.cards.count else { return false }
             return zip(selectedCards, selection.cards).allSatisfy { $0.id == $1.id }
+
+        case .pyramid(let index):
+            guard selection.cards.count == 1 else { return false }
+            guard state.pyramid.indices.contains(index),
+                  let card = state.pyramid[index] else { return false }
+            return card.id == selection.cards[0].id
         }
     }
 
@@ -203,6 +233,9 @@ private extension AutoMoveAdvisor {
             return FreeCellAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .yukon:
             return YukonAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
+        case .pyramid:
+            // Unreachable: Pyramid dispatches wholesale before the tableau flow.
+            return false
         }
     }
 
@@ -230,6 +263,9 @@ private extension AutoMoveAdvisor {
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
             )
+        case .pyramid:
+            // Unreachable: Pyramid dispatches wholesale before the tableau flow.
+            return false
         }
     }
 
@@ -253,6 +289,9 @@ private extension AutoMoveAdvisor {
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
             )
+        case .pyramid:
+            // Unreachable: Pyramid dispatches wholesale before the tableau flow.
+            return false
         }
     }
 
@@ -280,6 +319,9 @@ private extension AutoMoveAdvisor {
                 in: state,
                 destinations: &destinations
             )
+        case .pyramid:
+            // Unreachable: Pyramid dispatches wholesale before the tableau flow.
+            break
         }
     }
 
@@ -291,6 +333,9 @@ private extension AutoMoveAdvisor {
             FreeCellAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .yukon:
             YukonAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
+        case .pyramid:
+            // Unreachable: Pyramid dispatches wholesale before the tableau flow.
+            break
         }
     }
 }

@@ -48,6 +48,12 @@ enum DragDropCoordinator {
             return 100 + index
         case .tableau(let index):
             return 200 + index
+        case .pyramid(let index):
+            return 300 + index
+        case .waste:
+            return 400
+        case .discard:
+            return 500
         }
     }
 }

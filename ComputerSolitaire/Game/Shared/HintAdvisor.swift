@@ -17,6 +17,11 @@ enum HintAdvisor {
         if state.variant == .klondike, !state.stock.isEmpty || !state.waste.isEmpty {
             return true
         }
+        if state.variant == .pyramid {
+            if !state.stock.isEmpty || PyramidGameRules.canRecycleWaste(in: state) {
+                return true
+            }
+        }
         for selection in AutoMoveAdvisor.candidateSelections(in: state) {
             // Foundation rollbacks only count as available moves where the hint
             // stack can actually turn one into a hint: Yukon's planner searches
@@ -57,14 +62,24 @@ enum HintAdvisor {
 /// searched region — a nudge there has never been observed to rescue a game and a
 /// deterministic one shuttles a card back and forth, so a Yukon hint is always the
 /// first move of a verified improving line, or silence (like Klondike's planner).
+/// Pyramid hints come from `PyramidPlanner`'s exact search and are cached like
+/// Yukon's; on unwinnable deals (common in Pyramid) they follow the max-clear line
+/// rather than going silent, because players still play lost deals for cards
+/// cleared and the solver knows the best continuation. Pyramid's nil is reserved
+/// for positions where not one more pyramid card is clearable. The ratchet is
+/// loop-free by construction: every Pyramid move advances a monotone quantity
+/// (removals shrink the board, draws advance the stock, resets spend passes), so a
+/// followed line can never revisit a position.
 final class HintPlanner {
     /// How long a single interactive hint request may spend searching.
     private static let freeCellSearchBudget: TimeInterval = 0.3
     private static let klondikeSearchBudget: TimeInterval = 0.15
     private static let yukonSearchBudget: TimeInterval = 0.25
+    private static let pyramidSearchBudget: TimeInterval = 0.3
 
     private var freeCellPlan: [String: FreeCellSolver.Move] = [:]
     private var yukonPlan: [String: YukonPlanner.PlannedMove] = [:]
+    private var pyramidPlan: [String: PyramidPlanner.Move] = [:]
 
     func bestHint(in state: GameState, stockDrawCount: Int) -> HintAdvisor.Hint? {
         switch state.variant {
@@ -80,6 +95,8 @@ final class HintPlanner {
             return freeCellHint(in: state)
         case .yukon:
             return yukonHint(in: state)
+        case .pyramid:
+            return pyramidHint(in: state)
         }
     }
 }
@@ -108,6 +125,36 @@ private extension HintPlanner {
         return .move(
             HintAdvisor.HintMove(selection: fallback.selection, destination: fallback.destination)
         )
+    }
+
+    func pyramidHint(in state: GameState) -> HintAdvisor.Hint? {
+        let key = PyramidPlanner.stateKey(for: state)
+        if let hint = plannedPyramidHint(for: key, in: state) {
+            return hint
+        }
+
+        pyramidPlan.removeAll()
+        let limits = PyramidPlanner.Limits(
+            deadline: Date().addingTimeInterval(Self.pyramidSearchBudget)
+        )
+        switch PyramidPlanner.bestLine(in: state, limits: limits) {
+        case .winningLine(let line), .bestEffortLine(let line, _):
+            pyramidPlan = PyramidPlanner.keyedMoves(along: line, from: state)
+            return plannedPyramidHint(for: key, in: state)
+
+        case .noProgress:
+            // Exhaustion proves not one more pyramid card is clearable; truncation
+            // means a large searched region held none. Either way every remaining
+            // action is provably futile stock-churning, so silence is the honest
+            // answer. The hint button re-enables after the player's next move.
+            return nil
+        }
+    }
+
+    func plannedPyramidHint(for key: String, in state: GameState) -> HintAdvisor.Hint? {
+        // materialize re-validates the cached move against the live state.
+        guard let move = pyramidPlan[key] else { return nil }
+        return PyramidPlanner.materialize(move, in: state)
     }
 
     func yukonHint(in state: GameState) -> HintAdvisor.Hint? {

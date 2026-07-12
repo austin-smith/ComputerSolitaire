@@ -321,8 +321,8 @@ private extension YukonPlanner {
             }
         case .foundation(let pile):
             _ = nextState.foundations[pile].popLast()
-        case .waste, .freeCell:
-            // Yukon has no waste or free cells.
+        case .waste, .freeCell, .pyramid:
+            // Yukon has no waste, free cells, or pyramid.
             return nil
         }
         switch move.destination {
@@ -333,7 +333,7 @@ private extension YukonPlanner {
             nextState.foundations[index].append(card)
         case .tableau(let index):
             nextState.tableau[index].append(contentsOf: move.selection.cards)
-        case .freeCell:
+        case .freeCell, .pyramid, .waste, .discard:
             return nil
         }
         return nextState
