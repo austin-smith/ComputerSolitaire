@@ -22,25 +22,56 @@ struct StatisticsView: View {
     private enum Scope: String, CaseIterable, Identifiable {
         case klondike
         case freecell
+        case yukon
         case all
 
         var id: String { rawValue }
 
-        var title: String {
+        init(variant: GameVariant) {
+            switch variant {
+            case .klondike:
+                self = .klondike
+            case .freecell:
+                self = .freecell
+            case .yukon:
+                self = .yukon
+            }
+        }
+
+        /// The variant this scope covers; nil for the aggregate scope.
+        var variant: GameVariant? {
             switch self {
             case .klondike:
-                return GameVariant.klondike.title
+                return .klondike
             case .freecell:
-                return GameVariant.freecell.title
+                return .freecell
+            case .yukon:
+                return .yukon
+            case .all:
+                return nil
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .klondike, .freecell, .yukon:
+                return variant?.title ?? ""
             case .all:
                 return "All"
             }
         }
     }
 
+    private struct HighScoreRow: Identifiable {
+        let label: String
+        let score: Int?
+
+        var id: String { label }
+    }
+
     init(viewModel: SolitaireViewModel?, initialVariant: GameVariant = .klondike) {
         self.viewModel = viewModel
-        _selectedScope = State(initialValue: initialVariant == .freecell ? .freecell : .klondike)
+        _selectedScope = State(initialValue: Scope(variant: initialVariant))
     }
 
     var body: some View {
@@ -102,8 +133,9 @@ struct StatisticsView: View {
                         keyValueRow("Total Time", durationLabel(displayTotalTimeSeconds(at: context.date)))
                         keyValueRow("Avg Time", durationLabel(stats.averageTimeSeconds))
                         keyValueRow("Best Time", bestTimeLabel)
-                        keyValueRow("High Score (3-card)", stats.highScoreDrawThree.map { "\($0)" } ?? "-")
-                        keyValueRow("High Score (1-card)", stats.highScoreDrawOne.map { "\($0)" } ?? "-")
+                        ForEach(highScoreRowsForSelectedScope) { row in
+                            keyValueRow(row.label, scoreLabel(row.score))
+                        }
                     } header: {
                         Text("Performance")
                     }
@@ -221,6 +253,26 @@ struct StatisticsView: View {
         return durationLabel(bestTimeSeconds)
     }
 
+    /// Draw modes are a Klondike concept, so only Klondike splits its high score
+    /// by draw mode; the other variants keep a single high score.
+    private var highScoreRowsForSelectedScope: [HighScoreRow] {
+        switch selectedScope {
+        case .klondike:
+            return [
+                HighScoreRow(label: "High Score (3-card)", score: stats.highScoreDrawThree),
+                HighScoreRow(label: "High Score (1-card)", score: stats.highScoreDrawOne)
+            ]
+        case .freecell, .yukon:
+            return [HighScoreRow(label: "High Score", score: stats.highScore)]
+        case .all:
+            return []
+        }
+    }
+
+    private func scoreLabel(_ score: Int?) -> String {
+        score.map { "\($0)" } ?? "-"
+    }
+
     private var secondaryHighlightIcon: String {
         if selectedScope == .all {
             return "number"
@@ -253,21 +305,10 @@ struct StatisticsView: View {
 
     private func displayTotalTimeSeconds(at date: Date) -> Int {
         let liveElapsed: Int
-        switch selectedScope {
-        case .all:
+        if activeVariantMatchesSelectedScope {
             liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
-        case .klondike:
-            if viewModel?.gameVariant == .klondike {
-                liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
-            } else {
-                liveElapsed = 0
-            }
-        case .freecell:
-            if viewModel?.gameVariant == .freecell {
-                liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
-            } else {
-                liveElapsed = 0
-            }
+        } else {
+            liveElapsed = 0
         }
         let (sum, overflow) = stats.totalTimeSeconds.addingReportingOverflow(liveElapsed)
         return overflow ? Int.max : max(0, sum)
@@ -339,14 +380,12 @@ struct StatisticsView: View {
     }
 
     private func resetStatistics() {
-        switch selectedScope {
-        case .klondike:
-            GameStatisticsStore.reset(for: .klondike)
-        case .freecell:
-            GameStatisticsStore.reset(for: .freecell)
-        case .all:
-            GameStatisticsStore.reset(for: .klondike)
-            GameStatisticsStore.reset(for: .freecell)
+        if let variant = selectedScope.variant {
+            GameStatisticsStore.reset(for: variant)
+        } else {
+            for variant in GameVariant.allCases {
+                GameStatisticsStore.reset(for: variant)
+            }
         }
 
         if selectedScope == .all || activeVariantMatchesSelectedScope {
@@ -358,14 +397,8 @@ struct StatisticsView: View {
     }
 
     private var activeVariantMatchesSelectedScope: Bool {
-        switch selectedScope {
-        case .klondike:
-            return viewModel?.gameVariant == .klondike
-        case .freecell:
-            return viewModel?.gameVariant == .freecell
-        case .all:
-            return true
-        }
+        guard let variant = selectedScope.variant else { return true }
+        return viewModel?.gameVariant == variant
     }
 
     private var resetDialogTitle: String {
@@ -374,6 +407,8 @@ struct StatisticsView: View {
             return "Reset Klondike statistics?"
         case .freecell:
             return "Reset FreeCell statistics?"
+        case .yukon:
+            return "Reset Yukon statistics?"
         case .all:
             return "Reset all statistics?"
         }
@@ -385,6 +420,8 @@ struct StatisticsView: View {
             return "Reset Klondike Statistics"
         case .freecell:
             return "Reset FreeCell Statistics"
+        case .yukon:
+            return "Reset Yukon Statistics"
         case .all:
             return "Reset All Statistics"
         }
@@ -396,21 +433,20 @@ struct StatisticsView: View {
             return "This will reset only Klondike games, times, win rates, and high scores."
         case .freecell:
             return "This will reset only FreeCell games, times, win rates, and high scores."
+        case .yukon:
+            return "This will reset only Yukon games, times, win rates, and high scores."
         case .all:
-            return "This will reset both Klondike and FreeCell statistics."
+            return "This will reset Klondike, FreeCell, and Yukon statistics."
         }
     }
 
     private func loadStats() {
-        switch selectedScope {
-        case .klondike:
-            stats = GameStatisticsStore.load(for: .klondike)
-        case .freecell:
-            stats = GameStatisticsStore.load(for: .freecell)
-        case .all:
-            let klondikeStats = GameStatisticsStore.load(for: .klondike)
-            let freeCellStats = GameStatisticsStore.load(for: .freecell)
-            stats = GameStatistics.aggregated([klondikeStats, freeCellStats])
+        if let variant = selectedScope.variant {
+            stats = GameStatisticsStore.load(for: variant)
+        } else {
+            stats = GameStatistics.aggregated(
+                GameVariant.allCases.map { GameStatisticsStore.load(for: $0) }
+            )
         }
     }
 

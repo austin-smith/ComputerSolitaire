@@ -342,6 +342,21 @@ struct TopRowView: View {
                     hintWiggleToken: hintWiggleToken,
                     dragGesture: dragGesture
                 )
+            case .yukon:
+                YukonTopRowView(
+                    viewModel: viewModel,
+                    cardSize: cardSize,
+                    columnSpacing: columnSpacing,
+                    activeTarget: activeTarget,
+                    hintedTarget: hintedTarget,
+                    hintHighlightOpacity: hintHighlightOpacity,
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
+                    hiddenCardIDs: hiddenCardIDs,
+                    hintedCardIDs: hintedCardIDs,
+                    hintWiggleToken: hintWiggleToken,
+                    dragGesture: dragGesture
+                )
             }
         }
     }
@@ -572,17 +587,18 @@ struct TableauPileView: View {
                     let isSelected = viewModel.isSelected(card: card)
                     let selectableCards = Array(pile[index...])
                     let isValidRunOrigin = card.isFaceUp
-                        && GameRules.isValidDescendingAlternatingSequence(selectableCards)
-                    let isExposedFaceDownCard = viewModel.state.variant == .klondike
+                        && viewModel.canSelectTableauCards(selectableCards)
+                    let isExposedFaceDownCard = viewModel.state.variant.dealsFaceDownTableauCards
                         && !card.isFaceUp
                         && index == pile.indices.last
                     let isAccessibilityElement = (isValidRunOrigin || isExposedFaceDownCard)
                         && !isDragged
                         && !isHidden
+                    let multiCardNoun = viewModel.state.variant == .yukon ? "group" : "run"
                     let accessibilityHint = isExposedFaceDownCard
                         ? "Flip card"
                         : selectableCards.count > 1
-                            ? "Selects a \(selectableCards.count)-card run"
+                            ? "Selects a \(selectableCards.count)-card \(multiCardNoun)"
                             : "Selects this card"
                     let yOffset = yOffsets[index]
                     let cardView = CardView(

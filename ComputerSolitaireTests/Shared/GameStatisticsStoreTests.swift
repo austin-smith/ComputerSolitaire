@@ -33,6 +33,69 @@ final class GameStatisticsStoreTests: XCTestCase {
         XCTAssertEqual(stats.cleanWins, 1)
     }
 
+    func testRecordCompletedGameWithoutDrawModeUpdatesVariantNeutralHighScore() {
+        // FreeCell and Yukon have no stock, so they report draw count 0: their wins
+        // must land in the single variant-neutral high score, never in Klondike's
+        // per-draw-mode fields.
+        var stats = GameStatistics()
+
+        stats.recordCompletedGame(
+            didWin: true,
+            elapsedSeconds: 180,
+            finalScore: 420,
+            drawCount: 0,
+            hintsUsedInGame: 0,
+            undosUsedInGame: 0,
+            usedRedealInGame: false
+        )
+        stats.recordCompletedGame(
+            didWin: true,
+            elapsedSeconds: 240,
+            finalScore: 350,
+            drawCount: 0,
+            hintsUsedInGame: 0,
+            undosUsedInGame: 0,
+            usedRedealInGame: false
+        )
+
+        XCTAssertEqual(stats.highScore, 420)
+        XCTAssertNil(stats.highScoreDrawThree)
+        XCTAssertNil(stats.highScoreDrawOne)
+    }
+
+    func testKlondikeDrawModeWinsDoNotTouchVariantNeutralHighScore() {
+        var stats = GameStatistics()
+
+        stats.recordCompletedGame(
+            didWin: true,
+            elapsedSeconds: 100,
+            finalScore: 500,
+            drawCount: DrawMode.three.rawValue,
+            hintsUsedInGame: 0,
+            undosUsedInGame: 0,
+            usedRedealInGame: false
+        )
+
+        XCTAssertEqual(stats.highScoreDrawThree, 500)
+        XCTAssertNil(stats.highScore)
+    }
+
+    func testStatisticsDecodingToleratesPayloadWithoutHighScoreField() throws {
+        // Statistics saved before the variant-neutral high score existed must load
+        // with the field simply absent.
+        let legacyJSON = """
+        {"schemaVersion": 1, "gamesPlayed": 3, "gamesWon": 2, "totalTimeSeconds": 600, "cleanWins": 1}
+        """
+        let stats = try JSONDecoder().decode(
+            GameStatistics.self,
+            from: try XCTUnwrap(legacyJSON.data(using: .utf8))
+        )
+
+        XCTAssertNil(stats.highScore)
+        XCTAssertEqual(stats.gamesPlayed, 3)
+        XCTAssertEqual(stats.gamesWon, 2)
+    }
+
     func testRecordCompletedGameUsesOverflowSafeCounters() {
         var stats = GameStatistics(
             gamesPlayed: Int.max,
@@ -154,19 +217,30 @@ final class GameStatisticsStoreTests: XCTestCase {
             bestTimeSeconds: 150,
             highScoreDrawThree: nil,
             highScoreDrawOne: nil,
+            highScore: 260,
             cleanWins: 3
         )
+        let yukonStats = GameStatistics(
+            trackedSince: DateFixtures.plus(600),
+            gamesPlayed: 2,
+            gamesWon: 1,
+            totalTimeSeconds: 400,
+            bestTimeSeconds: 180,
+            highScore: 610,
+            cleanWins: 0
+        )
 
-        let aggregate = GameStatistics.aggregated([klondikeStats, freeCellStats])
+        let aggregate = GameStatistics.aggregated([klondikeStats, freeCellStats, yukonStats])
 
         XCTAssertEqual(aggregate.trackedSince, DateFixtures.reference)
-        XCTAssertEqual(aggregate.gamesPlayed, 10)
-        XCTAssertEqual(aggregate.gamesWon, 7)
-        XCTAssertEqual(aggregate.totalTimeSeconds, 2000)
+        XCTAssertEqual(aggregate.gamesPlayed, 12)
+        XCTAssertEqual(aggregate.gamesWon, 8)
+        XCTAssertEqual(aggregate.totalTimeSeconds, 2400)
         XCTAssertEqual(aggregate.bestTimeSeconds, 120)
         XCTAssertEqual(aggregate.cleanWins, 5)
         XCTAssertEqual(aggregate.highScoreDrawThree, 500)
         XCTAssertEqual(aggregate.highScoreDrawOne, 300)
+        XCTAssertEqual(aggregate.highScore, 610)
     }
 
     func testAggregatedStatisticsUsesOverflowSafeCounters() {

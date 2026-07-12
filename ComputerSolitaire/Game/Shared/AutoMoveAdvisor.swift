@@ -77,7 +77,7 @@ enum AutoMoveAdvisor {
             let pile = state.tableau[pileIndex]
             for cardIndex in pile.indices where pile[cardIndex].isFaceUp {
                 let cards = Array(pile[cardIndex...])
-                guard isValidTableauSequence(cards) else { continue }
+                guard variantAllowsTableauPickup(of: cards, in: state) else { continue }
                 selections.append(
                     Selection(source: .tableau(pile: pileIndex, index: cardIndex), cards: cards)
                 )
@@ -161,9 +161,51 @@ enum AutoMoveAdvisor {
     static func isValidTableauSequence(_ cards: [Card]) -> Bool {
         GameRules.isValidDescendingAlternatingSequence(cards)
     }
+
+    /// Moving an entire king-led tableau stack to another empty column is a no-op
+    /// for advisor quality purposes (manual play can still do this). Shared by the
+    /// variants whose empty columns accept Kings only.
+    static func isRedundantWholePileKingTransfer(
+        selection: Selection,
+        destinationTableauIndex: Int,
+        in state: GameState
+    ) -> Bool {
+        guard case .tableau(let sourcePile, let sourceIndex) = selection.source else { return false }
+        guard sourcePile != destinationTableauIndex else { return false }
+        guard state.tableau.indices.contains(sourcePile),
+              state.tableau.indices.contains(destinationTableauIndex) else { return false }
+        guard state.tableau[destinationTableauIndex].isEmpty else { return false }
+        guard sourceIndex == 0 else { return false }
+
+        let sourceCards = state.tableau[sourcePile]
+        guard selection.cards.count == sourceCards.count else { return false }
+        guard let movingCard = selection.cards.first else { return false }
+        return movingCard.rank == .king
+    }
+
+    /// Flips a face-down card exposed at the top of the pile a selection left,
+    /// shared by the variants that deal face-down tableau cards.
+    static func flipExposedFaceDownTop(on state: inout GameState, pileIndex: Int) {
+        guard let topIndex = state.tableau[pileIndex].indices.last,
+              !state.tableau[pileIndex][topIndex].isFaceUp else {
+            return
+        }
+        state.tableau[pileIndex][topIndex].isFaceUp = true
+    }
 }
 
 private extension AutoMoveAdvisor {
+    static func variantAllowsTableauPickup(of cards: [Card], in state: GameState) -> Bool {
+        switch state.variant {
+        case .klondike:
+            return KlondikeAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
+        case .freecell:
+            return FreeCellAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
+        case .yukon:
+            return YukonAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
+        }
+    }
+
     static func variantAllowsTableauTransfer(
         selection: Selection,
         destinationTableauIndex: Int,
@@ -178,6 +220,12 @@ private extension AutoMoveAdvisor {
             )
         case .freecell:
             return FreeCellAutoMoveAdvisor.allowsTableauTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
+        case .yukon:
+            return YukonAutoMoveAdvisor.allowsTableauTransfer(
                 selection: selection,
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
@@ -199,6 +247,12 @@ private extension AutoMoveAdvisor {
             )
         case .freecell:
             return false
+        case .yukon:
+            return YukonAutoMoveAdvisor.isRedundantEmptyColumnTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
         }
     }
 
@@ -220,6 +274,12 @@ private extension AutoMoveAdvisor {
                 in: state,
                 destinations: &destinations
             )
+        case .yukon:
+            YukonAutoMoveAdvisor.appendAuxiliaryDestinations(
+                for: selection,
+                in: state,
+                destinations: &destinations
+            )
         }
     }
 
@@ -229,6 +289,8 @@ private extension AutoMoveAdvisor {
             KlondikeAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .freecell:
             FreeCellAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
+        case .yukon:
+            YukonAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         }
     }
 }

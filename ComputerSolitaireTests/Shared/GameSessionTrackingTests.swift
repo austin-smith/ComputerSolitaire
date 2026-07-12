@@ -157,12 +157,21 @@ final class GameSessionTrackingTests: XCTestCase {
             XCTAssertEqual(klondikeStats.gamesPlayed, 1)
             XCTAssertEqual(freeCellStats.gamesPlayed, 0)
 
-            viewModel.newGame(variant: .klondike, drawMode: .three)
+            viewModel.newGame(variant: .yukon, drawMode: .three)
 
             klondikeStats = GameStatisticsStore.load(for: .klondike)
             freeCellStats = GameStatisticsStore.load(for: .freecell)
+            var yukonStats = GameStatisticsStore.load(for: .yukon)
             XCTAssertEqual(klondikeStats.gamesPlayed, 1)
             XCTAssertEqual(freeCellStats.gamesPlayed, 1)
+            XCTAssertEqual(yukonStats.gamesPlayed, 0)
+
+            viewModel.newGame(variant: .klondike, drawMode: .three)
+
+            klondikeStats = GameStatisticsStore.load(for: .klondike)
+            yukonStats = GameStatisticsStore.load(for: .yukon)
+            XCTAssertEqual(klondikeStats.gamesPlayed, 1)
+            XCTAssertEqual(yukonStats.gamesPlayed, 1)
         }
     }
 
