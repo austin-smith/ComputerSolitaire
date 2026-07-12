@@ -17,6 +17,9 @@ enum HintAdvisor {
         if state.variant == .klondike, !state.stock.isEmpty || !state.waste.isEmpty {
             return true
         }
+        if state.variant == .spider, SpiderGameRules.canDealFromStock(state: state) {
+            return true
+        }
         for selection in AutoMoveAdvisor.candidateSelections(in: state) {
             // Foundation rollbacks only count as available moves where the hint
             // stack can actually turn one into a hint: Yukon's planner searches
@@ -46,7 +49,9 @@ enum HintAdvisor {
 /// request. Yukon hints come from `YukonPlanner`'s best improving line, cached like
 /// FreeCell's: every Yukon tableau move is reversible until a card flips, so re-search
 /// after each move can oscillate between equally attractive lines, while following one
-/// cached line ratchets the position strictly forward. Cached lines are keyed by
+/// cached line ratchets the position strictly forward. Spider hints work like Yukon's
+/// (its tableau moves are just as reversible until a flip, deal, or completed run),
+/// with `SpiderPlanner` lines that may include stock deals. Cached lines are keyed by
 /// position, so as long as the player follows one (or plays ahead along it),
 /// subsequent hints are instant.
 ///
@@ -57,14 +62,18 @@ enum HintAdvisor {
 /// searched region — a nudge there has never been observed to rescue a game and a
 /// deterministic one shuttles a card back and forth, so a Yukon hint is always the
 /// first move of a verified improving line, or silence (like Klondike's planner).
+/// Spider returns a stock-deal hint when its tableau holds no improving line but a
+/// deal is legal — dealing is then the only way forward — and silence otherwise.
 final class HintPlanner {
     /// How long a single interactive hint request may spend searching.
     private static let freeCellSearchBudget: TimeInterval = 0.3
     private static let klondikeSearchBudget: TimeInterval = 0.15
     private static let yukonSearchBudget: TimeInterval = 0.25
+    private static let spiderSearchBudget: TimeInterval = 0.3
 
     private var freeCellPlan: [String: FreeCellSolver.Move] = [:]
     private var yukonPlan: [String: YukonPlanner.PlannedMove] = [:]
+    private var spiderPlan: [String: SpiderPlanner.PlannedAction] = [:]
 
     func bestHint(in state: GameState, stockDrawCount: Int) -> HintAdvisor.Hint? {
         switch state.variant {
@@ -80,6 +89,8 @@ final class HintPlanner {
             return freeCellHint(in: state)
         case .yukon:
             return yukonHint(in: state)
+        case .spider:
+            return spiderHint(in: state)
         }
     }
 }
@@ -145,6 +156,60 @@ private extension HintPlanner {
         return .move(
             HintAdvisor.HintMove(selection: planned.selection, destination: planned.destination)
         )
+    }
+
+    func spiderHint(in state: GameState) -> HintAdvisor.Hint? {
+        let key = SpiderPlanner.stateKey(for: state)
+        if let hint = plannedSpiderHint(for: key, in: state) {
+            return hint
+        }
+
+        spiderPlan.removeAll()
+        let limits = SpiderPlanner.Limits(
+            deadline: Date().addingTimeInterval(Self.spiderSearchBudget)
+        )
+        switch SpiderPlanner.bestLine(in: state, limits: limits) {
+        case .line(let line):
+            spiderPlan = SpiderPlanner.keyedActions(along: line, from: state)
+            return plannedSpiderHint(for: key, in: state)
+
+        case .noProgress:
+            // The searched region holds no tableau progress. Unlike Yukon,
+            // Spider has a rescue the planner can vouch for: dealing the next
+            // stock row is what a strong player does with a groomed-but-stuck
+            // tableau. The preparation line fills any empty columns first (the
+            // deal is illegal over them) and is cached whole — filling costs
+            // score, so re-planning from an intermediate position would just
+            // recommend undoing it.
+            //
+            // Deliberately falls back for truncated no-progress too, not just
+            // exhaustive proof: a Spider midgame's improvement-free region
+            // usually exceeds any budget, so most stuck verdicts are truncated,
+            // and gating the deal on exhaustiveness measures 8 points worse at
+            // 2-suit in the hint probe (deals withheld are games stalled).
+            guard let preparation = SpiderPlanner.dealPreparationLine(in: state) else {
+                return nil
+            }
+            spiderPlan = SpiderPlanner.keyedActions(along: preparation, from: state)
+            return plannedSpiderHint(for: key, in: state)
+        }
+    }
+
+    func plannedSpiderHint(for key: String, in state: GameState) -> HintAdvisor.Hint? {
+        switch spiderPlan[key] {
+        case .move(let selection, let destination):
+            guard AutoMoveAdvisor.selectionMatchesState(selection, in: state),
+                  AutoMoveAdvisor.legalDestinations(for: selection, in: state)
+                      .contains(destination) else {
+                return nil
+            }
+            return .move(HintAdvisor.HintMove(selection: selection, destination: destination))
+        case .stockDeal:
+            guard SpiderGameRules.canDealFromStock(state: state) else { return nil }
+            return .stockTap
+        case .none:
+            return nil
+        }
     }
 
     func materializedHint(for key: String, in state: GameState) -> HintAdvisor.Hint? {

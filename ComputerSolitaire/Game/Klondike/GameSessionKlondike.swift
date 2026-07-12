@@ -47,7 +47,7 @@ extension SolitaireViewModel {
         return Array(state.waste.suffix(count))
     }
 
-    func handleStockTap() {
+    func handleKlondikeStockTap() {
         guard state.variant == .klondike else { return }
         clearHint()
         selection = nil

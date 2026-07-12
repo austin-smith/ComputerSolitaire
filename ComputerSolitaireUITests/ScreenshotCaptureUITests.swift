@@ -19,7 +19,8 @@ final class ScreenshotCaptureUITests: XCTestCase {
     private static let boards = [
         "klondike-draw3",
         "freecell",
-        "yukon"
+        "yukon",
+        "spider"
     ]
 
     /// Appearance for every screenshot, pinned via UserDefaults launch

@@ -132,6 +132,7 @@ struct ContentView: View {
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
+    @AppStorage(SettingsKey.spiderSuitCount) private var spiderSuitCountRawValue = SpiderSuitCount.two.rawValue
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
     @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
 
@@ -141,6 +142,10 @@ struct ContentView: View {
 
     private var drawMode: DrawMode {
         DrawMode(rawValue: drawModeRawValue) ?? .three
+    }
+
+    private var spiderSuitCount: SpiderSuitCount {
+        SpiderSuitCount(rawValue: spiderSuitCountRawValue) ?? .two
     }
 
     private enum TimeScoringPauseReason: Hashable {
@@ -344,7 +349,7 @@ struct ContentView: View {
                 stopAutoFinish()
                 winCelebration.reset(to: .idle)
                 isScreenshotSession = false
-                viewModel.newGame(variant: variant, drawMode: drawMode)
+                viewModel.newGame(variant: variant, drawMode: drawMode, spiderSuitCount: spiderSuitCount)
                 persistGameNow()
             }
             .onChange(of: drawModeRawValue) { (_, newValue: Int) in
@@ -352,6 +357,18 @@ struct ContentView: View {
                 let mode = DrawMode(rawValue: newValue) ?? .three
                 viewModel.updateDrawMode(mode)
                 scheduleAutosave()
+            }
+            .onChange(of: spiderSuitCountRawValue) { _, newValue in
+                guard hasLoadedGame, !isHydratingGame else { return }
+                // Unlike a draw-mode change, a suit-count change recomposes the
+                // deck, so it always starts a new game (as variant changes do).
+                guard viewModel.gameVariant == .spider else { return }
+                let suitCount = SpiderSuitCount(rawValue: newValue) ?? .two
+                stopAutoFinish()
+                winCelebration.reset(to: .idle)
+                isScreenshotSession = false
+                viewModel.newGame(variant: .spider, drawMode: drawMode, spiderSuitCount: suitCount)
+                persistGameNow()
             }
             .onChange(of: isAnyMenuPresented) { _, _ in
                 updateMenuPresentationPauseState()
@@ -757,7 +774,7 @@ struct ContentView: View {
         winCelebration.reset(to: .idle)
         isScreenshotSession = false
         let selectedVariant = variant ?? gameVariant
-        viewModel.newGame(variant: selectedVariant, drawMode: drawMode)
+        viewModel.newGame(variant: selectedVariant, drawMode: drawMode, spiderSuitCount: spiderSuitCount)
         persistGameNow()
     }
 
@@ -1364,9 +1381,13 @@ struct ContentView: View {
             if viewModel.supportsDrawMode, drawModeRawValue != viewModel.stockDrawCount {
                 drawModeRawValue = viewModel.stockDrawCount
             }
+            if let restoredSuitCount = viewModel.state.spiderSuitCount,
+               spiderSuitCountRawValue != restoredSuitCount.rawValue {
+                spiderSuitCountRawValue = restoredSuitCount.rawValue
+            }
         } else {
             winCelebration.reset(to: .idle)
-            viewModel.newGame(variant: gameVariant, drawMode: drawMode)
+            viewModel.newGame(variant: gameVariant, drawMode: drawMode, spiderSuitCount: spiderSuitCount)
             persistGameNow()
         }
         winCelebration.syncForLoadedGame(
@@ -1459,6 +1480,10 @@ struct ContentView: View {
         }
         if viewModel.supportsDrawMode, drawModeRawValue != viewModel.stockDrawCount {
             drawModeRawValue = viewModel.stockDrawCount
+        }
+        if let restoredSuitCount = viewModel.state.spiderSuitCount,
+           spiderSuitCountRawValue != restoredSuitCount.rawValue {
+            spiderSuitCountRawValue = restoredSuitCount.rawValue
         }
         return true
 #else

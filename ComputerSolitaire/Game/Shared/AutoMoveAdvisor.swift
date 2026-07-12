@@ -10,7 +10,7 @@ enum AutoMoveAdvisor {
 
         var destinations: [Destination] = []
 
-        if selection.cards.count == 1 {
+        if selection.cards.count == 1, state.variant.playerBuildsFoundations {
             for foundationIndex in state.foundations.indices {
                 let foundation = state.foundations[foundationIndex]
                 if GameRules.canMoveToFoundation(card: movingCard, foundation: foundation) {
@@ -59,11 +59,13 @@ enum AutoMoveAdvisor {
             selections.append(Selection(source: .waste, cards: [topWasteCard]))
         }
 
-        for foundationIndex in state.foundations.indices {
-            guard let topFoundationCard = state.foundations[foundationIndex].last else { continue }
-            selections.append(
-                Selection(source: .foundation(pile: foundationIndex), cards: [topFoundationCard])
-            )
+        if state.variant.playerBuildsFoundations {
+            for foundationIndex in state.foundations.indices {
+                guard let topFoundationCard = state.foundations[foundationIndex].last else { continue }
+                selections.append(
+                    Selection(source: .foundation(pile: foundationIndex), cards: [topFoundationCard])
+                )
+            }
         }
 
         for freeCellIndex in state.freeCells.indices {
@@ -121,6 +123,7 @@ enum AutoMoveAdvisor {
             nextState.foundations[index].append(card)
         case .tableau(let index):
             nextState.tableau[index].append(contentsOf: selection.cards)
+            applyVariantTableauDestinationEffects(on: &nextState, pileIndex: index)
         case .freeCell(let index):
             guard selection.cards.count == 1, let card = selection.cards.first else { return nil }
             nextState.freeCells[index] = card
@@ -162,10 +165,9 @@ enum AutoMoveAdvisor {
         GameRules.isValidDescendingAlternatingSequence(cards)
     }
 
-    /// Moving an entire king-led tableau stack to another empty column is a no-op
-    /// for advisor quality purposes (manual play can still do this). Shared by the
-    /// variants whose empty columns accept Kings only.
-    static func isRedundantWholePileKingTransfer(
+    /// Moving an entire tableau pile to another empty column is a no-op for
+    /// advisor quality purposes (manual play can still do this).
+    static func isRedundantWholePileTransfer(
         selection: Selection,
         destinationTableauIndex: Int,
         in state: GameState
@@ -176,11 +178,22 @@ enum AutoMoveAdvisor {
               state.tableau.indices.contains(destinationTableauIndex) else { return false }
         guard state.tableau[destinationTableauIndex].isEmpty else { return false }
         guard sourceIndex == 0 else { return false }
+        return selection.cards.count == state.tableau[sourcePile].count
+    }
 
-        let sourceCards = state.tableau[sourcePile]
-        guard selection.cards.count == sourceCards.count else { return false }
-        guard let movingCard = selection.cards.first else { return false }
-        return movingCard.rank == .king
+    /// The whole-pile no-op restricted to king-led stacks, for the variants
+    /// whose empty columns accept Kings only.
+    static func isRedundantWholePileKingTransfer(
+        selection: Selection,
+        destinationTableauIndex: Int,
+        in state: GameState
+    ) -> Bool {
+        guard selection.cards.first?.rank == .king else { return false }
+        return isRedundantWholePileTransfer(
+            selection: selection,
+            destinationTableauIndex: destinationTableauIndex,
+            in: state
+        )
     }
 
     /// Flips a face-down card exposed at the top of the pile a selection left,
@@ -203,6 +216,8 @@ private extension AutoMoveAdvisor {
             return FreeCellAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .yukon:
             return YukonAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
+        case .spider:
+            return SpiderAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         }
     }
 
@@ -230,6 +245,12 @@ private extension AutoMoveAdvisor {
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
             )
+        case .spider:
+            return SpiderAutoMoveAdvisor.allowsTableauTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
         }
     }
 
@@ -249,6 +270,12 @@ private extension AutoMoveAdvisor {
             return false
         case .yukon:
             return YukonAutoMoveAdvisor.isRedundantEmptyColumnTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
+        case .spider:
+            return SpiderAutoMoveAdvisor.isRedundantEmptyColumnTransfer(
                 selection: selection,
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
@@ -280,6 +307,12 @@ private extension AutoMoveAdvisor {
                 in: state,
                 destinations: &destinations
             )
+        case .spider:
+            SpiderAutoMoveAdvisor.appendAuxiliaryDestinations(
+                for: selection,
+                in: state,
+                destinations: &destinations
+            )
         }
     }
 
@@ -291,6 +324,19 @@ private extension AutoMoveAdvisor {
             FreeCellAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .yukon:
             YukonAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
+        case .spider:
+            SpiderAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
+        }
+    }
+
+    /// Effects a landing triggers on the destination pile. Spider banks any
+    /// run the landing completed; the other variants have none.
+    static func applyVariantTableauDestinationEffects(on state: inout GameState, pileIndex: Int) {
+        switch state.variant {
+        case .klondike, .freecell, .yukon:
+            break
+        case .spider:
+            SpiderAutoMoveAdvisor.applyTableauDestinationEffects(on: &state, pileIndex: pileIndex)
         }
     }
 }

@@ -213,11 +213,15 @@ final class SolitaireViewModel {
         return true
     }
 
-    func newGame(variant: GameVariant? = nil, drawMode: DrawMode = .three) {
+    func newGame(
+        variant: GameVariant? = nil,
+        drawMode: DrawMode = .three,
+        spiderSuitCount: SpiderSuitCount = .two
+    ) {
         finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: dateProvider.now)
         clearHint()
         let nextVariant = variant ?? state.variant
-        let initialState = GameState.newGame(variant: nextVariant)
+        let initialState = GameState.newGame(variant: nextVariant, spiderSuitCount: spiderSuitCount)
         state = initialState
         redealState = initialState
         selection = nil
@@ -345,6 +349,7 @@ final class SolitaireViewModel {
     }
 
     func handleFoundationTap(index: Int) {
+        guard state.variant.playerBuildsFoundations else { return }
         if selection != nil || state.foundations[index].last != nil {
             HapticManager.shared.play(.cardPickUp)
         }
@@ -422,6 +427,7 @@ final class SolitaireViewModel {
 
     @discardableResult
     func startDragFromFoundation(index: Int) -> Bool {
+        guard state.variant.playerBuildsFoundations else { return false }
         guard let top = state.foundations[index].last else { return false }
         clearHint()
         selection = Selection(source: .foundation(pile: index), cards: [top])
@@ -452,6 +458,21 @@ final class SolitaireViewModel {
         stockDrawCount = count
     }
 
+    func setInitialScore(_ initialScore: Int) {
+        score = Scoring.clamped(initialScore)
+    }
+
+    func handleStockTap() {
+        switch state.variant {
+        case .klondike:
+            handleKlondikeStockTap()
+        case .freecell, .yukon:
+            break
+        case .spider:
+            handleSpiderStockTap()
+        }
+    }
+
     func setScoringDrawCount(_ count: Int) {
         scoringDrawCount = count
     }
@@ -469,7 +490,9 @@ final class SolitaireViewModel {
         case .klondike:
             configureKlondikeNewGame(drawMode: drawMode)
         case .freecell, .yukon:
-            configureStocklessNewGame()
+            configureWastelessNewGame()
+        case .spider:
+            configureSpiderNewGame()
         }
     }
 
@@ -478,7 +501,9 @@ final class SolitaireViewModel {
         case .klondike:
             configureKlondikeRedeal()
         case .freecell, .yukon:
-            configureStocklessRedeal()
+            configureWastelessRedeal()
+        case .spider:
+            configureSpiderRedeal()
         }
     }
 
@@ -489,26 +514,26 @@ final class SolitaireViewModel {
         switch state.variant {
         case .klondike:
             return sanitizeKlondikeRedealState(state, stockDrawCount: stockDrawCount)
-        case .freecell, .yukon:
-            return sanitizeStocklessRedealState(state)
+        case .freecell, .yukon, .spider:
+            return sanitizeWastelessRedealState(state)
         }
     }
 
-    /// New-game configuration shared by the variants without a stock: draw counts
-    /// stay at the draw-three defaults so time-bonus scoring has a defined basis,
-    /// and no waste cards are ever fanned.
-    func configureStocklessNewGame() {
+    /// New-game configuration shared by the variants that never draw through a
+    /// waste: draw counts stay at the draw-three defaults so time-bonus scoring
+    /// has a defined basis, and no waste cards are ever fanned.
+    func configureWastelessNewGame() {
         setStockDrawCount(DrawMode.three.rawValue)
         setScoringDrawCount(DrawMode.three.rawValue)
         setWasteDrawCount(0)
     }
 
-    func configureStocklessRedeal() {
+    func configureWastelessRedeal() {
         setScoringDrawCount(stockDrawCount)
         setWasteDrawCount(0)
     }
 
-    func sanitizeStocklessRedealState(_ baseState: GameState) -> GameState {
+    func sanitizeWastelessRedealState(_ baseState: GameState) -> GameState {
         var sanitizedState = baseState
         sanitizedState.wasteDrawCount = 0
         return sanitizedState
@@ -521,7 +546,7 @@ final class SolitaireViewModel {
         card: Card
     ) -> Bool {
         switch state.variant {
-        case .klondike, .yukon:
+        case .klondike, .yukon, .spider:
             return handleFaceDownTableauTap(
                 pile: pile,
                 pileIndex: pileIndex,
@@ -557,7 +582,7 @@ final class SolitaireViewModel {
         )
         state.tableau[pileIndex][cardIndex].isFaceUp = true
         incrementMovesCount()
-        applyScore(.turnOverTableauCard)
+        applyTableauRevealScoreIfNeeded()
         SoundManager.shared.play(.cardFlipFaceUp)
         HapticManager.shared.play(.cardFlipFaceUp)
         refreshAutoFinishAvailability()
@@ -573,6 +598,8 @@ final class SolitaireViewModel {
             return true
         case .freecell:
             return canSelectFreeCellTableauCards(cards)
+        case .spider:
+            return SharedGameRules.isDescendingSameSuitRun(cards)
         }
     }
 
@@ -580,7 +607,7 @@ final class SolitaireViewModel {
         switch state.variant {
         case .klondike:
             return scoringDrawCount
-        case .freecell, .yukon:
+        case .freecell, .yukon, .spider:
             return 0
         }
     }
@@ -602,6 +629,7 @@ extension SolitaireViewModel {
     }
 
     func selectFromFoundation(index: Int) {
+        guard state.variant.playerBuildsFoundations else { return }
         guard let top = state.foundations[index].last else { return }
         selection = Selection(source: .foundation(pile: index), cards: [top])
     }
@@ -651,6 +679,9 @@ extension SolitaireViewModel {
             state.tableau[index].append(contentsOf: selection.cards)
             movesCount += 1
             applyScore(for: selection.source, destination: .tableau(index))
+            if state.variant == .spider {
+                resolveCompletedSpiderRuns()
+            }
             applyTimeBonusIfWon()
             self.selection = nil
             SoundManager.shared.play(.cardPlaced)
@@ -701,22 +732,29 @@ extension SolitaireViewModel {
 
     func flipTopCardIfNeeded(in pileIndex: Int) {
         switch state.variant {
-        case .klondike, .yukon:
+        case .klondike, .yukon, .spider:
             flipFaceDownTopCardIfNeeded(in: pileIndex)
         case .freecell:
             break
         }
     }
 
-    /// Flips a face-down card exposed at the top of a pile (a scored reveal),
-    /// shared by the variants that deal face-down tableau cards.
+    /// Flips a face-down card exposed at the top of a pile, shared by the
+    /// variants that deal face-down tableau cards.
     private func flipFaceDownTopCardIfNeeded(in pileIndex: Int) {
         guard let lastIndex = state.tableau[pileIndex].indices.last else { return }
         guard !state.tableau[pileIndex][lastIndex].isFaceUp else { return }
         state.tableau[pileIndex][lastIndex].isFaceUp = true
-        applyScore(.turnOverTableauCard)
+        applyTableauRevealScoreIfNeeded()
         SoundManager.shared.play(.cardFlipFaceUp)
         HapticManager.shared.play(.cardFlipFaceUp)
+    }
+
+    /// Reveals score in the Klondike-family variants; Spider's classic scheme
+    /// scores card moves and completed runs only.
+    private func applyTableauRevealScoreIfNeeded() {
+        guard state.variant != .spider else { return }
+        applyScore(.turnOverTableauCard)
     }
 
     func pushHistory(undoContext: UndoAnimationContext? = nil) {
@@ -742,6 +780,8 @@ extension SolitaireViewModel {
             break
         case .yukon:
             applyYukonMoveScore(for: source, destination: destination)
+        case .spider:
+            applySpiderMoveScore(for: source, destination: destination)
         }
     }
 
@@ -775,6 +815,7 @@ extension SolitaireViewModel {
                 elapsedSeconds: elapsedSeconds,
                 finalScore: score,
                 drawCount: statisticsDrawCountForCurrentVariant(),
+                spiderSuitCount: state.spiderSuitCount,
                 hintsUsedInGame: hintRequestsInCurrentGame,
                 undosUsedInGame: undosUsedInCurrentGame,
                 usedRedealInGame: usedRedealInCurrentGame

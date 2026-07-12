@@ -58,7 +58,7 @@ struct GameState: Equatable, Codable {
         newGame(variant: .klondike)
     }
 
-    static func newGame(variant: GameVariant) -> GameState {
+    static func newGame(variant: GameVariant, spiderSuitCount: SpiderSuitCount = .two) -> GameState {
         switch variant {
         case .klondike:
             return newKlondikeGame()
@@ -66,6 +66,8 @@ struct GameState: Equatable, Codable {
             return newFreeCellGame()
         case .yukon:
             return newYukonGame()
+        case .spider:
+            return newSpiderGame(suitCount: spiderSuitCount)
         }
     }
 }

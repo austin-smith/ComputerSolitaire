@@ -105,6 +105,13 @@ struct Card: Identifiable, Equatable, Codable {
     }
 }
 
+/// A card's face — suit and rank without instance identity. Deck-composition
+/// checks count these; Spider's two decks carry each identity more than once.
+struct CardIdentity: Hashable {
+    let suit: Suit
+    let rank: Rank
+}
+
 extension Card {
     var accessibilityName: String {
         guard isFaceUp else { return "Face-down card" }

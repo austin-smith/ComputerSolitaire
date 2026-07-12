@@ -98,11 +98,31 @@ private extension TapMovePolicy {
                 // No stock to refill the board: an eager unsafe foundation move can
                 // strand a card another pile still needs as a landing spot.
                 tier = isSafeFoundationMove(card: card, in: state) ? 100 : 60
+            case .spider:
+                // Unreachable: Spider foundations are never player destinations.
+                tier = 100
             }
             return Priority(tier: tier, buildLength: 0, pileOrder: -index)
 
         case .tableau(let index):
             let pile = state.tableau[index]
+            if state.variant == .spider {
+                // Only suited runs can complete in Spider, so a same-suit
+                // landing beats an off-suit one, which beats an empty pile.
+                let tier: Int
+                if pile.isEmpty {
+                    tier = 40
+                } else if pile.last?.suit == selection.cards.first?.suit {
+                    tier = 90
+                } else {
+                    tier = 80
+                }
+                return Priority(
+                    tier: tier,
+                    buildLength: topSameSuitRunLength(of: pile) + selection.cards.count,
+                    pileOrder: -index
+                )
+            }
             let tier = pile.isEmpty ? 40 : 80
             return Priority(
                 tier: tier,
@@ -124,6 +144,24 @@ private extension TapMovePolicy {
             let lower = pile[index]
             guard upper.isFaceUp,
                   upper.suit.isRed != lower.suit.isRed,
+                  lower.rank.rawValue == upper.rank.rawValue - 1 else {
+                break
+            }
+            length += 1
+            index -= 1
+        }
+        return length
+    }
+
+    /// Length of the descending same-suit run ending at the pile's top card.
+    static func topSameSuitRunLength(of pile: [Card]) -> Int {
+        guard var index = pile.indices.last else { return 0 }
+        var length = 1
+        while index > 0 {
+            let upper = pile[index - 1]
+            let lower = pile[index]
+            guard upper.isFaceUp,
+                  upper.suit == lower.suit,
                   lower.rank.rawValue == upper.rank.rawValue - 1 else {
                 break
             }

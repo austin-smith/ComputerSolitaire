@@ -26,11 +26,9 @@ struct SeededRandomNumberGenerator: RandomNumberGenerator {
     }
 }
 
-func seededDeck(seed: UInt64, faceUp: Bool) -> [Card] {
+func seededShuffle(_ cards: [Card], seed: UInt64) -> [Card] {
     var generator = SeededRandomNumberGenerator(seed: seed)
-    var deck = Suit.allCases.flatMap { suit in
-        Rank.allCases.map { rank in Card(suit: suit, rank: rank, isFaceUp: faceUp) }
-    }
+    var deck = cards
     for index in stride(from: deck.count - 1, through: 1, by: -1) {
         let swapIndex = Int(generator.next() % UInt64(index + 1))
         deck.swapAt(index, swapIndex)
@@ -38,7 +36,38 @@ func seededDeck(seed: UInt64, faceUp: Bool) -> [Card] {
     return deck
 }
 
-func seededDeal(variant: GameVariant, seed: UInt64) -> GameState {
+func seededDeck(seed: UInt64, faceUp: Bool) -> [Card] {
+    seededShuffle(
+        Suit.allCases.flatMap { suit in
+            Rank.allCases.map { rank in Card(suit: suit, rank: rank, isFaceUp: faceUp) }
+        },
+        seed: seed
+    )
+}
+
+func seededSpiderDeal(seed: UInt64, suitCount: SpiderSuitCount) -> GameState {
+    var deck = seededShuffle(SpiderDeck.deck(suitCount: suitCount), seed: seed)
+    var tableau: [[Card]] = Array(repeating: [], count: 10)
+    for pileIndex in 0..<10 {
+        let cardCount = pileIndex < 4 ? 6 : 5
+        for cardIndex in 0..<cardCount {
+            var card = deck.removeLast()
+            card.isFaceUp = cardIndex == cardCount - 1
+            tableau[pileIndex].append(card)
+        }
+    }
+    return GameState(
+        variant: .spider,
+        stock: deck,
+        waste: [],
+        wasteDrawCount: 0,
+        freeCells: Array(repeating: nil, count: 4),
+        foundations: Array(repeating: [], count: 8),
+        tableau: tableau
+    )
+}
+
+func seededDeal(variant: GameVariant, seed: UInt64, spiderSuitCount: SpiderSuitCount = .two) -> GameState {
     switch variant {
     case .klondike:
         var deck = seededDeck(seed: seed, faceUp: false)
@@ -93,6 +122,9 @@ func seededDeal(variant: GameVariant, seed: UInt64) -> GameState {
             foundations: Array(repeating: [], count: 4),
             tableau: tableau
         )
+
+    case .spider:
+        return seededSpiderDeal(seed: seed, suitCount: spiderSuitCount)
     }
 }
 
@@ -140,6 +172,14 @@ func apply(
     )
 }
 
+/// Mirrors dealSpiderStockRow in the session (via the shared rules function,
+/// including the completed-run sweep).
+func spiderStockDeal(_ state: GameState) -> GameState? {
+    var next = state
+    guard SpiderGameRules.dealStockRow(in: &next) != nil else { return nil }
+    return next
+}
+
 /// Mirrors drawFromStock / recycleWaste in the session.
 func stockTap(_ state: GameState, drawCount: Int) -> GameState? {
     var next = state
@@ -172,9 +212,16 @@ enum Outcome {
 }
 
 /// Yukon/FreeCell games finish or die well under this; Klondike needs headroom
-/// for stock cycling.
+/// for stock cycling, and Spider for grooming 104 cards across five deals.
 func actionCap(for variant: GameVariant) -> Int {
-    variant == .klondike ? 1_200 : 600
+    switch variant {
+    case .klondike:
+        return 1_200
+    case .spider:
+        return 1_000
+    case .freecell, .yukon:
+        return 600
+    }
 }
 
 func foundationCount(_ state: GameState) -> Int {
@@ -305,6 +352,79 @@ func playYukonFollowingHints(seed: UInt64) -> (outcome: Outcome, revisitEvents: 
     return (.actionCap(foundation: foundationCount(state)), revisitEvents)
 }
 
+func playSpiderFollowingHints(
+    seed: UInt64,
+    suitCount: SpiderSuitCount
+) -> (outcome: Outcome, revisitEvents: Int) {
+    // Replicates HintPlanner's Spider path without its wall-clock deadline:
+    // follow each improving line (which may include stock deals) to its end,
+    // then replan; on no-progress, follow the deal-preparation fallback the
+    // real hint stack uses, and declare a deadlock only when no deal remains.
+    var state = seededSpiderDeal(seed: seed, suitCount: suitCount)
+    var visitCounts: [UInt64: Int] = [fingerprint(state): 1]
+    var revisitEvents = 0
+    var actions = 0
+
+    func record(_ nextState: GameState) -> Outcome? {
+        state = nextState
+        actions += 1
+        let key = fingerprint(state)
+        let count = (visitCounts[key] ?? 0) + 1
+        visitCounts[key] = count
+        if count > 1 { revisitEvents += 1 }
+        // A transient cross-line revisit is survivable (the next plan differs);
+        // a third visit to the same exact layout means the hints are looping.
+        if count >= 3 {
+            return .stalemateLoop(foundation: foundationCount(state))
+        }
+        // Cap before win, matching the other players: their win check only
+        // runs on the next loop iteration, so a win landed on the final
+        // permitted action classifies as .actionCap everywhere.
+        if actions >= actionCap(for: .spider) {
+            return .actionCap(foundation: foundationCount(state))
+        }
+        if state.isWon { return .win(moves: actions) }
+        return nil
+    }
+
+    func applied(_ action: SpiderPlanner.PlannedAction) -> GameState? {
+        switch action {
+        case .move(let selection, let destination):
+            return apply(selection, destination, to: state, stockDrawCount: 3)
+        case .stockDeal:
+            return spiderStockDeal(state)
+        }
+    }
+
+    while actions < actionCap(for: .spider) {
+        if state.isWon { return (.win(moves: actions), revisitEvents) }
+        switch SpiderPlanner.bestLine(in: state) {
+        case .line(let line):
+            for action in line {
+                guard let next = applied(action) else {
+                    fatalError("Seed \(seed): illegal Spider hint")
+                }
+                if let outcome = record(next) { return (outcome, revisitEvents) }
+            }
+
+        case .noProgress:
+            // Mirrors HintPlanner's fallback: follow the whole deal-preparation
+            // line (fill any empty columns, then deal) without re-planning from
+            // the intermediate positions.
+            guard let preparation = SpiderPlanner.dealPreparationLine(in: state) else {
+                return (.deadlock(foundation: foundationCount(state)), revisitEvents)
+            }
+            for action in preparation {
+                guard let next = applied(action) else {
+                    fatalError("Seed \(seed): illegal Spider deal preparation")
+                }
+                if let outcome = record(next) { return (outcome, revisitEvents) }
+            }
+        }
+    }
+    return (.actionCap(foundation: foundationCount(state)), revisitEvents)
+}
+
 // MARK: - Control player
 
 // The random-moves floor calibrates each variant's deal universe. Deliberately
@@ -313,12 +433,17 @@ func playYukonFollowingHints(seed: UInt64) -> (outcome: Outcome, revisitEvents: 
 // spend much of the endgame yanking banked cards back down). Two tap-policy
 // control players were evaluated and retired as uninformative; those findings
 // are recorded in README.md.
-func playRandom(variant: GameVariant, seed: UInt64, drawCount: Int) -> Outcome {
+func playRandom(
+    variant: GameVariant,
+    seed: UInt64,
+    drawCount: Int,
+    spiderSuitCount: SpiderSuitCount = .two
+) -> Outcome {
     // No revisit check: a stochastic player legitimately revisits positions and
     // diverges by luck afterward, so it runs to a true deadlock or the action cap.
     // (The hint followers keep their revisit checks — they are deterministic, so
     // for them a revisit is a proven infinite loop.)
-    var state = seededDeal(variant: variant, seed: seed)
+    var state = seededDeal(variant: variant, seed: seed, spiderSuitCount: spiderSuitCount)
     var generator = SeededRandomNumberGenerator(seed: seed ^ 0xDEADBEEF)
     var actions = 0
     while actions < actionCap(for: variant) {
@@ -331,13 +456,17 @@ func playRandom(variant: GameVariant, seed: UInt64, drawCount: Int) -> Outcome {
                 legal.append((selection, destination))
             }
         }
-        let canTapStock = variant == .klondike && (!state.stock.isEmpty || !state.waste.isEmpty)
+        let canTapStock = (variant == .klondike && (!state.stock.isEmpty || !state.waste.isEmpty))
+            || (variant == .spider && SpiderGameRules.canDealFromStock(state: state))
         let choices = legal.count + (canTapStock ? 1 : 0)
         guard choices > 0 else { return .deadlock(foundation: foundationCount(state)) }
 
         let pick = Int(generator.next() % UInt64(choices))
         if pick == legal.count {
-            guard let next = stockTap(state, drawCount: drawCount) else {
+            let tapped = variant == .spider
+                ? spiderStockDeal(state)
+                : stockTap(state, drawCount: drawCount)
+            guard let next = tapped else {
                 fatalError("Seed \(seed): random stock tap with nothing to tap")
             }
             state = next
@@ -432,7 +561,12 @@ func mapInParallel<Result>(
     return results.map { $0! }
 }
 
-func run(variant: GameVariant, seeds: UInt64, drawCount: Int) {
+func run(
+    variant: GameVariant,
+    seeds: UInt64,
+    drawCount: Int,
+    spiderSuitCount: SpiderSuitCount = .two
+) {
     let label: String
     switch variant {
     case .klondike:
@@ -441,6 +575,8 @@ func run(variant: GameVariant, seeds: UInt64, drawCount: Int) {
         label = "freecell"
     case .yukon:
         label = "yukon"
+    case .spider:
+        label = "spider \(spiderSuitCount.rawValue)-suit"
     }
 
     let start = DispatchTime.now()
@@ -455,6 +591,8 @@ func run(variant: GameVariant, seeds: UInt64, drawCount: Int) {
             return (playFreeCellFollowingHints(seed: seed), 0)
         case .yukon:
             return playYukonFollowingHints(seed: seed)
+        case .spider:
+            return playSpiderFollowingHints(seed: seed, suitCount: spiderSuitCount)
         }
     }
     let seconds = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1e9
@@ -468,13 +606,17 @@ func run(variant: GameVariant, seeds: UInt64, drawCount: Int) {
 
     summarize("\(label) — following every hint", outcomes: followerOutcomes)
     print(String(format: "elapsed: %.1fs", seconds))
-    if variant == .yukon {
+    if variant == .yukon || variant == .spider {
         print("hint revisit events: \(revisitEvents)")
     }
     if followerLoops > 0 {
         print("GATE VIOLATION: \(label) hint follower looped in \(followerLoops) game(s)")
         gateViolations += followerLoops
     }
+    // Spider revisit events are reported but not gated: the deal-preparation
+    // fallback deliberately plays score-losing fills, so a later line can
+    // transiently re-cross an earlier position (a handful per 500 deals).
+    // Yukon's planner measures zero, so for it any revisit is a regression.
     if variant == .yukon, revisitEvents > 0 {
         print("GATE VIOLATION: yukon hint follower revisited positions \(revisitEvents) time(s)")
         gateViolations += revisitEvents
@@ -484,7 +626,7 @@ func run(variant: GameVariant, seeds: UInt64, drawCount: Int) {
         seeds: seeds,
         progressLabel: "\(label) — random control"
     ) { seed in
-        playRandom(variant: variant, seed: seed, drawCount: drawCount)
+        playRandom(variant: variant, seed: seed, drawCount: drawCount, spiderSuitCount: spiderSuitCount)
     }
     summarize(
         "\(label) — random legal moves (control)",
@@ -506,7 +648,10 @@ var gateViolations = 0
 setvbuf(stdout, nil, _IOLBF, 0)
 
 func exitWithUsage() -> Never {
-    print("usage: run.sh <yukon|klondike|freecell|all> [deals >= 1] [klondike draw count: 1 or 3]")
+    print(
+        "usage: run.sh <yukon|klondike|freecell|spider|all> [deals >= 1] "
+            + "[klondike draw count: 1 or 3 | spider suit count: 1, 2, or 4]"
+    )
     exit(1)
 }
 
@@ -515,8 +660,9 @@ let mode = arguments.count > 1 ? arguments[1] : "all"
 guard let seeds = arguments.count > 2 ? UInt64(arguments[2]) : 500, seeds >= 1 else {
     exitWithUsage()
 }
-guard let draw = arguments.count > 3 ? Int(arguments[3]) : 1,
-      DrawMode(rawValue: draw) != nil else {
+// The third argument is mode-specific: a Klondike draw count or a Spider suit count.
+let modeOption = arguments.count > 3 ? Int(arguments[3]) : nil
+if arguments.count > 3, modeOption == nil {
     exitWithUsage()
 }
 
@@ -524,14 +670,27 @@ switch mode {
 case "yukon":
     run(variant: .yukon, seeds: seeds, drawCount: 3)
 case "klondike":
-    run(variant: .klondike, seeds: seeds, drawCount: draw)
+    guard let draw = DrawMode(rawValue: modeOption ?? 1) else { exitWithUsage() }
+    run(variant: .klondike, seeds: seeds, drawCount: draw.rawValue)
 case "freecell":
     run(variant: .freecell, seeds: seeds, drawCount: 3)
+case "spider":
+    if let modeOption {
+        guard let suitCount = SpiderSuitCount(rawValue: modeOption) else { exitWithUsage() }
+        run(variant: .spider, seeds: seeds, drawCount: 3, spiderSuitCount: suitCount)
+    } else {
+        for suitCount in SpiderSuitCount.allCases {
+            run(variant: .spider, seeds: seeds, drawCount: 3, spiderSuitCount: suitCount)
+        }
+    }
 case "all":
     run(variant: .yukon, seeds: seeds, drawCount: 3)
     run(variant: .klondike, seeds: seeds, drawCount: 1)
     run(variant: .klondike, seeds: seeds, drawCount: 3)
     run(variant: .freecell, seeds: seeds, drawCount: 3)
+    for suitCount in SpiderSuitCount.allCases {
+        run(variant: .spider, seeds: seeds, drawCount: 3, spiderSuitCount: suitCount)
+    }
 default:
     exitWithUsage()
 }
