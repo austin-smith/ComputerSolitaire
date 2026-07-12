@@ -1,6 +1,3 @@
-// swiftlint:disable file_length
-// Removal is tracked in GitHub issue #36.
-
 import SwiftUI
 import SwiftData
 

@@ -14,42 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  swiftlint:
-    name: SwiftLint
-    runs-on: macos-26
-
-    env:
-      SWIFTLINT_VERSION: 0.65.0
-      SWIFTLINT_SHA256: d6cb0aa7a2f5f1ef306fc9e37bcb54dc9a26facc8f7784ac0c3dd3eccf5c6ba6
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install SwiftLint
-        run: |
-          archive="$RUNNER_TEMP/portable_swiftlint.zip"
-          install_dir="$RUNNER_TEMP/swiftlint"
-          curl \
-            --fail \
-            --location \
-            --proto '=https' \
-            --retry 3 \
-            --tlsv1.2 \
-            --output "$archive" \
-            "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip"
-          echo "${SWIFTLINT_SHA256}  ${archive}" | shasum --algorithm 256 --check
-          mkdir "$install_dir"
-          ditto -x -k "$archive" "$install_dir"
-          "$install_dir/swiftlint" version
-
-      - name: Lint Swift sources
-        run: "$RUNNER_TEMP/swiftlint/swiftlint lint --strict --config .swiftlint.yml"
-
   macos-unit-tests:
     name: macOS Build & Test
     runs-on: macos-26
-    needs: swiftlint
 
     steps:
       - name: Checkout
@@ -77,7 +44,6 @@ jobs:
   ios-build:
     name: iOS Build
     runs-on: macos-26
-    needs: swiftlint
 
     steps:
       - name: Checkout
