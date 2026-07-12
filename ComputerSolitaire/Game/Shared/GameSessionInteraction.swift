@@ -13,6 +13,9 @@ extension SolitaireViewModel {
            !freeCellCanMoveStack(cards, to: .tableau(pileIndex)) {
             return false
         }
+        if state.variant == .spider, !canSelectTableauCards(cards) {
+            return false
+        }
         selection = Selection(source: .tableau(pile: pileIndex, index: cardIndex), cards: cards)
         isDragging = true
         return true
@@ -23,6 +26,7 @@ extension SolitaireViewModel {
 
         switch destination {
         case .foundation(let index):
+            guard state.variant.playerBuildsFoundations else { return false }
             guard selection.cards.count == 1 else { return false }
             return GameRules.canMoveToFoundation(
                 card: movingCard,

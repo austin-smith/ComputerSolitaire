@@ -146,7 +146,7 @@ struct SavedGamePayload: Codable {
             case .pyramid:
                 // Pyramid always draws a single card to the waste.
                 return DrawMode.one.rawValue
-            case .freecell, .yukon:
+            case .freecell, .yukon, .spider:
                 return DrawMode.three.rawValue
             }
         }()
@@ -231,7 +231,7 @@ struct SavedGamePayload: Codable {
             return min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         case .pyramid:
             return min(max(0, state.wasteDrawCount), min(1, state.waste.count))
-        case .freecell, .yukon:
+        case .freecell, .yukon, .spider:
             return 0
         }
     }
@@ -291,9 +291,13 @@ struct GameStatistics: Codable, Equatable {
     var bestTimeSeconds: Int?
     var highScoreDrawThree: Int?
     var highScoreDrawOne: Int?
-    /// High score for variants without a draw mode (FreeCell, Yukon, Pyramid).
-    /// Klondike wins record into the per-draw-mode fields above instead.
+    /// High score for variants without a game-mode split (FreeCell, Yukon,
+    /// Pyramid). Klondike wins record into the per-draw-mode fields above and
+    /// Spider wins into the per-suit-count fields below instead.
     var highScore: Int?
+    var highScoreOneSuit: Int?
+    var highScoreTwoSuits: Int?
+    var highScoreFourSuits: Int?
     var cleanWins: Int
 
     enum CodingKeys: String, CodingKey {
@@ -306,6 +310,9 @@ struct GameStatistics: Codable, Equatable {
         case highScoreDrawThree
         case highScoreDrawOne
         case highScore
+        case highScoreOneSuit
+        case highScoreTwoSuits
+        case highScoreFourSuits
         case cleanWins
     }
 
@@ -319,6 +326,9 @@ struct GameStatistics: Codable, Equatable {
         highScoreDrawThree: Int? = nil,
         highScoreDrawOne: Int? = nil,
         highScore: Int? = nil,
+        highScoreOneSuit: Int? = nil,
+        highScoreTwoSuits: Int? = nil,
+        highScoreFourSuits: Int? = nil,
         cleanWins: Int = 0
     ) {
         self.schemaVersion = schemaVersion
@@ -330,6 +340,9 @@ struct GameStatistics: Codable, Equatable {
         self.highScoreDrawThree = highScoreDrawThree.map { max(0, $0) }
         self.highScoreDrawOne = highScoreDrawOne.map { max(0, $0) }
         self.highScore = highScore.map { max(0, $0) }
+        self.highScoreOneSuit = highScoreOneSuit.map { max(0, $0) }
+        self.highScoreTwoSuits = highScoreTwoSuits.map { max(0, $0) }
+        self.highScoreFourSuits = highScoreFourSuits.map { max(0, $0) }
         self.cleanWins = max(0, min(cleanWins, self.gamesWon))
     }
 
@@ -358,6 +371,9 @@ struct GameStatistics: Codable, Equatable {
         highScoreDrawThree = try container.decodeIfPresent(Int.self, forKey: .highScoreDrawThree).map { max(0, $0) }
         highScoreDrawOne = try container.decodeIfPresent(Int.self, forKey: .highScoreDrawOne).map { max(0, $0) }
         highScore = try container.decodeIfPresent(Int.self, forKey: .highScore).map { max(0, $0) }
+        highScoreOneSuit = try container.decodeIfPresent(Int.self, forKey: .highScoreOneSuit).map { max(0, $0) }
+        highScoreTwoSuits = try container.decodeIfPresent(Int.self, forKey: .highScoreTwoSuits).map { max(0, $0) }
+        highScoreFourSuits = try container.decodeIfPresent(Int.self, forKey: .highScoreFourSuits).map { max(0, $0) }
         cleanWins = max(
             0,
             min(
@@ -392,6 +408,9 @@ struct GameStatistics: Codable, Equatable {
         var highScoreDrawThree: Int?
         var highScoreDrawOne: Int?
         var highScore: Int?
+        var highScoreOneSuit: Int?
+        var highScoreTwoSuits: Int?
+        var highScoreFourSuits: Int?
 
         for stats in statsByVariant {
             gamesPlayed = addingSafely(gamesPlayed, stats.gamesPlayed)
@@ -424,6 +443,15 @@ struct GameStatistics: Codable, Equatable {
             if let candidate = stats.highScore {
                 highScore = max(highScore ?? 0, candidate)
             }
+            if let candidate = stats.highScoreOneSuit {
+                highScoreOneSuit = max(highScoreOneSuit ?? 0, candidate)
+            }
+            if let candidate = stats.highScoreTwoSuits {
+                highScoreTwoSuits = max(highScoreTwoSuits ?? 0, candidate)
+            }
+            if let candidate = stats.highScoreFourSuits {
+                highScoreFourSuits = max(highScoreFourSuits ?? 0, candidate)
+            }
         }
 
         gamesWon = min(gamesWon, gamesPlayed)
@@ -438,6 +466,9 @@ struct GameStatistics: Codable, Equatable {
             highScoreDrawThree: highScoreDrawThree,
             highScoreDrawOne: highScoreDrawOne,
             highScore: highScore,
+            highScoreOneSuit: highScoreOneSuit,
+            highScoreTwoSuits: highScoreTwoSuits,
+            highScoreFourSuits: highScoreFourSuits,
             cleanWins: cleanWins
         )
     }
@@ -447,6 +478,7 @@ struct GameStatistics: Codable, Equatable {
         elapsedSeconds: Int,
         finalScore: Int,
         drawCount: Int,
+        spiderSuitCount: SpiderSuitCount? = nil,
         hintsUsedInGame: Int,
         undosUsedInGame: Int,
         usedRedealInGame: Bool
@@ -468,7 +500,18 @@ struct GameStatistics: Codable, Equatable {
             bestTimeSeconds = sanitizedElapsed
         }
 
-        if drawCount == DrawMode.one.rawValue {
+        if let spiderSuitCount {
+            // Spider difficulties aren't score-comparable, so each suit count
+            // keeps its own high score (mirroring Klondike's draw-mode split).
+            switch spiderSuitCount {
+            case .one:
+                highScoreOneSuit = max(highScoreOneSuit ?? 0, sanitizedScore)
+            case .two:
+                highScoreTwoSuits = max(highScoreTwoSuits ?? 0, sanitizedScore)
+            case .four:
+                highScoreFourSuits = max(highScoreFourSuits ?? 0, sanitizedScore)
+            }
+        } else if drawCount == DrawMode.one.rawValue {
             highScoreDrawOne = max(highScoreDrawOne ?? 0, sanitizedScore)
         } else if drawCount == DrawMode.three.rawValue {
             highScoreDrawThree = max(highScoreDrawThree ?? 0, sanitizedScore)
@@ -562,11 +605,6 @@ enum GameStatisticsStore {
     }
 }
 
-private struct CardIdentity: Hashable {
-    let suit: Suit
-    let rank: Rank
-}
-
 private extension GameState {
     var allCards: [Card] {
         stock + waste + freeCells.compactMap { $0 } + foundations.flatMap { $0 }
@@ -574,15 +612,42 @@ private extension GameState {
     }
 
     var isValidForPersistence: Bool {
-        guard foundations.count == 4 else { return false }
+        guard foundations.count == variant.foundationPileCount else { return false }
         guard freeCells.count == 4 else { return false }
         guard hasValidVariantPersistenceLayout else { return false }
 
         let allCards = allCards
-        guard allCards.count == 52 else { return false }
-        guard Set(allCards.map(\.id)).count == 52 else { return false }
-        guard Set(allCards.map { CardIdentity(suit: $0.suit, rank: $0.rank) }).count == 52 else { return false }
+        guard allCards.count == variant.deckCardCount else { return false }
+        guard Set(allCards.map(\.id)).count == variant.deckCardCount else { return false }
+        guard hasExpectedDeckComposition(allCards) else { return false }
         return true
+    }
+
+    /// Every card identity must appear exactly as often as the variant's deck
+    /// composition prescribes: once each for the single-deck variants, and per
+    /// `SpiderDeck` for Spider's two suit-composed decks.
+    private func hasExpectedDeckComposition(_ allCards: [Card]) -> Bool {
+        var identityCounts: [CardIdentity: Int] = [:]
+        for card in allCards {
+            identityCounts[CardIdentity(suit: card.suit, rank: card.rank), default: 0] += 1
+        }
+        return identityCounts == expectedIdentityCounts
+    }
+
+    private var expectedIdentityCounts: [CardIdentity: Int] {
+        switch variant {
+        case .klondike, .freecell, .yukon, .pyramid:
+            var counts: [CardIdentity: Int] = [:]
+            for suit in Suit.allCases {
+                for rank in Rank.allCases {
+                    counts[CardIdentity(suit: suit, rank: rank)] = 1
+                }
+            }
+            return counts
+        case .spider:
+            guard let suitCount = spiderSuitCount else { return [:] }
+            return SpiderDeck.expectedIdentityCounts(suitCount: suitCount)
+        }
     }
 
     private var hasValidVariantPersistenceLayout: Bool {
@@ -593,6 +658,8 @@ private extension GameState {
             return FreeCellPersistenceRules.hasValidLayout(state: self)
         case .yukon:
             return YukonPersistenceRules.hasValidLayout(state: self)
+        case .spider:
+            return SpiderPersistenceRules.hasValidLayout(state: self)
         case .pyramid:
             return PyramidPersistenceRules.hasValidLayout(state: self)
         }

@@ -80,6 +80,30 @@ enum GameStateFixtures {
         )
     }
 
+    /// A reproducible Spider deal matching the shape of `GameState.newSpiderGame`.
+    /// Mirrored by the hint probe's `seededSpiderDeal` so seeds are comparable.
+    static func seededSpiderDeal(seed: UInt64, suitCount: SpiderSuitCount) -> GameState {
+        var deck = seededShuffle(SpiderDeck.deck(suitCount: suitCount), seed: seed)
+        var tableau: [[Card]] = Array(repeating: [], count: 10)
+        for pileIndex in 0..<10 {
+            let cardCount = pileIndex < 4 ? 6 : 5
+            for cardIndex in 0..<cardCount {
+                var card = deck.removeLast()
+                card.isFaceUp = cardIndex == cardCount - 1
+                tableau[pileIndex].append(card)
+            }
+        }
+        return GameState(
+            variant: .spider,
+            stock: deck,
+            waste: [],
+            wasteDrawCount: 0,
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: Array(repeating: [], count: 8),
+            tableau: tableau
+        )
+    }
+
     /// A reproducible Yukon deal matching the shape of `GameState.newYukonGame`.
     static func seededYukonDeal(seed: UInt64) -> GameState {
         var deck = seededDeck(seed: seed, faceUp: false)
@@ -175,8 +199,12 @@ enum GameStateFixtures {
     }
 
     private static func seededDeck(seed: UInt64, faceUp: Bool) -> [Card] {
+        seededShuffle(TestCards.fullDeck(faceUp: faceUp), seed: seed)
+    }
+
+    private static func seededShuffle(_ cards: [Card], seed: UInt64) -> [Card] {
         var generator = SeededRandomNumberGenerator(seed: seed)
-        var deck = TestCards.fullDeck(faceUp: faceUp)
+        var deck = cards
         for index in stride(from: deck.count - 1, through: 1, by: -1) {
             let swapIndex = Int(generator.next() % UInt64(index + 1))
             deck.swapAt(index, swapIndex)

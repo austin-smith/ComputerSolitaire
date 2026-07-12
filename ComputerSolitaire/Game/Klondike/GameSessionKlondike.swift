@@ -42,6 +42,7 @@ extension SolitaireViewModel {
     }
 
     func handleKlondikeStockTap() {
+        guard state.variant == .klondike else { return }
         clearHint()
         selection = nil
         isDragging = false

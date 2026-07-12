@@ -241,6 +241,20 @@ struct RulesAndScoringView: View {
                     definition: "Any face-up card together with every card stacked on top of it, moved as one, even out of order."
                 )
             ]
+        case .spider:
+            return [
+                TermRow(term: "Tableau", definition: "The ten play piles where you build down, regardless of suit."),
+                TermRow(
+                    term: "Run",
+                    definition: "Face-up cards of one suit in descending order; only runs move together."
+                ),
+                TermRow(
+                    term: "Completed run",
+                    definition: "A full King-to-Ace run of one suit. It leaves the tableau automatically; eight complete the game."
+                ),
+                TermRow(term: "Stock", definition: "The face-down pile that deals one card onto every tableau pile at once."),
+                TermRow(term: "Suits", definition: "The difficulty: 1, 2, or 4 suits composing the two decks (104 cards).")
+            ]
         case .pyramid:
             return [
                 TermRow(
@@ -288,6 +302,17 @@ struct RulesAndScoringView: View {
                 "Face-down cards turn face up when they become the top of a pile.",
                 "You win by moving all 52 cards to foundations."
             ]
+        case .spider:
+            return [
+                "Two decks (104 cards) are dealt into ten tableau piles: six cards in each of the first four, five in the rest, with only the top card face up. The remaining 50 cards form the stock.",
+                "A card can move onto any card one rank higher, regardless of suit. Nothing can be placed on an Ace.",
+                "Several cards move together only as a face-up run of one suit in descending order.",
+                "Any card or movable run can fill an empty pile.",
+                "Tapping the stock deals one face-up card onto every pile. Dealing is not allowed while any pile is empty.",
+                "A completed King-to-Ace run of one suit is removed from the tableau automatically.",
+                "Face-down cards turn face up when they become the top of a pile.",
+                "You win by completing all eight runs."
+            ]
         case .pyramid:
             return [
                 "Deal 28 cards face up into a seven-row pyramid; the remaining 24 form the stock.",
@@ -324,6 +349,16 @@ struct RulesAndScoringView: View {
                     points: Scoring.timedMaxBonusDrawThree,
                     note: "Reduced by elapsed time."
                 )
+            ]
+        case .spider:
+            return [
+                ScoringRow(
+                    move: "Start of game",
+                    points: Scoring.spiderInitialScore,
+                    note: "Classic Spider scoring starts every game with this balance."
+                ),
+                ScoringRow(move: "Any move or stock deal", points: Scoring.delta(for: .spiderMove), note: nil),
+                ScoringRow(move: "Complete a run", points: Scoring.delta(for: .spiderCompletedRun), note: nil),
             ]
         case .pyramid:
             return [

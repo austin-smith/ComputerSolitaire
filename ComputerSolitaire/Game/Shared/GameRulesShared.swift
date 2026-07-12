@@ -19,6 +19,8 @@ enum GameRules {
             return FreeCellGameRules.canMoveToTableau(card: card, destinationPile: destinationPile)
         case .yukon:
             return YukonGameRules.canMoveToTableau(card: card, destinationPile: destinationPile)
+        case .spider:
+            return SpiderGameRules.canMoveToTableau(card: card, destinationPile: destinationPile)
         case .pyramid:
             // Pyramid has no tableau piles; its pair moves flow through PyramidGameRules.
             return false
@@ -70,6 +72,20 @@ enum SharedGameRules {
             let upper = cards[index]
             let lower = cards[index + 1]
             guard upper.suit.isRed != lower.suit.isRed else { return false }
+            guard upper.rank.rawValue == lower.rank.rawValue + 1 else { return false }
+        }
+        return true
+    }
+
+    /// A face-up single-suit run descending one rank per step — Spider's movable
+    /// group, and (at thirteen cards led by a King) its completed run.
+    static func isDescendingSameSuitRun(_ cards: [Card]) -> Bool {
+        guard !cards.isEmpty else { return false }
+        guard cards.allSatisfy(\.isFaceUp) else { return false }
+        for index in 0..<(cards.count - 1) {
+            let upper = cards[index]
+            let lower = cards[index + 1]
+            guard upper.suit == lower.suit else { return false }
             guard upper.rank.rawValue == lower.rank.rawValue + 1 else { return false }
         }
         return true

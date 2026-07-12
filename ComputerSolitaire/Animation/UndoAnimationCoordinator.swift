@@ -63,6 +63,18 @@ enum UndoAnimationCoordinator {
             }
             return Plan(items: items, targets: targets, needsPostUndoFrames: true)
 
+        case .dealTableauRow:
+            // Spider's dealt row flies from the tableau (or a banked run's pile)
+            // back onto the stock; unlike a waste draw there is no fan position
+            // to fall back to when a card's frame is unknown.
+            for (index, id) in cardIDs.enumerated() {
+                guard let card = beforeCards[id] ?? afterCards[id],
+                      let startFrame = cardFrames[id] else { continue }
+                items.append(UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame))
+                targets[id] = .stock(index)
+            }
+            return Plan(items: items, targets: targets, needsPostUndoFrames: false)
+
         case .flipTableauTop:
             return Plan(items: [], targets: [:], needsPostUndoFrames: false)
         }

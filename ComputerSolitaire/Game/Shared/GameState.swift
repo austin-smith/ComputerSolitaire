@@ -71,8 +71,9 @@ struct GameState: Equatable, Codable {
 
     var isWon: Bool {
         switch variant {
-        case .klondike, .freecell, .yukon:
-            // Won once every foundation holds a full Ace-to-King run.
+        case .klondike, .freecell, .yukon, .spider:
+            // Won once every foundation holds a full run (Ace-to-King on the
+            // build-up variants, a banked King-to-Ace run per Spider foundation).
             return foundations.allSatisfy { $0.count == Rank.allCases.count }
         case .pyramid:
             // Won once every pyramid slot is cleared; stock and waste may keep cards.
@@ -84,7 +85,7 @@ struct GameState: Equatable, Codable {
         newGame(variant: .klondike)
     }
 
-    static func newGame(variant: GameVariant) -> GameState {
+    static func newGame(variant: GameVariant, spiderSuitCount: SpiderSuitCount = .two) -> GameState {
         switch variant {
         case .klondike:
             return newKlondikeGame()
@@ -92,6 +93,8 @@ struct GameState: Equatable, Codable {
             return newFreeCellGame()
         case .yukon:
             return newYukonGame()
+        case .spider:
+            return newSpiderGame(suitCount: spiderSuitCount)
         case .pyramid:
             return newPyramidGame()
         }

@@ -48,6 +48,7 @@ enum SettingsKey {
     static let cardTiltEnabled = "settings.cardTiltEnabled"
     static let gameVariant = "settings.gameVariant"
     static let drawMode = "settings.drawMode"
+    static let spiderSuitCount = "settings.spiderSuitCount"
     static let tableBackgroundColor = "settings.tableBackgroundColor"
     static let feltEffectEnabled = "settings.feltEffectEnabled"
     static let soundEffectsEnabled = "settings.soundEffectsEnabled"
@@ -62,6 +63,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
+    @AppStorage(SettingsKey.spiderSuitCount) private var spiderSuitCountRawValue = SpiderSuitCount.two.rawValue
     @AppStorage(SettingsKey.tableBackgroundColor)
     private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
@@ -124,6 +126,10 @@ struct SettingsView: View {
         }
 #endif
         .onChange(of: drawModeRawValue) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            HapticManager.shared.play(.settingsSelection)
+        }
+        .onChange(of: spiderSuitCountRawValue) { oldValue, newValue in
             guard oldValue != newValue else { return }
             HapticManager.shared.play(.settingsSelection)
         }
@@ -242,6 +248,16 @@ struct SettingsView: View {
                 .labelsHidden()
                 .pickerStyle(.segmented)
             }
+
+            if gameVariantRawValue == GameVariant.spider.rawValue {
+                Picker("Suits", selection: $spiderSuitCountRawValue) {
+                    ForEach(SpiderSuitCount.allCases, id: \.rawValue) { suitCount in
+                        Text(suitCount.title).tag(suitCount.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
         } header: {
             Text("Game Type")
         }
@@ -327,6 +343,8 @@ struct SettingsView: View {
             VStack(spacing: 3) {
                 Text(variant.title)
                     .font(.subheadline.weight(.bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
 
                 Text(variant.subtitle)
                     .font(.caption2)
