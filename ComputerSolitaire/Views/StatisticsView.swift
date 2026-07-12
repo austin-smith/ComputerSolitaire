@@ -23,6 +23,7 @@ struct StatisticsView: View {
         case klondike
         case freecell
         case yukon
+        case spider
         case all
 
         var id: String { rawValue }
@@ -35,6 +36,8 @@ struct StatisticsView: View {
                 self = .freecell
             case .yukon:
                 self = .yukon
+            case .spider:
+                self = .spider
             }
         }
 
@@ -47,6 +50,8 @@ struct StatisticsView: View {
                 return .freecell
             case .yukon:
                 return .yukon
+            case .spider:
+                return .spider
             case .all:
                 return nil
             }
@@ -54,7 +59,7 @@ struct StatisticsView: View {
 
         var title: String {
             switch self {
-            case .klondike, .freecell, .yukon:
+            case .klondike, .freecell, .yukon, .spider:
                 return variant?.title ?? ""
             case .all:
                 return "All"
@@ -253,8 +258,9 @@ struct StatisticsView: View {
         return durationLabel(bestTimeSeconds)
     }
 
-    /// Draw modes are a Klondike concept, so only Klondike splits its high score
-    /// by draw mode; the other variants keep a single high score.
+    /// Klondike splits its high score by draw mode and Spider by suit count
+    /// (scores across game modes aren't comparable); the other variants keep a
+    /// single high score.
     private var highScoreRowsForSelectedScope: [HighScoreRow] {
         switch selectedScope {
         case .klondike:
@@ -264,6 +270,12 @@ struct StatisticsView: View {
             ]
         case .freecell, .yukon:
             return [HighScoreRow(label: "High Score", score: stats.highScore)]
+        case .spider:
+            return [
+                HighScoreRow(label: "High Score (1 Suit)", score: stats.highScoreOneSuit),
+                HighScoreRow(label: "High Score (2 Suits)", score: stats.highScoreTwoSuits),
+                HighScoreRow(label: "High Score (4 Suits)", score: stats.highScoreFourSuits)
+            ]
         case .all:
             return []
         }
@@ -409,6 +421,8 @@ struct StatisticsView: View {
             return "Reset FreeCell statistics?"
         case .yukon:
             return "Reset Yukon statistics?"
+        case .spider:
+            return "Reset Spider statistics?"
         case .all:
             return "Reset all statistics?"
         }
@@ -422,6 +436,8 @@ struct StatisticsView: View {
             return "Reset FreeCell Statistics"
         case .yukon:
             return "Reset Yukon Statistics"
+        case .spider:
+            return "Reset Spider Statistics"
         case .all:
             return "Reset All Statistics"
         }
@@ -435,8 +451,10 @@ struct StatisticsView: View {
             return "This will reset only FreeCell games, times, win rates, and high scores."
         case .yukon:
             return "This will reset only Yukon games, times, win rates, and high scores."
+        case .spider:
+            return "This will reset only Spider games, times, win rates, and high scores."
         case .all:
-            return "This will reset Klondike, FreeCell, and Yukon statistics."
+            return "This will reset Klondike, FreeCell, Yukon, and Spider statistics."
         }
     }
 

@@ -31,7 +31,8 @@ enum ScreenshotFixtures {
     static let bundled: [ScreenshotFixture] = [
         ScreenshotFixture(name: "klondike-draw3", title: "Klondike – Draw 3"),
         ScreenshotFixture(name: "freecell", title: "FreeCell – fresh deal"),
-        ScreenshotFixture(name: "yukon", title: "Yukon – fresh deal")
+        ScreenshotFixture(name: "yukon", title: "Yukon – fresh deal"),
+        ScreenshotFixture(name: "spider", title: "Spider – 2 suits")
     ]
 
     static func payloadFromLaunchArguments() -> SavedGamePayload? {

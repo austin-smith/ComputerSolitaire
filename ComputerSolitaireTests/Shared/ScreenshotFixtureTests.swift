@@ -124,7 +124,7 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
 
         let viewModel = SolitaireViewModel()
         viewModel.state = GameStateFixtures.seededFreeCellDeal(seed: seed)
-        viewModel.configureStocklessNewGame()
+        viewModel.configureWastelessNewGame()
 
         let savedAt = DateFixtures.reference
         let payload = SavedGamePayload(
@@ -174,7 +174,7 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
 
         let viewModel = SolitaireViewModel()
         viewModel.state = GameStateFixtures.seededYukonDeal(seed: seed)
-        viewModel.configureStocklessNewGame()
+        viewModel.configureWastelessNewGame()
 
         let savedAt = DateFixtures.reference
         let payload = SavedGamePayload(
@@ -202,6 +202,56 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
 
         print("SCREENSHOT-FIXTURE-OUTPUT: \(outputURL.path)")
         print("Yukon fixture — seed \(seed), photogenic \(bestScore)")
+    }
+
+    /// The staged Spider board is a fresh 2-suit deal — ten piles with a single
+    /// face-up top each and a full stock. Seeds are scanned for the most
+    /// photogenic spread across the ten tops (the cards the eye lands on).
+    func testGenerateSpiderFixture() throws {
+        try skipUnlessGenerating()
+
+        var bestSeed: UInt64?
+        var bestScore = Int.min
+        for seed in Self.candidateSeeds {
+            let deal = GameStateFixtures.seededSpiderDeal(seed: seed, suitCount: .two)
+            let score = spiderDealScore(of: deal)
+            if score > bestScore {
+                bestScore = score
+                bestSeed = seed
+            }
+        }
+        let seed = try XCTUnwrap(bestSeed)
+
+        let viewModel = SolitaireViewModel()
+        viewModel.state = GameStateFixtures.seededSpiderDeal(seed: seed, suitCount: .two)
+        viewModel.configureSpiderNewGame()
+
+        let savedAt = DateFixtures.reference
+        let payload = SavedGamePayload(
+            savedAt: savedAt,
+            state: viewModel.state,
+            movesCount: viewModel.movesCount,
+            score: viewModel.score,
+            gameStartedAt: savedAt.addingTimeInterval(-Self.stagedElapsedSeconds),
+            stockDrawCount: DrawMode.three.rawValue,
+            history: [],
+            hasStartedTrackedGame: false
+        )
+
+        XCTAssertNotNil(payload.sanitizedForRestore(), "Generated fixture failed the validity gate")
+        let restoredViewModel = SolitaireViewModel()
+        XCTAssertTrue(restoredViewModel.restore(from: payload), "Generated fixture failed to restore")
+        XCTAssertEqual(restoredViewModel.gameVariant, .spider, "Fixture did not restore as Spider")
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("spider.json")
+        try data.write(to: outputURL)
+
+        print("SCREENSHOT-FIXTURE-OUTPUT: \(outputURL.path)")
+        print("Spider fixture — seed \(seed), photogenic \(bestScore)")
     }
 
     // MARK: - Photogenic scoring
@@ -241,6 +291,21 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         score += Set(visible.map(\.suit)).count == Suit.allCases.count ? 8 : 0
         score += visible.count(where: { $0.rank >= .jack }) >= 3 ? 6 : 0
         score += deal.tableau.compactMap { $0.last }.contains(where: { $0.rank == .ace }) ? 6 : 0
+        return score
+    }
+
+    /// Scores a fresh Spider deal by its ten face-up tops: rank variety,
+    /// red/black balance, both composed suits, a few face cards, and an ace
+    /// on a top read well.
+    private func spiderDealScore(of deal: GameState) -> Int {
+        let visible = deal.tableau.compactMap { $0.last }
+        var score = 0
+        score += Set(visible.map(\.rank)).count * 6
+        let redCount = visible.count(where: { $0.suit.isRed })
+        score -= abs(redCount * 2 - visible.count) * 4
+        score += Set(visible.map(\.suit)).count == 2 ? 8 : 0
+        score += visible.count(where: { $0.rank >= .jack }) >= 3 ? 6 : 0
+        score += visible.contains(where: { $0.rank == .ace }) ? 6 : 0
         return score
     }
 

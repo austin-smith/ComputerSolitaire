@@ -1,0 +1,1121 @@
+{
+  "gameStartedAt" : 721692797,
+  "hasAppliedTimeBonus" : false,
+  "hasStartedTrackedGame" : false,
+  "hintRequestsInCurrentGame" : 0,
+  "history" : [
+
+  ],
+  "isCurrentGameFinalized" : false,
+  "movesCount" : 0,
+  "savedAt" : 721692800,
+  "schemaVersion" : 1,
+  "score" : 500,
+  "scoringDrawCount" : 3,
+  "state" : {
+    "foundations" : [
+      [
+
+      ],
+      [
+
+      ],
+      [
+
+      ],
+      [
+
+      ],
+      [
+
+      ],
+      [
+
+      ],
+      [
+
+      ],
+      [
+
+      ]
+    ],
+    "freeCells" : [
+      null,
+      null,
+      null,
+      null
+    ],
+    "stock" : [
+      {
+        "id" : "E9BF25DD-38E1-4C7F-AA92-81E9169DDCD0",
+        "isFaceUp" : false,
+        "rank" : 12,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "66B3FF11-9FBD-4004-9D76-F8415F20F6A7",
+        "isFaceUp" : false,
+        "rank" : 13,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "095456AB-B49F-4E3D-A36E-E4A8F58C2ADA",
+        "isFaceUp" : false,
+        "rank" : 3,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "21B7E153-755D-4DD4-BB1B-DB6BF3B06803",
+        "isFaceUp" : false,
+        "rank" : 10,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "4A817BDA-4213-4EC2-963B-C2B12F3CD545",
+        "isFaceUp" : false,
+        "rank" : 10,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "4989916A-5E57-406A-A1B6-7905EA9A256B",
+        "isFaceUp" : false,
+        "rank" : 10,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "F752682A-2899-4EBA-8232-A8C32C598081",
+        "isFaceUp" : false,
+        "rank" : 6,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "F31DB790-6463-4E67-9867-073CE371572E",
+        "isFaceUp" : false,
+        "rank" : 2,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "292E4D36-1D7B-4C17-A53A-1213EAD7FA76",
+        "isFaceUp" : false,
+        "rank" : 9,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "68844967-04E4-41F7-83D2-764FD858EC11",
+        "isFaceUp" : false,
+        "rank" : 8,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "154FE8B2-1BD9-4A80-9CAB-7B9A74E11D05",
+        "isFaceUp" : false,
+        "rank" : 4,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "D3E37318-2E7F-4127-98F9-01743BFDDA4F",
+        "isFaceUp" : false,
+        "rank" : 2,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "2288D6AA-8D57-451B-98D1-491E35C2A39A",
+        "isFaceUp" : false,
+        "rank" : 13,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "8A8C69D2-98B0-4DA6-A03A-EE1CD29856A5",
+        "isFaceUp" : false,
+        "rank" : 13,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "8C31E560-E373-498B-AD59-9FC881F97D24",
+        "isFaceUp" : false,
+        "rank" : 1,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "21089D88-3CE6-40D9-B42F-A3DC522FD541",
+        "isFaceUp" : false,
+        "rank" : 5,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "BD027465-5439-46B8-911C-2790EB7E93A5",
+        "isFaceUp" : false,
+        "rank" : 3,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "D8FE8647-F0F7-4434-A033-1C95500E6C8B",
+        "isFaceUp" : false,
+        "rank" : 11,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "4C90527E-FE36-49F6-9692-2C09CBB72162",
+        "isFaceUp" : false,
+        "rank" : 6,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "A09F366B-5C1C-4F20-846B-7F7FF688C41A",
+        "isFaceUp" : false,
+        "rank" : 2,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "60527FC7-D2D0-4223-B488-1E6C294A56A7",
+        "isFaceUp" : false,
+        "rank" : 3,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "F379A261-9977-4AAF-A437-424C562C2424",
+        "isFaceUp" : false,
+        "rank" : 9,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "70995AAA-D7A6-41B9-9A7A-5185CAADE77A",
+        "isFaceUp" : false,
+        "rank" : 9,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "5786DFE2-4A75-40E7-96E6-D7F0E4C8DA27",
+        "isFaceUp" : false,
+        "rank" : 6,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "CD512405-B60A-42DB-8396-9D0427BBC02A",
+        "isFaceUp" : false,
+        "rank" : 8,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "94DC3877-7991-4408-920B-ED43B6A35766",
+        "isFaceUp" : false,
+        "rank" : 11,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "AF737A48-B126-481D-B684-3B98C28B26BD",
+        "isFaceUp" : false,
+        "rank" : 3,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "BD92F0EE-4CEF-4490-A2C9-57ED8B7BA6AB",
+        "isFaceUp" : false,
+        "rank" : 11,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "BC1C0A5E-4199-4A79-B7EC-4F8F8C06B146",
+        "isFaceUp" : false,
+        "rank" : 11,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "C48C744F-99BB-4180-BEDA-E25E638092DD",
+        "isFaceUp" : false,
+        "rank" : 11,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "BA1CC49C-1651-426E-BF60-14451736406F",
+        "isFaceUp" : false,
+        "rank" : 4,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "0EDF906B-4618-4BDB-A560-CF7E27131A8B",
+        "isFaceUp" : false,
+        "rank" : 7,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "75E4C866-7DA1-4847-9E59-130B43EC4EFD",
+        "isFaceUp" : false,
+        "rank" : 1,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "60B3AF19-5C2E-4EAB-8223-4555BC1CAD3A",
+        "isFaceUp" : false,
+        "rank" : 8,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "E3CAD810-16EE-42AF-880B-DC85D0BB0F04",
+        "isFaceUp" : false,
+        "rank" : 10,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "FC771AC2-5F40-4AA5-AC10-8DBBB4184228",
+        "isFaceUp" : false,
+        "rank" : 6,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "4F30A023-C445-460D-AD08-06A816FCA56C",
+        "isFaceUp" : false,
+        "rank" : 3,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "666AC744-5846-419C-B0BD-B4EE297FD619",
+        "isFaceUp" : false,
+        "rank" : 4,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "2A8A6A2A-2B86-4F83-8265-35730444F4E1",
+        "isFaceUp" : false,
+        "rank" : 5,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "5762787F-DF7C-4EE6-8C83-5BCA1241BBD3",
+        "isFaceUp" : false,
+        "rank" : 7,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "F04D450E-CDF1-43D3-9607-AC1E72B4A107",
+        "isFaceUp" : false,
+        "rank" : 6,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "77881F27-0416-4F23-869D-936A5EECCF8B",
+        "isFaceUp" : false,
+        "rank" : 8,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "114785D0-C2AC-43BE-B2DE-0CEC64C3A40E",
+        "isFaceUp" : false,
+        "rank" : 5,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "59F8E87D-2840-4B2E-81D6-ECBC996F28C0",
+        "isFaceUp" : false,
+        "rank" : 7,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "CB7CFC69-7941-42D3-ABED-F387B3DEE6DA",
+        "isFaceUp" : false,
+        "rank" : 12,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "B8F78C14-9E75-4213-BB9F-2618ADD3895E",
+        "isFaceUp" : false,
+        "rank" : 13,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "FF5DB4E0-5BEE-41A9-8052-04448D42803C",
+        "isFaceUp" : false,
+        "rank" : 8,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "C756DAD9-6B5B-42DC-8A48-B29543885E20",
+        "isFaceUp" : false,
+        "rank" : 4,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "630ABC4A-4A5A-46F7-B5FF-19B86C09871D",
+        "isFaceUp" : false,
+        "rank" : 5,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "44CBB5F0-3D36-453B-9472-17F845BF6AAE",
+        "isFaceUp" : false,
+        "rank" : 1,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      }
+    ],
+    "tableau" : [
+      [
+        {
+          "id" : "C4042C1E-A507-4077-9B04-C5C8828ACA1D",
+          "isFaceUp" : false,
+          "rank" : 5,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "BFA65E6C-213E-46C1-8593-322B141C5764",
+          "isFaceUp" : false,
+          "rank" : 1,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "BFF1AD6E-99CB-4AEA-87CC-B6DB0BA36FF6",
+          "isFaceUp" : false,
+          "rank" : 2,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "79023CA3-34B0-4854-AF3F-D4F42CA09C9E",
+          "isFaceUp" : false,
+          "rank" : 12,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "86EC7B2A-2169-4250-B0EF-78B8B1B407AB",
+          "isFaceUp" : false,
+          "rank" : 7,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "9EF3B45E-35DE-4A54-B9FD-9F5BEE621716",
+          "isFaceUp" : true,
+          "rank" : 12,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        }
+      ],
+      [
+        {
+          "id" : "FF259395-8420-4C77-A476-F22BE8068D49",
+          "isFaceUp" : false,
+          "rank" : 2,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "2394B558-B85D-4556-93CA-325F8A9B5582",
+          "isFaceUp" : false,
+          "rank" : 12,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "08BC1F65-F6B8-463D-8E7C-0C0ACEA7D84F",
+          "isFaceUp" : false,
+          "rank" : 11,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "026499CE-0F76-4F17-B831-F7546E4C71A3",
+          "isFaceUp" : false,
+          "rank" : 7,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "A8B9CEC5-F47B-4313-AE28-091B42B185C2",
+          "isFaceUp" : false,
+          "rank" : 8,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "B66870FE-3333-468E-B294-3135C5B3D511",
+          "isFaceUp" : true,
+          "rank" : 13,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        }
+      ],
+      [
+        {
+          "id" : "419AE571-3B6C-4B59-9783-8B6785D18E4B",
+          "isFaceUp" : false,
+          "rank" : 12,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "FB038707-3DC0-490C-920C-EA87E3A5E3A7",
+          "isFaceUp" : false,
+          "rank" : 9,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "6F588E14-3553-4136-A06C-69517152D60E",
+          "isFaceUp" : false,
+          "rank" : 1,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "B8A62BF8-A2FA-4C42-95EF-64732CBAE0B7",
+          "isFaceUp" : false,
+          "rank" : 8,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "1EDEF8AE-6F0B-45AA-97A5-DDC0DD6770EE",
+          "isFaceUp" : false,
+          "rank" : 9,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "4D36DBB2-929B-4336-9CC9-1BBC57481524",
+          "isFaceUp" : true,
+          "rank" : 2,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        }
+      ],
+      [
+        {
+          "id" : "9F78F03E-9053-4867-8F34-C562326F8C8B",
+          "isFaceUp" : false,
+          "rank" : 3,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "BE3EBFBD-0FA2-4676-85DB-5E6D9E19DD87",
+          "isFaceUp" : false,
+          "rank" : 13,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "C2EF2598-1640-420A-A8EF-08F145CB480D",
+          "isFaceUp" : false,
+          "rank" : 7,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "E3F9A7ED-661A-43BE-9FEA-345EF3DEA7F2",
+          "isFaceUp" : false,
+          "rank" : 9,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "AEDA0811-074C-4A1E-B1E2-A1E16A864552",
+          "isFaceUp" : false,
+          "rank" : 4,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "789C8886-B174-467C-9964-2D37CF50BF90",
+          "isFaceUp" : true,
+          "rank" : 10,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        }
+      ],
+      [
+        {
+          "id" : "02FF7FEC-FB7C-4DDA-A461-CAC3960883C0",
+          "isFaceUp" : false,
+          "rank" : 9,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "C58E8A01-B05F-43EF-866F-098DCA0C6524",
+          "isFaceUp" : false,
+          "rank" : 10,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "1D75106F-9BAB-442D-A312-8ABB61AEE0B6",
+          "isFaceUp" : false,
+          "rank" : 5,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "BE950BFA-6CAE-4357-8AEB-99F6442688D5",
+          "isFaceUp" : false,
+          "rank" : 5,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "E005EE9A-D732-435E-9AAC-9FF87B848458",
+          "isFaceUp" : true,
+          "rank" : 7,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        }
+      ],
+      [
+        {
+          "id" : "A37696A9-52FE-42CF-B1C6-7A16AB4FB2E6",
+          "isFaceUp" : false,
+          "rank" : 12,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "6149400D-F872-4ECD-A21A-DC7AF2D3751E",
+          "isFaceUp" : false,
+          "rank" : 1,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "C3DAB45F-0F01-4E88-9877-D540E9734F0F",
+          "isFaceUp" : false,
+          "rank" : 3,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "50ED787C-8306-4F1A-88A6-6899AF5EEF9C",
+          "isFaceUp" : false,
+          "rank" : 10,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "6023F836-CAA9-4335-9DB2-FA2E158F64B4",
+          "isFaceUp" : true,
+          "rank" : 6,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        }
+      ],
+      [
+        {
+          "id" : "12E41E76-EABE-454E-839E-93B55F4906C5",
+          "isFaceUp" : false,
+          "rank" : 13,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "DD45E549-8271-4AA6-9D7D-EBC00F0BF153",
+          "isFaceUp" : false,
+          "rank" : 2,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "E53B9C48-73B8-435D-8EDB-76F1E85ED733",
+          "isFaceUp" : false,
+          "rank" : 6,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "5FF2C900-F0D7-4120-9AB5-9C1B74EBBA10",
+          "isFaceUp" : false,
+          "rank" : 1,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "4199DE4B-089E-4228-A13F-9F5A25D6DDE2",
+          "isFaceUp" : true,
+          "rank" : 8,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        }
+      ],
+      [
+        {
+          "id" : "E23E977F-B79A-46B1-8A17-E1E948F6AE5E",
+          "isFaceUp" : false,
+          "rank" : 11,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "DBB59164-670C-497A-BC1A-15F3DED3A724",
+          "isFaceUp" : false,
+          "rank" : 13,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "9415CA31-D229-4C36-B075-17F202B5989E",
+          "isFaceUp" : false,
+          "rank" : 5,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "27DDF58F-0DCF-4721-AFC4-58284B250553",
+          "isFaceUp" : false,
+          "rank" : 12,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "1513B9E2-C5FA-4078-A5F5-7A63A7E33D1A",
+          "isFaceUp" : true,
+          "rank" : 1,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        }
+      ],
+      [
+        {
+          "id" : "F0F449CA-1F7C-4346-BE62-D7F886150166",
+          "isFaceUp" : false,
+          "rank" : 7,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "45C0D5CB-20F2-4C7B-8D15-67417D697089",
+          "isFaceUp" : false,
+          "rank" : 4,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "36A612DA-1856-4C7E-B50D-A90F650C9F04",
+          "isFaceUp" : false,
+          "rank" : 2,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "6C39EB4A-3BBF-415C-BBF2-FA6B04356638",
+          "isFaceUp" : false,
+          "rank" : 10,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "48AAC4DC-8247-45AE-8705-D2B6CFF16805",
+          "isFaceUp" : true,
+          "rank" : 11,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        }
+      ],
+      [
+        {
+          "id" : "7B2F1D1F-8F0D-4EBB-885B-888CC749EFC7",
+          "isFaceUp" : false,
+          "rank" : 6,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "5BC4CF08-F819-42CC-9B99-6360EC1EC424",
+          "isFaceUp" : false,
+          "rank" : 3,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "8F1DB080-BD43-433B-8E6A-2B0A31C86C2A",
+          "isFaceUp" : false,
+          "rank" : 4,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        },
+        {
+          "id" : "545A6ABD-48AC-481E-A4E7-C4D91FD51024",
+          "isFaceUp" : false,
+          "rank" : 4,
+          "suit" : {
+            "hearts" : {
+
+            }
+          }
+        },
+        {
+          "id" : "8E12D854-3767-4998-9011-689579FD9D14",
+          "isFaceUp" : true,
+          "rank" : 9,
+          "suit" : {
+            "spades" : {
+
+            }
+          }
+        }
+      ]
+    ],
+    "variant" : "spider",
+    "waste" : [
+
+    ],
+    "wasteDrawCount" : 0
+  },
+  "stockDrawCount" : 3,
+  "undosUsedInCurrentGame" : 0,
+  "usedRedealInCurrentGame" : false
+}

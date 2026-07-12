@@ -45,6 +45,7 @@ struct UndoAnimationContext: Codable {
         case drawFromStock
         case recycleWaste
         case flipTableauTop
+        case dealTableauRow
     }
 
     let action: Action

@@ -48,6 +48,10 @@ private extension AutoFinishPlanner {
             return true
         case .yukon:
             return !state.tableau.joined().contains(where: { !$0.isFaceUp })
+        case .spider:
+            // Spider banks completed runs automatically; there is never a
+            // foundation run left for auto-finish to play.
+            return false
         }
     }
 

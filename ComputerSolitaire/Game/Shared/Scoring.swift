@@ -7,6 +7,8 @@ enum ScoringAction {
     case turnOverTableauCard
     case foundationToTableau
     case recycleWasteInDrawOne
+    case spiderMove
+    case spiderCompletedRun
 }
 
 enum Scoring {
@@ -14,6 +16,8 @@ enum Scoring {
     static let timedPointsLostPerSecond = 1
     static let timedMaxBonusDrawOne = 600
     static let timedMaxBonusDrawThree = 900
+    /// Classic Spider scoring starts every game at 500.
+    static let spiderInitialScore = 500
 
     static func delta(for action: ScoringAction) -> Int {
         switch action {
@@ -29,6 +33,10 @@ enum Scoring {
             return -15
         case .recycleWasteInDrawOne:
             return -100
+        case .spiderMove:
+            return -1
+        case .spiderCompletedRun:
+            return 100
         }
     }
 

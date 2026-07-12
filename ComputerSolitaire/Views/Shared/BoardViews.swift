@@ -357,6 +357,18 @@ struct TopRowView: View {
                     hintWiggleToken: hintWiggleToken,
                     dragGesture: dragGesture
                 )
+            case .spider:
+                SpiderTopRowView(
+                    viewModel: viewModel,
+                    cardSize: cardSize,
+                    columnSpacing: columnSpacing,
+                    isStockHinted: isStockHinted,
+                    hintHighlightOpacity: hintHighlightOpacity,
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
+                    hiddenCardIDs: hiddenCardIDs,
+                    hintWiggleToken: hintWiggleToken
+                )
             }
         }
     }
@@ -594,6 +606,8 @@ struct TableauPileView: View {
                     let isAccessibilityElement = (isValidRunOrigin || isExposedFaceDownCard)
                         && !isDragged
                         && !isHidden
+                    // Yukon groups need not be ordered; every other multi-card
+                    // pickup is a run.
                     let multiCardNoun = viewModel.state.variant == .yukon ? "group" : "run"
                     let accessibilityHint = isExposedFaceDownCard
                         ? "Flip card"

@@ -88,7 +88,7 @@ final class WinCelebrationController {
         }
 
         var launchFrames: [Int: CGRect] = [:]
-        for index in 0..<4 {
+        for index in foundations.indices {
             if let frame = dropFrames[.foundation(index)]?.snapFrame, frame != .zero {
                 launchFrames[index] = frame
             }
@@ -159,7 +159,7 @@ final class WinCelebrationController {
         guard boardBounds.width > 0, boardBounds.height > 0 else { return [] }
 
         var launchFrames: [Int: CGRect] = [:]
-        for index in 0..<4 {
+        for index in foundations.indices {
             if let frame = dropFrames[.foundation(index)]?.snapFrame, frame != .zero {
                 launchFrames[index] = frame
             }
