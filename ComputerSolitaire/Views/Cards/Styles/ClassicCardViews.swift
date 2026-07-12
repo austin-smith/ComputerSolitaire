@@ -69,6 +69,7 @@ struct ClassicCardFrontView: View {
             Spacer(minLength: 0)
             Image(systemName: card.suit.symbolName)
                 .font(.system(size: cardSize.width * 0.2, weight: .semibold))
+                .accessibilityHidden(true)
         }
 
         ZStack {
@@ -114,6 +115,7 @@ struct ClassicCardFrontView: View {
                 .foregroundStyle(inkColor.opacity(0.12))
                 .rotationEffect(.degrees(8))
                 .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.center)
+                .accessibilityHidden(true)
         }
     }
 }

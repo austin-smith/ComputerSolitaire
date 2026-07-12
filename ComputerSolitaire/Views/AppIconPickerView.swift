@@ -49,6 +49,7 @@ struct AppIconPreviewView: View {
             .scaledToFill()
             .frame(width: size, height: size)
             .clipShape(shape)
+            .accessibilityHidden(true)
             .overlay {
                 shape.stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
             }
@@ -140,6 +141,7 @@ struct AppIconPickerView: View {
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(.white, Color.accentColor)
                         .padding(6)
+                        .accessibilityHidden(true)
                 }
             }
             .contentShape(Rectangle())

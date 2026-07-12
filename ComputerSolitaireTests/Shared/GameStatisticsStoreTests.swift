@@ -57,8 +57,8 @@ final class GameStatisticsStoreTests: XCTestCase {
         XCTAssertEqual(stats.cleanWins, Int.max)
     }
 
-    func testStatisticsStoreMarkTrackingStartedAndReset() {
-        let defaults = makeIsolatedDefaults()
+    func testStatisticsStoreMarkTrackingStartedAndReset() throws {
+        let defaults = try makeIsolatedDefaults()
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
 
         GameStatisticsStore.markTrackingStarted(
@@ -88,8 +88,8 @@ final class GameStatisticsStoreTests: XCTestCase {
         XCTAssertEqual(reset.gamesWon, 0)
     }
 
-    func testStatisticsStoreUpdatePersistsMutation() {
-        let defaults = makeIsolatedDefaults()
+    func testStatisticsStoreUpdatePersistsMutation() throws {
+        let defaults = try makeIsolatedDefaults()
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
 
         GameStatisticsStore.update(for: .klondike, userDefaults: defaults) { stats in
@@ -110,8 +110,8 @@ final class GameStatisticsStoreTests: XCTestCase {
         XCTAssertEqual(loaded.bestTimeSeconds, 123)
     }
 
-    func testVariantStoresRemainIsolated() {
-        let defaults = makeIsolatedDefaults()
+    func testVariantStoresRemainIsolated() throws {
+        let defaults = try makeIsolatedDefaults()
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
 
         GameStatisticsStore.update(for: .klondike, userDefaults: defaults) { stats in
@@ -193,8 +193,8 @@ final class GameStatisticsStoreTests: XCTestCase {
 
     private let defaultsSuiteName = "ComputerSolitaire.GameStatisticsStoreTests"
 
-    private func makeIsolatedDefaults() -> UserDefaults {
-        let defaults = UserDefaults(suiteName: defaultsSuiteName)!
+    private func makeIsolatedDefaults() throws -> UserDefaults {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuiteName))
         defaults.removePersistentDomain(forName: defaultsSuiteName)
         return defaults
     }

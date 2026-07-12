@@ -43,9 +43,10 @@ enum KlondikePlanner {
             let node = nodes[nodeIndex]
 
             if node.score > rootScore {
-                if best == nil
-                    || node.score > best!.score
-                    || (node.score == best!.score && node.depth < best!.depth) {
+                let improvesBest = best.map {
+                    node.score > $0.score || (node.score == $0.score && node.depth < $0.depth)
+                } ?? true
+                if improvesBest {
                     best = (nodeIndex, node.score, node.depth)
                 }
                 if isWon(node.state) { break }

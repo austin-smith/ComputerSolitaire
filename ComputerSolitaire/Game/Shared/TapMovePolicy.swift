@@ -17,7 +17,7 @@ enum TapMovePolicy {
         var best: (destination: Destination, priority: Priority)?
         for destination in destinations {
             let priority = priority(of: destination, for: selection, in: state)
-            if best == nil || priority.isBetter(than: best!.priority) {
+            if best.map({ priority.isBetter(than: $0.priority) }) ?? true {
                 best = (destination, priority)
             }
         }
@@ -33,7 +33,7 @@ enum TapMovePolicy {
             if case .foundation = selection.source { continue }
             for destination in AutoMoveAdvisor.legalDestinations(for: selection, in: state) {
                 let priority = priority(of: destination, for: selection, in: state)
-                if best == nil || priority.isBetter(than: best!.priority) {
+                if best.map({ priority.isBetter(than: $0.priority) }) ?? true {
                     best = (selection, destination, priority)
                 }
             }

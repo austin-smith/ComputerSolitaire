@@ -62,7 +62,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
     @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
-    @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
+    @AppStorage(SettingsKey.tableBackgroundColor)
+    private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
     @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
@@ -260,6 +261,7 @@ struct SettingsView: View {
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
                 .contentShape(Rectangle())
             }
@@ -282,6 +284,7 @@ struct SettingsView: View {
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
                 .contentShape(Rectangle())
             }
@@ -402,6 +405,7 @@ struct SettingsView: View {
                         Image(systemName: "checkmark")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(.white)
+                            .accessibilityHidden(true)
                     }
                 }
                 .overlay {
@@ -434,6 +438,7 @@ struct SettingsView: View {
                         Image(systemName: "checkmark")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(.white)
+                            .accessibilityHidden(true)
                     }
                 }
                 .overlay {
@@ -459,7 +464,11 @@ private extension View {
             .frame(maxWidth: .infinity)
             .background {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.12)) : AnyShapeStyle(.quaternary.opacity(0.5)))
+                    .fill(
+                        isSelected
+                            ? AnyShapeStyle(Color.accentColor.opacity(0.12))
+                            : AnyShapeStyle(.quaternary.opacity(0.5))
+                    )
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)

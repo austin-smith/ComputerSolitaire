@@ -1,7 +1,6 @@
 import Foundation
 import SwiftData
 
-
 @Model
 final class SavedGameRecord {
     static let currentRecordKey = "current"
@@ -227,7 +226,6 @@ struct SavedGamePayload: Codable {
     }
 }
 
-
 enum GamePersistenceError: Error {
     case invalidPayload
 }
@@ -321,7 +319,10 @@ struct GameStatistics: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        let decodedSchemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? Self.currentSchemaVersion
+        let decodedSchemaVersion = try container.decodeIfPresent(
+            Int.self,
+            forKey: .schemaVersion
+        ) ?? Self.currentSchemaVersion
         let decodedGamesPlayed = max(0, try container.decodeIfPresent(Int.self, forKey: .gamesPlayed) ?? 0)
         let decodedGamesWon = max(
             0,

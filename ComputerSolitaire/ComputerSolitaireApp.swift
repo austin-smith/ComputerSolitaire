@@ -74,11 +74,14 @@ struct ComputerSolitaireApp: App {
     private var appCommands: some Commands {
 #if os(macOS)
         CommandGroup(replacing: .appInfo) {
-            Button(action: {
-                openWindow(id: "about")
-            }) {
-                Label("About Computer Solitaire", systemImage: "info.circle")
-            }
+            Button(
+                action: {
+                    openWindow(id: "about")
+                },
+                label: {
+                    Label("About Computer Solitaire", systemImage: "info.circle")
+                }
+            )
         }
         CommandGroup(replacing: .help) {
             Button {

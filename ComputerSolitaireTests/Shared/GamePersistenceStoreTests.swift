@@ -44,8 +44,20 @@ final class GamePersistenceStoreTests: XCTestCase {
     func testSaveOverwritesExistingRecord() throws {
         let context = try makeInMemoryContext()
         let state = GameStateFixtures.validPersistenceState()
-        let first = SavedGamePayload(state: state, movesCount: 1, score: 10, stockDrawCount: DrawMode.three.rawValue, history: [])
-        let second = SavedGamePayload(state: state, movesCount: 9, score: 90, stockDrawCount: DrawMode.one.rawValue, history: [])
+        let first = SavedGamePayload(
+            state: state,
+            movesCount: 1,
+            score: 10,
+            stockDrawCount: DrawMode.three.rawValue,
+            history: []
+        )
+        let second = SavedGamePayload(
+            state: state,
+            movesCount: 9,
+            score: 90,
+            stockDrawCount: DrawMode.one.rawValue,
+            history: []
+        )
 
         try GamePersistence.save(first, in: context)
         try GamePersistence.save(second, in: context)

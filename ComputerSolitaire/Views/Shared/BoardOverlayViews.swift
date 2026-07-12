@@ -37,7 +37,8 @@ struct UndoOverlayView: View {
                 isSelected: false,
                 cardSize: item.startFrame.size,
                 isCardTiltEnabled: false,
-                cardTilts: .constant([:])
+                cardTilts: .constant([:]),
+                isAccessibilityElement: false
             )
             .position(x: currentX, y: currentY)
         }
@@ -57,7 +58,8 @@ struct WinCascadeOverlayView: View {
                 isSelected: false,
                 cardSize: item.size,
                 isCardTiltEnabled: false,
-                cardTilts: .constant([:])
+                cardTilts: .constant([:]),
+                isAccessibilityElement: false
             )
             .rotationEffect(.degrees(item.rotationDegrees))
             .position(item.position)
@@ -92,7 +94,8 @@ private struct DrawOverlayCardView: View {
             cardTilts: $cardTilts,
             flipOnAppear: true,
             // The packet flips in the air while it travels and spreads.
-            flipDelay: delay
+            flipDelay: delay,
+            isAccessibilityElement: false
         )
         .position(x: currentX, y: currentY)
         .onAppear {
@@ -143,7 +146,8 @@ struct DragOverlayView: View {
                         isSelected: true,
                         cardSize: frame.size,
                         isCardTiltEnabled: false,
-                        cardTilts: .constant([:])
+                        cardTilts: .constant([:]),
+                        isAccessibilityElement: false
                     )
                     .rotationEffect(.degrees(overlayTilt))
                     .position(x: frame.midX, y: frame.midY)

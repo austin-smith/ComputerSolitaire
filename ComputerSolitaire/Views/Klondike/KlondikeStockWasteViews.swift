@@ -9,41 +9,60 @@ struct StockView: View {
     let hintWiggleToken: UUID
 
     var body: some View {
-        ZStack {
-            PilePlaceholderView(cardSize: cardSize)
-                .allowsHitTesting(false)
-            if viewModel.state.stock.isEmpty {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.7))
-            } else {
-                CardBackView(cardSize: cardSize)
-            }
-            Text("\(viewModel.state.stock.count)")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.8))
-                .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
-
-            DropHighlightView(
-                cardSize: cardSize,
-                isTargeted: false,
-                isHintTargeted: isHintTargeted,
-                hintOpacity: hintHighlightOpacity
-            )
-            .allowsHitTesting(false)
-        }
-        .hintWiggle(token: isHintTargeted ? hintWiggleToken : nil)
-        .background(
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(key: StockFrameKey.self, value: proxy.frame(in: .named("board")))
-            }
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
+        Button {
             viewModel.handleStockTap()
+        } label: {
+            ZStack {
+                PilePlaceholderView(cardSize: cardSize)
+                    .allowsHitTesting(false)
+                if viewModel.state.stock.isEmpty {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .accessibilityHidden(true)
+                } else {
+                    CardBackView(cardSize: cardSize)
+                }
+                Text("\(viewModel.state.stock.count)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
+
+                DropHighlightView(
+                    cardSize: cardSize,
+                    isTargeted: false,
+                    isHintTargeted: isHintTargeted,
+                    hintOpacity: hintHighlightOpacity
+                )
+                .allowsHitTesting(false)
+            }
+            .hintWiggle(token: isHintTargeted ? hintWiggleToken : nil)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: StockFrameKey.self, value: proxy.frame(in: .named("board")))
+                }
+            )
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(isStockActionUnavailable)
         .accessibilityLabel("Stock")
+        .accessibilityValue(stockAccessibilityValue)
+    }
+
+    private var isStockActionUnavailable: Bool {
+        viewModel.state.stock.isEmpty && viewModel.state.waste.isEmpty
+    }
+
+    private var stockAccessibilityValue: String {
+        if !viewModel.state.stock.isEmpty {
+            return "\(viewModel.state.stock.count) cards"
+        }
+        if !viewModel.state.waste.isEmpty {
+            return "Empty. Activate to recycle the waste pile"
+        }
+        return "Empty"
     }
 }
 
@@ -70,6 +89,14 @@ struct WasteView: View {
             return false
         }()
         let visibleWaste = viewModel.visibleWasteCards()
+        let accessibleTopCard: Card? = visibleWaste.last.flatMap { card in
+            let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+            let isUnavailable = isDragged || drawingCardIDs.contains(card.id) || hiddenCardIDs.contains(card.id)
+            return isUnavailable ? nil : card
+        }
+        let isAccessibleTopCardSelected = accessibleTopCard.map {
+            viewModel.isSelected(card: $0)
+        } ?? false
         let isSelected = visibleWaste.contains(where: { viewModel.isSelected(card: $0) })
         let fanWidth = fanSpacing * CGFloat(max(0, visibleWaste.count - 1))
 
@@ -89,7 +116,8 @@ struct WasteView: View {
                     cardSize: cardSize,
                     isCardTiltEnabled: isCardTiltEnabled,
                     cardTilts: $cardTilts,
-                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
+                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
+                    isAccessibilityElement: false
                 )
                 .opacity(isDragged || isDrawing || isHidden ? 0 : 1)
                 .offset(x: xOffset, y: 0)
@@ -115,6 +143,11 @@ struct WasteView: View {
             viewModel.handleWasteTap()
         }
         .zIndex(isDragSource || isSelected ? 10 : 0)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Waste")
+        .accessibilityValue(accessibleTopCard?.accessibilityName ?? "Empty")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isAccessibleTopCardSelected ? .isSelected : [])
+        .accessibilityHidden(accessibleTopCard == nil)
     }
 }

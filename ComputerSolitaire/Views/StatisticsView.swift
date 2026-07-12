@@ -278,6 +278,7 @@ struct StatisticsView: View {
             Image(systemName: icon)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text(value)
                 .font(.system(.headline, design: .monospaced, weight: .bold))
             Text(label)
@@ -285,6 +286,7 @@ struct StatisticsView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder

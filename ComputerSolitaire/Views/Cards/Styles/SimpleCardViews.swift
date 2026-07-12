@@ -88,6 +88,7 @@ struct SimpleCardFrontView: View {
                 Spacer(minLength: 0)
                 Image(systemName: card.suit.symbolName)
                     .font(.system(size: cardSize.width * 0.22, weight: .semibold))
+                    .accessibilityHidden(true)
             }
             .foregroundStyle(inkColor)
             .padding(cardSize.width * 0.08)
@@ -108,6 +109,7 @@ struct SimpleCardFrontView: View {
                             y: cardSize.width * (isJack ? 0.36 : 0.32))
                     .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.bottomTrailing)
                     .clipShape(RoundedRectangle(cornerRadius: chrome.cornerRadius, style: .continuous))
+                    .accessibilityHidden(true)
             } else {
                 // Optically centered in the region below the top marks, not
                 // the full card, so the face doesn't read bottom-heavy.
@@ -116,6 +118,7 @@ struct SimpleCardFrontView: View {
                     .foregroundStyle(inkColor)
                     .offset(y: cardSize.width * 0.14)
                     .frame(width: cardSize.width, height: cardSize.height, alignment: Alignment.center)
+                    .accessibilityHidden(true)
             }
         }
     }

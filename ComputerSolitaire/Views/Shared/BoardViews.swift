@@ -106,7 +106,9 @@ enum Layout {
         } else if isCompactBoard && boardSize.height > boardSize.width {
             // Portrait phones have far more height than the width-fitted cards
             // use; spread the worst-case pile into it, capped for readability.
-            let fittedFaceUp = (tableauMaxHeight - cardSize.height - maxFaceDownGaps * baseFaceDownOffset) / maxFaceUpGaps
+            let fittedFaceUp = (
+                tableauMaxHeight - cardSize.height - maxFaceDownGaps * baseFaceDownOffset
+            ) / maxFaceUpGaps
             faceUpOffset = min(max(baseFaceUpOffset, fittedFaceUp), cardSize.height * 0.38)
             faceDownOffset = baseFaceDownOffset
         } else {
@@ -415,6 +417,13 @@ struct FoundationView: View {
             }
             return false
         }()
+        let accessibleTopCard: Card? = foundation.last.flatMap { card in
+            let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+            return isDragged || hiddenCardIDs.contains(card.id) ? nil : card
+        }
+        let isAccessibleTopCardSelected = accessibleTopCard.map {
+            viewModel.isSelected(card: $0)
+        } ?? false
         let highlightZ: Double = 1
         ZStack {
             PilePlaceholderView(cardSize: cardSize)
@@ -441,7 +450,8 @@ struct FoundationView: View {
                     cardSize: cardSize,
                     isCardTiltEnabled: isCardTiltEnabled,
                     cardTilts: $cardTilts,
-                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
+                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
+                    isAccessibilityElement: false
                 )
                 .opacity(isDragged || isHidden ? 0 : 1)
                 .zIndex(isTopCard && isDragged ? 20 : 0)
@@ -460,6 +470,9 @@ struct FoundationView: View {
         .onTapGesture {
             viewModel.handleFoundationTap(index: index)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isAccessibleTopCardSelected ? .isSelected : [])
         .background(
             GeometryReader { proxy in
                 let boardFrame = proxy.frame(in: .named("board"))
@@ -482,6 +495,7 @@ struct FoundationView: View {
         )
         .zIndex(isDragSource ? 10 : 0)
         .accessibilityLabel("Foundation \(index + 1)")
+        .accessibilityValue(accessibleTopCard?.accessibilityName ?? "Empty")
     }
 }
 
@@ -537,6 +551,10 @@ struct TableauPileView: View {
                     .onTapGesture {
                         viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: nil)
                     }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Tableau \(pileIndex + 1)")
+                    .accessibilityValue("Empty")
+                    .accessibilityHidden(!pile.isEmpty)
 
                 PilePlaceholderView(cardSize: cardSize)
                 DropHighlightView(
@@ -551,14 +569,30 @@ struct TableauPileView: View {
                 ForEach(Array(pile.enumerated()), id: \.element.id) { index, card in
                     let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
                     let isHidden = hiddenCardIDs.contains(card.id)
+                    let isSelected = viewModel.isSelected(card: card)
+                    let selectableCards = Array(pile[index...])
+                    let isValidRunOrigin = card.isFaceUp
+                        && GameRules.isValidDescendingAlternatingSequence(selectableCards)
+                    let isExposedFaceDownCard = viewModel.state.variant == .klondike
+                        && !card.isFaceUp
+                        && index == pile.indices.last
+                    let isAccessibilityElement = (isValidRunOrigin || isExposedFaceDownCard)
+                        && !isDragged
+                        && !isHidden
+                    let accessibilityHint = isExposedFaceDownCard
+                        ? "Flip card"
+                        : selectableCards.count > 1
+                            ? "Selects a \(selectableCards.count)-card run"
+                            : "Selects this card"
                     let yOffset = yOffsets[index]
                     let cardView = CardView(
                         card: card,
-                        isSelected: viewModel.isSelected(card: card),
+                        isSelected: isSelected,
                         cardSize: cardSize,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
-                        hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil
+                        hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
+                        isAccessibilityElement: isAccessibilityElement
                     )
                     .opacity(isDragged || isHidden ? 0 : 1)
                     .offset(x: 0, y: yOffset)
@@ -567,6 +601,9 @@ struct TableauPileView: View {
                     .onTapGesture {
                         viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
                     }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    .accessibilityHint(accessibilityHint)
                     .cardFramePreference(card.id, yOffset: yOffset)
 
                     cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
@@ -608,7 +645,6 @@ struct TableauPileView: View {
                 }
             )
             .zIndex(isDragSource ? 10 : 0)
-            .accessibilityLabel("Tableau \(pileIndex + 1)")
         } else {
             Color.clear
                 .frame(width: cardSize.width, height: cardSize.height)
@@ -685,11 +721,13 @@ struct DropHighlightView: View {
 }
 
 struct TableBackground: View {
-    @AppStorage(SettingsKey.tableBackgroundColor) private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
+    @AppStorage(SettingsKey.tableBackgroundColor)
+    private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.feltEffectEnabled) private var feltEffectEnabled = true
 
     var body: some View {
-        let baseColor = (TableBackgroundColor(rawValue: tableBackgroundColorRawValue) ?? TableBackgroundColor.defaultValue).color
+        let background = TableBackgroundColor(rawValue: tableBackgroundColorRawValue) ?? .defaultValue
+        let baseColor = background.color
         Group {
             if feltEffectEnabled {
                 GeometryReader { proxy in
