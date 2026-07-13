@@ -155,6 +155,10 @@ struct ContentView: View {
     private enum TimeScoringPauseReason: Hashable {
         case lifecycle
         case menuPresentation
+        /// A dead Golf hole froze the clock: the hole's time is final the
+        /// moment nothing plays, however long the completion overlay sits,
+        /// and undoing out of the hole resumes without counting the dwell.
+        case golfHoleOver
     }
 
     private var isAnyMenuPresented: Bool {
@@ -229,6 +233,7 @@ struct ContentView: View {
                         Button("Redeal", systemImage: "arrow.clockwise") {
                             redealFromUI()
                         }
+                        .disabled(!viewModel.canRedeal)
                         Button("Auto Finish", systemImage: "bolt") {
                             startAutoFinish()
                         }
@@ -279,6 +284,7 @@ struct ContentView: View {
                     }
                     .labelStyle(.iconOnly)
                     .help("Redeal")
+                    .disabled(!viewModel.canRedeal)
                 }
                 ToolbarSpacer(.fixed)
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -415,11 +421,20 @@ struct ContentView: View {
             .onChange(of: viewModel.state) { _, _ in
                 scheduleAutosave()
                 queueAutoFinishStepIfPossible()
+                // Every path into or out of a dead Golf hole is a state
+                // change: the killing move freezes the clock, undo thaws it.
+                updateGolfHoleOverPauseState()
             }
             .onChange(of: viewModel.movesCount) { _, _ in
                 scheduleAutosave()
             }
             .onChange(of: viewModel.stockDrawCount) { _, _ in
+                scheduleAutosave()
+            }
+            .onChange(of: viewModel.golfMatch) { _, _ in
+                // Finishing the ninth hole mutates only the match — the board
+                // stays as it was won or died — so the scorecard needs its own
+                // autosave trigger to survive a relaunch at the summary.
                 scheduleAutosave()
             }
             .onChange(of: viewModel.hasActiveHint) { _, hasActiveHint in
@@ -737,16 +752,44 @@ struct ContentView: View {
                         overlayTilt: overlayTilt
                     )
                     .zIndex(100)
-                    if viewModel.isWin && winCelebration.phase != .idle {
-                        WinOverlay(score: viewModel.score) {
-                            startNewGameFromUI()
-                        }
-                        .zIndex(200)
-                        .transition(.opacity)
-                    }
                 }
             }
+            // Hidden deliberately: these are animation ghosts of on-board
+            // cards. The interactive end-of-game overlays live in their own
+            // layer below so VoiceOver can reach their controls.
             .accessibilityHidden(true)
+        }
+        .overlay {
+            if viewModel.gameVariant == .golf {
+                // Golf ends every hole through the match flow, so the
+                // shared win overlay never presents for it.
+                if viewModel.golfMatch.isComplete {
+                    GolfMatchSummaryOverlay(match: viewModel.golfMatch) {
+                        viewModel.startNewGolfMatch()
+                    }
+                    .transition(.opacity)
+                } else if viewModel.isGolfHoleOver,
+                          // A dead hole presents immediately; a won hole waits
+                          // for the celebration to start, the same gate the
+                          // shared win overlay uses.
+                          !viewModel.isWin || winCelebration.phase != .idle {
+                    GolfHoleCompleteOverlay(
+                        holeNumber: viewModel.golfMatch.currentHoleNumber,
+                        holeScore: viewModel.score,
+                        matchTotalThroughHole: viewModel.golfLiveMatchTotal,
+                        isFinalHole: viewModel.golfMatch.currentHoleNumber == GolfMatchState.holeCount,
+                        didClearBoard: viewModel.isWin,
+                        onAdvance: { viewModel.advanceGolfHole() },
+                        onUndo: { viewModel.undo() }
+                    )
+                    .transition(.opacity)
+                }
+            } else if viewModel.isWin && winCelebration.phase != .idle {
+                WinOverlay(score: viewModel.score) {
+                    startNewGameFromUI()
+                }
+                .transition(.opacity)
+            }
         }
     }
 
@@ -768,12 +811,17 @@ struct ContentView: View {
         boardContentWidth: CGFloat,
         onScoreTapped: @escaping () -> Void
     ) -> some View {
+        let isGolf = viewModel.gameVariant == .golf
         return HeaderView(
             gameTitle: viewModel.gameVariant.title,
             gameQualifier: viewModel.gameMode.qualifier,
             movesCount: viewModel.movesCount,
             elapsedSeconds: elapsedSeconds,
             score: score,
+            golfHoleLabel: isGolf
+                ? "Hole \(viewModel.golfMatch.currentHoleNumber)/\(GolfMatchState.holeCount)"
+                : nil,
+            golfMatchTotal: isGolf ? viewModel.golfLiveMatchTotal : nil,
             onGameTitleTapped: {
                 withAnimation(.smooth(duration: 0.25)) {
                     isShowingGamePicker = true
@@ -848,6 +896,7 @@ struct ContentView: View {
         GameMenuState(
             currentVariant: gameVariant,
             canUndo: !isUndoDisabled,
+            canRedeal: viewModel.canRedeal,
             canAutoFinish: isAutoFinishing || !isAutoFinishDisabled,
             canHint: !isHintDisabled,
             isHintVisible: isHintButtonVisible,
@@ -886,6 +935,7 @@ struct ContentView: View {
     }
 
     private func redealFromUI() {
+        guard viewModel.canRedeal else { return }
         stopAutoFinish()
         winCelebration.reset(to: .idle)
         viewModel.redeal()
@@ -1625,6 +1675,9 @@ struct ContentView: View {
         if isAnyMenuPresented {
             timeScoringPauseReasons.insert(.menuPresentation)
         }
+        if viewModel.isGolfHoleDead {
+            timeScoringPauseReasons.insert(.golfHoleOver)
+        }
         let shouldPauseTimeScoring = !timeScoringPauseReasons.isEmpty
         let didChange = shouldPauseTimeScoring
             ? viewModel.pauseTimeScoring()
@@ -1658,13 +1711,13 @@ struct ContentView: View {
     }
 
     /// The cascade erupts from the foundations, except in Pyramid where every
-    /// removed card lives on the discard, and in TriPeaks where every played
-    /// card lives on the waste.
+    /// removed card lives on the discard, and in TriPeaks and Golf where every
+    /// played card lives on the waste.
     private var winCascadeLaunchPiles: [[Card]] {
         switch viewModel.gameVariant {
         case .pyramid:
             return [viewModel.state.discard]
-        case .tripeaks:
+        case .tripeaks, .golf:
             return [viewModel.state.waste]
         case .klondike, .freecell, .yukon, .spider:
             return viewModel.state.foundations
@@ -1675,7 +1728,7 @@ struct ContentView: View {
         switch viewModel.gameVariant {
         case .pyramid:
             return [.discard]
-        case .tripeaks:
+        case .tripeaks, .golf:
             return [.waste]
         case .klondike, .freecell, .yukon, .spider:
             return viewModel.state.foundations.indices.map(DropTarget.foundation)
@@ -1688,6 +1741,10 @@ struct ContentView: View {
 
     private func updateMenuPresentationPauseState() {
         updatePauseReason(.menuPresentation, shouldPause: isAnyMenuPresented)
+    }
+
+    private func updateGolfHoleOverPauseState() {
+        updatePauseReason(.golfHoleOver, shouldPause: viewModel.isGolfHoleDead)
     }
 
     private func updatePauseReason(_ reason: TimeScoringPauseReason, shouldPause: Bool) {

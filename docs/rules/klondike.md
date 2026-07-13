@@ -1,6 +1,6 @@
-# Klondike Solitaire Rules (1-Card and 3-Card Draw)
+# Klondike Rules
 
-These rules describe standard Klondike setup and play, with **1-card** and **3-card** draw options for the stock. Both variants use **unlimited passes** through the stock.
+These rules describe Klondike as implemented in the app: standard setup and play, with **1-card** and **3-card** draw modes for the stock and **unlimited passes** through it in both modes.
 
 ## Objective
 Move all 52 cards to the four foundations, building each suit from Ace to King.
@@ -18,32 +18,41 @@ Move all 52 cards to the four foundations, building each suit from Ace to King.
 - **Stock:** Remaining cards are placed face down.
 - **Waste:** Empty pile beside the stock.
 
-## Tableau Play
+## Play
+
+### Tableau
 - Build tableau piles **down in rank** while **alternating colors** (e.g., red 6 on black 7).
 - You may move a face-up card or a properly ordered sequence as a unit.
 - When a face-up card is moved, flip the next card in that pile face up.
 - Empty tableau spaces may be filled **only by a King** (or a sequence starting with a King).
 
-## Foundations
+### Foundations
 - Foundations are built **by suit** from **Ace to King**.
 - Aces start each foundation pile.
 
-## Stock and Waste (Draw Variants)
-
-### 1-Card Draw
-- Turn **one card at a time** from the stock to the waste.
+### Stock and waste
+- Tap the stock to turn **one card** (1-card draw) or **three cards** (3-card draw) onto the waste.
 - Only the **top waste card** is playable.
-- If no moves are available, continue drawing one card at a time.
-- When the stock is exhausted, **turn the waste pile face down** to form a new stock and continue. **Unlimited passes** through the stock are allowed.
+- When the stock is exhausted, the waste turns face down to form a new stock. **Unlimited passes** are allowed in both draw modes.
 
-### 3-Card Draw
-- Turn **three cards at a time** from the stock to the waste.
-- Only the **top waste card** is playable.
-- If no moves are available, continue drawing three cards at a time.
-- When the stock is exhausted, **turn the waste pile face down** to form a new stock and continue. **Unlimited passes** through the stock are allowed.
+## Scoring
+- Waste to tableau: +5.
+- Waste to foundation: +10.
+- Tableau to foundation: +10.
+- Turning a tableau card face up: +5.
+- Foundation back to tableau: −15.
+- Recycling the waste in 1-card draw: −100.
+- On a win, a time bonus is added: it starts at 600 in 1-card draw and 900 in 3-card draw, and drops by one point per second of play.
+- The score never drops below zero.
 
 ## Winning
 You win when all cards are moved to the foundations in ascending order by suit.
+
+## Rule choices
+Published Klondike rules differ mainly in how the stock is handled; this implementation uses:
+- **Unlimited stock passes in both draw modes** — several published rule sets cap 3-card draw at three passes.
+- **The classic −100 recycle penalty in 1-card draw**, where unlimited free passes would otherwise remove the mode's tension; 3-card recycles are free.
+- **Kings only on empty piles** (the standard rule; some variants allow any card).
 
 ## Sources
 - https://en.wikipedia.org/wiki/Klondike_(solitaire)#Rules

@@ -14,6 +14,7 @@ struct GameMenuActions {
 struct GameMenuState {
     var currentVariant: GameVariant
     var canUndo: Bool
+    var canRedeal: Bool
     var canAutoFinish: Bool
     var canHint: Bool
     var isHintVisible: Bool
@@ -74,7 +75,7 @@ struct GameMenuCommands: Commands {
             } label: {
                 Label("Redeal", systemImage: "arrow.clockwise")
             }
-            .disabled(actions == nil)
+            .disabled(!(state?.canRedeal ?? false))
 
             Divider()
 

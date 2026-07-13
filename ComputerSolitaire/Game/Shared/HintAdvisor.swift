@@ -28,6 +28,9 @@ enum HintAdvisor {
         if state.variant == .tripeaks, !state.stock.isEmpty {
             return true
         }
+        if state.variant == .golf, !state.stock.isEmpty {
+            return true
+        }
         for selection in AutoMoveAdvisor.candidateSelections(in: state) {
             // Foundation rollbacks only count as available moves where the hint
             // stack can actually turn one into a hint: Yukon's planner searches
@@ -86,6 +89,12 @@ enum HintAdvisor {
 /// ratchet is the strongest of any variant — every TriPeaks move consumes a card
 /// (plays shrink the board, draws shrink the stock), so a followed line can never
 /// revisit a position.
+/// Golf hints come from `GolfPlanner`'s exact search and behave exactly like
+/// TriPeaks': winning lines when the deal is winnable, the max-clear line on
+/// unwinnable deals (common under strict no-wraparound rules), nil only when
+/// not one more column card is clearable. Its ratchet matches TriPeaks' —
+/// every Golf move consumes a card — so a followed line can never revisit a
+/// position.
 final class HintPlanner {
     /// How long a single interactive hint request may spend searching.
     private static let freeCellSearchBudget: TimeInterval = 0.3
@@ -94,12 +103,18 @@ final class HintPlanner {
     private static let spiderSearchBudget: TimeInterval = 0.3
     private static let pyramidSearchBudget: TimeInterval = 0.3
     private static let triPeaksSearchBudget: TimeInterval = 0.3
+    /// Golf's exact searches are the largest of the planners (see
+    /// `GolfPlanner.Limits`), so its clip is looser: a half-second think on
+    /// the rare hard deal beats truncating a provably winnable position into
+    /// a best-effort line.
+    private static let golfSearchBudget: TimeInterval = 0.5
 
     private var freeCellPlan: [String: FreeCellSolver.Move] = [:]
     private var yukonPlan: [String: YukonPlanner.PlannedMove] = [:]
     private var spiderPlan: [String: SpiderPlanner.PlannedAction] = [:]
     private var pyramidPlan: [String: PyramidPlanner.Move] = [:]
     private var triPeaksPlan: [String: TriPeaksPlanner.Move] = [:]
+    private var golfPlan: [String: GolfPlanner.Move] = [:]
 
     func bestHint(in state: GameState, stockDrawCount: Int) -> HintAdvisor.Hint? {
         switch state.variant {
@@ -121,6 +136,8 @@ final class HintPlanner {
             return pyramidHint(in: state)
         case .tripeaks:
             return triPeaksHint(in: state)
+        case .golf:
+            return golfHint(in: state)
         }
     }
 }
@@ -213,6 +230,40 @@ private extension HintPlanner {
         // materialize re-validates the cached move against the live state.
         guard let move = triPeaksPlan[key] else { return nil }
         return TriPeaksPlanner.materialize(move, in: state)
+    }
+
+    func golfHint(in state: GameState) -> HintAdvisor.Hint? {
+        let key = GolfPlanner.stateKey(for: state)
+        if let hint = plannedGolfHint(for: key, in: state) {
+            return hint
+        }
+
+        golfPlan.removeAll()
+        let limits = GolfPlanner.Limits(
+            deadline: Date().addingTimeInterval(Self.golfSearchBudget)
+        )
+        switch GolfPlanner.bestLine(in: state, limits: limits) {
+        case .winningLine(let line), .bestEffortLine(let line, _):
+            golfPlan = GolfPlanner.keyedMoves(along: line, from: state)
+            return plannedGolfHint(for: key, in: state)
+
+        case .noProgress:
+            // A proof, not a budget artifact: any clearable line registers
+            // within the search's first ~two dozen expansions (a root play
+            // pops immediately; otherwise only draws are legal, a chain of at
+            // most 16, and a draw-enabled play pops right after its draw), so
+            // no-progress is only ever reached by exhausting that region —
+            // far under the interactive budget. Every remaining action is
+            // provably futile stock-churning and silence is the honest
+            // answer. The hint button re-enables after the player's next move.
+            return nil
+        }
+    }
+
+    func plannedGolfHint(for key: String, in state: GameState) -> HintAdvisor.Hint? {
+        // materialize re-validates the cached move against the live state.
+        guard let move = golfPlan[key] else { return nil }
+        return GolfPlanner.materialize(move, in: state)
     }
 
     func yukonHint(in state: GameState) -> HintAdvisor.Hint? {

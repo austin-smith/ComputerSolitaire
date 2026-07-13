@@ -46,7 +46,16 @@ final class SolitaireViewModel {
     private var hintRequestsInCurrentGame: Int = 0
     private var undosUsedInCurrentGame: Int = 0
     private var usedRedealInCurrentGame = false
-    private let dateProvider: any DateProviding
+    /// The nine-hole Golf match in progress; meaningless (and left at its
+    /// fresh value) for every other variant. A fresh deal abandons it, a
+    /// statistics reset revokes its eligibility, and redeal and undo leave it
+    /// alone (undo snapshots deliberately exclude it, so undo can never cross
+    /// a hole boundary); the match methods in `GameSessionGolf.swift` drive
+    /// everything else.
+    var golfMatch = GolfMatchState()
+    /// Internal so variant session extensions (Golf's hole advance) share the
+    /// injected clock.
+    let dateProvider: any DateProviding
     @ObservationIgnored private let hintPlanner = HintPlanner()
 
     private var history: [GameSnapshot] = []
@@ -92,8 +101,19 @@ final class SolitaireViewModel {
         state.isWon
     }
 
+    // A completed Golf match's final board is an archive: its hole score is
+    // already banked into the scorecard and its statistics are recorded, so
+    // no gameplay command may mutate it. These two properties are the single
+    // gate for every entry point — toolbar, macOS menu, keyboard shortcut.
     var canUndo: Bool {
-        !history.isEmpty && !isWin
+        !history.isEmpty && !isWin && !golfMatch.isComplete
+    }
+
+    /// Whether the current deal may be replayed. Redealing under a completed
+    /// Golf match would run a hidden tracked deal beneath the match summary
+    /// and finalize it as a phantom loss when the next match starts.
+    var canRedeal: Bool {
+        !golfMatch.isComplete
     }
 
     var hintedCardIDs: Set<UUID> {
@@ -184,18 +204,30 @@ final class SolitaireViewModel {
         hintRequestsInCurrentGame = 0
         undosUsedInCurrentGame = 0
         usedRedealInCurrentGame = false
+        if gameVariant == .golf {
+            // The scorecard plays on, but a match holding pre-reset holes can
+            // no longer finalize into the fresh statistics bucket.
+            golfMatch.countsTowardStatistics = false
+        }
     }
 
     func displayScore(at date: Date = .now) -> Int {
         guard !hasAppliedTimeBonus else { return score }
         let elapsedSeconds = elapsedActiveSeconds(at: date)
-        let maxBonus = Scoring.timedMaxBonus(for: scoringDrawCount)
+        let maxBonus = winTimeMaxBonus
         let bonus = Scoring.timeBonus(
             elapsedSeconds: elapsedSeconds,
             maxBonus: maxBonus,
             pointsLostPerSecond: Scoring.timedPointsLostPerSecond
         )
-        return Scoring.clamped(score + bonus)
+        return Scoring.clamped(score + bonus, for: state.variant)
+    }
+
+    /// A positive win bonus is perverse under Golf's lower-is-better stroke
+    /// scoring, so Golf's basis is zero; every other variant keeps the
+    /// draw-count basis.
+    var winTimeMaxBonus: Int {
+        state.variant.lowerScoreIsBetter ? 0 : Scoring.timedMaxBonus(for: scoringDrawCount)
     }
 
     func elapsedActiveSeconds(at date: Date = .now) -> Int {
@@ -249,6 +281,10 @@ final class SolitaireViewModel {
             variant: mode.variant,
             spiderSuitCount: mode.spiderSuitCount ?? .two
         )
+        // A fresh deal abandons any Golf match in progress. `dealNextGolfHole`
+        // restores the match around this reset when advancing holes, and
+        // `activateGame` re-adopts a stashed match through its payload restore.
+        golfMatch = GolfMatchState()
         state = initialState
         redealState = initialState
         selection = nil
@@ -272,6 +308,7 @@ final class SolitaireViewModel {
     }
 
     func redeal() {
+        guard canRedeal else { return }
         finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: dateProvider.now)
         clearHint()
         state = redealState
@@ -296,7 +333,7 @@ final class SolitaireViewModel {
     }
 
     func undo() {
-        guard !isWin else { return }
+        guard canUndo else { return }
         guard let snapshot = history.popLast() else { return }
         clearHint()
         state = snapshot.state
@@ -333,7 +370,8 @@ final class SolitaireViewModel {
             isCurrentGameFinalized: isCurrentGameFinalized,
             hintRequestsInCurrentGame: hintRequestsInCurrentGame,
             undosUsedInCurrentGame: undosUsedInCurrentGame,
-            usedRedealInCurrentGame: usedRedealInCurrentGame
+            usedRedealInCurrentGame: usedRedealInCurrentGame,
+            golfMatch: state.variant == .golf ? golfMatch : nil
         )
     }
 
@@ -361,6 +399,7 @@ final class SolitaireViewModel {
         hintRequestsInCurrentGame = sanitizedPayload.hintRequestsInCurrentGame
         undosUsedInCurrentGame = sanitizedPayload.undosUsedInCurrentGame
         usedRedealInCurrentGame = sanitizedPayload.usedRedealInCurrentGame
+        golfMatch = sanitizedPayload.golfMatch ?? GolfMatchState()
         history = Array(sanitizedPayload.history.suffix(Self.maxUndoHistoryCount))
         var restoredRedealState = sanitizedPayload.redealState ?? history.first?.state ?? state
         restoredRedealState = normalizedRedealStateForCurrentVariant(
@@ -486,7 +525,7 @@ final class SolitaireViewModel {
     }
 
     func setInitialScore(_ initialScore: Int) {
-        score = Scoring.clamped(initialScore)
+        score = Scoring.clamped(initialScore, for: state.variant)
     }
 
     func setScoringDrawCount(_ count: Int) {
@@ -513,6 +552,8 @@ final class SolitaireViewModel {
             configurePyramidNewGame()
         case .tripeaks:
             configureTriPeaksNewGame()
+        case .golf:
+            configureGolfNewGame()
         }
     }
 
@@ -528,6 +569,8 @@ final class SolitaireViewModel {
             configurePyramidRedeal()
         case .tripeaks:
             configureTriPeaksRedeal()
+        case .golf:
+            configureGolfRedeal()
         }
     }
 
@@ -544,6 +587,8 @@ final class SolitaireViewModel {
             return sanitizePyramidRedealState(state)
         case .tripeaks:
             return sanitizeTriPeaksRedealState(state)
+        case .golf:
+            return sanitizeGolfRedealState(state)
         }
     }
 
@@ -576,6 +621,13 @@ final class SolitaireViewModel {
         switch state.variant {
         case .klondike, .yukon, .spider:
             return handleFaceDownTableauTap(
+                pile: pile,
+                pileIndex: pileIndex,
+                cardIndex: cardIndex,
+                card: card
+            )
+        case .golf:
+            return handleGolfTableauTap(
                 pile: pile,
                 pileIndex: pileIndex,
                 cardIndex: cardIndex,
@@ -628,6 +680,9 @@ final class SolitaireViewModel {
             return canSelectFreeCellTableauCards(cards)
         case .spider:
             return SharedGameRules.isDescendingSameSuitRun(cards)
+        case .golf:
+            // Only the exposed card of a column can ever move.
+            return cards.count == 1
         case .pyramid, .tripeaks:
             // Pyramid and TriPeaks have no tableau piles.
             return false
@@ -661,6 +716,8 @@ extension SolitaireViewModel {
             handlePyramidStockTap()
         case .tripeaks:
             handleTriPeaksStockTap()
+        case .golf:
+            handleGolfStockTap()
         case .freecell, .yukon:
             break
         }
@@ -674,7 +731,7 @@ extension SolitaireViewModel {
             return !(state.stock.isEmpty && state.waste.isEmpty)
         case .pyramid:
             return !state.stock.isEmpty || PyramidGameRules.canRecycleWaste(in: state)
-        case .tripeaks:
+        case .tripeaks, .golf:
             // Single pass with no recycles: an empty stock is dead.
             return !state.stock.isEmpty
         case .spider:
@@ -690,7 +747,7 @@ extension SolitaireViewModel {
         case .klondike:
             let count = min(state.wasteDrawCount, stockDrawCount)
             return Array(state.waste.suffix(count))
-        case .pyramid, .tripeaks:
+        case .pyramid, .tripeaks, .golf:
             return Array(state.waste.suffix(min(1, state.wasteDrawCount)))
         case .freecell, .yukon, .spider:
             return []
@@ -699,8 +756,8 @@ extension SolitaireViewModel {
 
     func handleWasteTap() {
         guard state.variant.dealsFromStock else { return }
-        // The TriPeaks waste top is the match target, never a mover.
-        guard state.variant != .tripeaks else { return }
+        // The TriPeaks and Golf waste tops are the match target, never a mover.
+        guard state.variant != .tripeaks, state.variant != .golf else { return }
         guard let top = state.waste.last, state.wasteDrawCount > 0 else { return }
         HapticManager.shared.play(.cardPickUp)
 
@@ -726,8 +783,8 @@ extension SolitaireViewModel {
     @discardableResult
     func startDragFromWaste() -> Bool {
         guard state.variant.dealsFromStock else { return false }
-        // The TriPeaks waste top is the match target, never a mover.
-        guard state.variant != .tripeaks else { return false }
+        // The TriPeaks and Golf waste tops are the match target, never a mover.
+        guard state.variant != .tripeaks, state.variant != .golf else { return false }
         guard let top = state.waste.last, state.wasteDrawCount > 0 else { return false }
         clearHint()
         selection = Selection(source: .waste, cards: [top])
@@ -860,6 +917,9 @@ extension SolitaireViewModel {
             if state.variant == .tripeaks {
                 return performTriPeaksMove(selection: selection, to: destination)
             }
+            if state.variant == .golf {
+                return performGolfMove(selection: selection, to: destination)
+            }
             return performPyramidMove(selection: selection, to: destination)
         }
     }
@@ -893,7 +953,7 @@ extension SolitaireViewModel {
         switch state.variant {
         case .klondike, .yukon, .spider:
             flipFaceDownTopCardIfNeeded(in: pileIndex)
-        case .freecell, .pyramid, .tripeaks:
+        case .freecell, .pyramid, .tripeaks, .golf:
             break
         }
     }
@@ -947,24 +1007,28 @@ extension SolitaireViewModel {
             // TriPeaks chain scoring reads the before/after states, so
             // `performTriPeaksMove` applies it directly.
             break
+        case .golf:
+            // Golf stroke scoring reads the after state, so `performGolfMove`
+            // applies it directly.
+            break
         }
     }
 
     func applyScore(_ action: ScoringAction) {
-        score = Scoring.applying(action, to: score)
+        score = Scoring.applying(action, to: score, variant: state.variant)
     }
 
     func applyTimeBonusIfWon() {
         guard isWin, !hasAppliedTimeBonus else { return }
         let endedAt = dateProvider.now
         let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
-        let maxBonus = Scoring.timedMaxBonus(for: scoringDrawCount)
+        let maxBonus = winTimeMaxBonus
         let bonus = Scoring.timeBonus(
             elapsedSeconds: elapsedSeconds,
             maxBonus: maxBonus,
             pointsLostPerSecond: Scoring.timedPointsLostPerSecond
         )
-        score = Scoring.clamped(score + bonus)
+        score = Scoring.clamped(score + bonus, for: state.variant)
         finalElapsedSeconds = elapsedSeconds
         hasAppliedTimeBonus = true
         pauseStartedAt = nil
@@ -974,6 +1038,11 @@ extension SolitaireViewModel {
     func finalizeCurrentGameIfNeeded(didWin: Bool, endedAt: Date) {
         guard hasStartedTrackedGame, !isCurrentGameFinalized else { return }
         let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
+        // A Golf hole's stroke score is final only once the hole is over (won
+        // or dead); a mid-hole abandonment finalizes as a played game like any
+        // variant, but its score is an unfinished snapshot and must not enter
+        // the best-hole record.
+        let completedGolfHoleScore = isGolfHoleOver ? score : nil
         GameStatisticsStore.update(for: gameMode) { stats in
             stats.recordCompletedGame(
                 didWin: didWin,
@@ -981,10 +1050,14 @@ extension SolitaireViewModel {
                 finalScore: score,
                 drawCount: statisticsDrawCountForCurrentVariant(),
                 spiderSuitCount: state.spiderSuitCount,
+                lowerScoreIsBetter: state.variant.lowerScoreIsBetter,
                 hintsUsedInGame: hintRequestsInCurrentGame,
                 undosUsedInGame: undosUsedInCurrentGame,
                 usedRedealInGame: usedRedealInCurrentGame
             )
+            if let completedGolfHoleScore {
+                stats.recordCompletedGolfHole(score: completedGolfHoleScore)
+            }
         }
         isCurrentGameFinalized = true
     }

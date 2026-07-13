@@ -96,6 +96,9 @@ struct GameState: Equatable, Codable {
         case .tripeaks:
             // Won once every peak slot is cleared; stock and waste may keep cards.
             return !triPeaks.isEmpty && triPeaks.allSatisfy { $0 == nil }
+        case .golf:
+            // Won once every column is emptied; stock and waste may keep cards.
+            return !tableau.isEmpty && tableau.allSatisfy(\.isEmpty)
         }
     }
 
@@ -117,6 +120,8 @@ struct GameState: Equatable, Codable {
             return newPyramidGame()
         case .tripeaks:
             return newTriPeaksGame()
+        case .golf:
+            return newGolfGame()
         }
     }
 }

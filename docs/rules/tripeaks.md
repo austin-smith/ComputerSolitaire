@@ -44,20 +44,6 @@ The linked sources disagree; this implementation uses:
 - **Single pass** through the stock with no recycles (universal across sources — the pass limit is the game).
 - **Chain scoring with peak bonuses** (the conventional scheme from the original game: escalating discards, −5 flips, 15/15/30 peak bonuses), not plain per-card scoring.
 
-## Solver-backed hints
-TriPeaks is a perfect-information game once dealt, so `TriPeaksPlanner` searches the exact position graph: a plays-first depth-first pass over a collision-free 37-bit packed position that returns a winning line, or — because nothing is pruned — an exhausted pass that both proves the deal unwinnable and yields the exact max-clear line, which hints then follow. Timing the stock flip is most of the strategy, so "flip the stock" is itself a hint verdict: it appears only when every available play was searched and lost. Hints go silent only when not one more peak card is clearable.
-
-### Measured baselines
-The canonical hint-quality figures live in the hint-probe ledger
-(`tools/hint-probe/README.md`): over 500 seeded deals, following every hint
-wins **95.4%** against a **0.0%** random-control floor, with zero loops and a
-median winning game of 49 moves. The solver's own verdict sweep at its default
-budget proves **95.6%** of deals winnable and **0.2%** unwinnable, with 4.1%
-undecided at budget (hard deals whose reachable graphs exceed it — they still
-get best-effort hints); interactive searches resolve in well under a
-millisecond on the median deal. Validate planner changes against the ledger
-before shipping.
-
 ## Sources
 - https://en.wikipedia.org/wiki/Tri_Peaks_(game)
 - https://cardgames.io/tripeakssolitaire/

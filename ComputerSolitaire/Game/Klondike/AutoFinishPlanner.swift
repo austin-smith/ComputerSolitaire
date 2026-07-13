@@ -60,6 +60,10 @@ private extension AutoFinishPlanner {
             // TriPeaks has no deterministic mop-up phase either: play order
             // matters to the last card, so the game never auto-finishes.
             return false
+        case .golf:
+            // Golf has no deterministic mop-up phase either: play order
+            // matters to the last card, so the game never auto-finishes.
+            return false
         }
     }
 

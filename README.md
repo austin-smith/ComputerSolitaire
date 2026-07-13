@@ -13,7 +13,7 @@ Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 ## Features
 
 - Fully native apps for iOS, iPadOS, and macOS
-- Multiple game variants: **Klondike** (both 1-card and 3-card draw), **Spider** (1, 2, or 4 suits), **FreeCell**, **TriPeaks**, **Pyramid**, and **Yukon**
+- Multiple game variants: **Klondike** (both 1-card and 3-card draw), **Spider** (1, 2, or 4 suits), **FreeCell**, **TriPeaks**, **Pyramid**, **Golf**, and **Yukon**
 - Automatic game persistence and resume
 - Customizable table appearance
 - Other things you enjoy
@@ -22,9 +22,10 @@ Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 
 | Variant | Description | Rules |
 |---------|-------------|-------|
-| **Klondike** | Classic Solitaire, with 1-card and 3-card draw modes | [Rules](docs/solitaire-rules-klondike.md) |
-| **Spider** | Two decks, ten piles — build full suit runs from King to Ace, with 1/2/4-suit difficulty | [Rules](docs/solitaire-rules-spider.md) |
-| **FreeCell** | Strategy-focused variant where every card is visible from the start | [Rules](docs/solitaire-rules-freecell.md) |
-| **TriPeaks** | Chain uncovered cards one rank up or down to level three peaks | [Rules](docs/solitaire-rules-tripeaks.md) |
-| **Pyramid** | Pair exposed cards totaling 13 to dismantle a 28-card pyramid | [Rules](docs/solitaire-rules-pyramid.md) |
-| **Yukon** | Klondike's wilder sibling — no stock, and any face-up card moves with everything stacked on it | [Rules](docs/solitaire-rules-yukon.md) |
+| **Klondike** | Classic Solitaire, with 1-card and 3-card draw modes | [Rules](docs/rules/klondike.md) |
+| **Spider** | Two decks, ten piles — build full suit runs from King to Ace, with 1/2/4-suit difficulty | [Rules](docs/rules/spider.md) |
+| **FreeCell** | Strategy-focused variant where every card is visible from the start | [Rules](docs/rules/freecell.md) |
+| **TriPeaks** | Chain uncovered cards one rank up or down to level three peaks | [Rules](docs/rules/tripeaks.md) |
+| **Pyramid** | Pair exposed cards totaling 13 to dismantle a 28-card pyramid | [Rules](docs/rules/pyramid.md) |
+| **Golf** | Play columns down to nothing, one rank up or down, scored like golf across a nine-hole match | [Rules](docs/rules/golf.md) |
+| **Yukon** | Klondike's wilder sibling — no stock, and any face-up card moves with everything stacked on it | [Rules](docs/rules/yukon.md) |

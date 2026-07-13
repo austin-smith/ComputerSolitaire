@@ -12,10 +12,25 @@ final class ScoringTests: XCTestCase {
         XCTAssertEqual(Scoring.delta(for: .recycleWasteInDrawOne), -100)
     }
 
+    func testGolfScoringDeltaValuesMatchRules() {
+        XCTAssertEqual(Scoring.delta(for: .golfBoardPlay), -1)
+        XCTAssertEqual(Scoring.delta(for: .golfBoardClear(remainingStockCount: 5)), -5)
+        XCTAssertEqual(Scoring.delta(for: .golfBoardClear(remainingStockCount: 0)), 0)
+        XCTAssertEqual(Scoring.delta(for: .golfBoardClear(remainingStockCount: -3)), 0)
+    }
+
     func testApplyingScoreClampsAtMinimumZero() {
-        XCTAssertEqual(Scoring.applying(.foundationToTableau, to: 10), 0)
-        XCTAssertEqual(Scoring.applying(.recycleWasteInDrawOne, to: 99), 0)
-        XCTAssertEqual(Scoring.applying(.wasteToFoundation, to: 0), 10)
+        XCTAssertEqual(Scoring.applying(.foundationToTableau, to: 10, variant: .klondike), 0)
+        XCTAssertEqual(Scoring.applying(.recycleWasteInDrawOne, to: 99, variant: .klondike), 0)
+        XCTAssertEqual(Scoring.applying(.wasteToFoundation, to: 0, variant: .klondike), 10)
+    }
+
+    func testClampIsVariantAware() {
+        // Golf's stroke score legitimately goes negative on a cleared board;
+        // every other variant floors at zero.
+        XCTAssertEqual(Scoring.clamped(-3, for: .golf), -3)
+        XCTAssertEqual(Scoring.clamped(-3, for: .klondike), 0)
+        XCTAssertEqual(Scoring.applying(.golfBoardClear(remainingStockCount: 4), to: 0, variant: .golf), -4)
     }
 
     func testTimeBonusUsesConfiguredLossRate() {

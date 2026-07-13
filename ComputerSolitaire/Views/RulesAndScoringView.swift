@@ -185,19 +185,28 @@ struct RulesAndScoringView: View {
                         }
                     }
                 }
-                Text("On win, a time bonus is added.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(
-                    "Time bonus starts at \(Scoring.timedMaxBonusDrawOne) in 1-card draw and "
-                        + "\(Scoring.timedMaxBonusDrawThree) in 3-card draw, then drops by "
-                        + "\(Scoring.timedPointsLostPerSecond) point per second."
-                )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("Score cannot go below \(Scoring.minimumScore).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if gameVariant.lowerScoreIsBetter {
+                    Text(
+                        "Golf scores run like golf: lower is better, there is no time bonus, "
+                            + "and negative hole scores are possible after clearing the board."
+                    )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("On win, a time bonus is added.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(
+                        "Time bonus starts at \(Scoring.timedMaxBonusDrawOne) in 1-card draw and "
+                            + "\(Scoring.timedMaxBonusDrawThree) in 3-card draw, then drops by "
+                            + "\(Scoring.timedPointsLostPerSecond) point per second."
+                    )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Score cannot go below \(Scoring.minimumScore).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -285,6 +294,23 @@ struct RulesAndScoringView: View {
                     definition: "Consecutive discards without flipping the stock; each discard in a chain is worth one more point than the last."
                 )
             ]
+        case .golf:
+            return [
+                TermRow(
+                    term: "Columns",
+                    definition: "Seven face-up piles of five cards; only each column's exposed card may play."
+                ),
+                TermRow(term: "Stock", definition: "The face-down draw pile. One pass only — there are no recycles."),
+                TermRow(
+                    term: "Waste",
+                    definition: "The growing face-up pile; play any exposed card one rank above or below its top."
+                ),
+                TermRow(term: "Hole", definition: "One deal. Nine holes make a match."),
+                TermRow(
+                    term: "Par",
+                    definition: "45 strokes for a nine-hole match. Like golf, lower is better."
+                )
+            ]
         }
     }
 
@@ -347,6 +373,16 @@ struct RulesAndScoringView: View {
                 "A face-down card flips face up once both cards covering it are removed.",
                 "Tap the stock to flip one card onto the waste. The stock allows a single pass — there are no recycles.",
                 "You win by clearing all 28 peak cards; stock and waste may keep cards."
+            ]
+        case .golf:
+            return [
+                "Deal 35 cards face up into seven columns of five. One card starts the waste; the remaining 16 form the stock.",
+                "Play any exposed column card that is one rank above or below the top waste card, regardless of suit. It becomes the new target.",
+                "Ranks never wrap: an Ace connects only to a Two, and a King only to a Queen.",
+                "Nothing plays on a King — once a King tops the waste, flip the stock to bury it.",
+                "Tap the stock to flip one card onto the waste. The stock allows a single pass — there are no recycles.",
+                "The hole ends when you clear all 35 column cards, or when the stock is spent and nothing plays.",
+                "A match is nine holes; the lowest total wins. Switching games keeps the match — it resumes with your Golf session."
             ]
         }
     }
@@ -422,6 +458,20 @@ struct RulesAndScoringView: View {
                     move: "Win time bonus",
                     points: Scoring.timedMaxBonusDrawThree,
                     note: "Reduced by elapsed time."
+                )
+            ]
+        case .golf:
+            return [
+                ScoringRow(
+                    move: "Play a card onto the waste",
+                    points: Scoring.delta(for: .golfBoardPlay),
+                    note: "Your score is the cards still on the board."
+                ),
+                ScoringRow(move: "Flip a stock card", points: 0, note: nil),
+                ScoringRow(
+                    move: "Clear the board",
+                    points: Scoring.delta(for: .golfBoardClear(remainingStockCount: 1)),
+                    note: "Per stock card left — scores below zero are the best results."
                 )
             ]
         }

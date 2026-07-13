@@ -25,6 +25,10 @@ enum GameRules {
             // Neither has tableau piles; their moves flow through
             // PyramidGameRules and TriPeaksGameRules.
             return false
+        case .golf:
+            // Golf columns are never a destination; its one move flows
+            // through GolfGameRules.
+            return false
         }
     }
 

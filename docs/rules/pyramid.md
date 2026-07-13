@@ -44,20 +44,6 @@ The linked sources disagree; this implementation uses:
 - **Three passes** through the stock (solitaired.com; Wikipedia's "Par Pyramid"), not one pass (strict) or unlimited (cardgames.io).
 - **Cover pairs allowed** (cardgames.io and most digital implementations).
 
-## Solver-backed hints
-Pyramid is a perfect-information game once dealt, so `PyramidPlanner` searches the exact position graph: stage one runs weighted A* for a full winning line, with a partner-count prune that can prove a deal unwinnable; stage two finds the line clearing the most pyramid cards when no win exists, and hints follow it — unlike the other variants, lost Pyramid deals are common and still played for cards cleared. Hints go silent only when not one more pyramid card is clearable.
-
-### Measured baselines
-The canonical hint-quality figures live in the hint-probe ledger
-(`tools/hint-probe/README.md`): over 500 seeded deals, following every hint
-wins **80.2%** against a **15.2%** random-control floor, with zero loops and a
-median winning game of 67 moves. The solver's own verdict sweep at its default
-budget proves **79.5%** of deals winnable and **0.8%** unwinnable, with 19.8%
-undecided at budget (hard deals whose reachable graphs exceed it — they still
-get best-effort hints); interactive searches resolve in well under a
-millisecond on the median deal. Validate planner changes against the ledger
-before shipping.
-
 ## Sources
 - https://en.wikipedia.org/wiki/Pyramid_(solitaire)
 - https://cardgames.io/pyramidsolitaire/
