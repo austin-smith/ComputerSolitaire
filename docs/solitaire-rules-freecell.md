@@ -57,7 +57,7 @@ Formally, FreeCell only allows moving one card at a time. Moving a run of cards 
 You win when all 52 cards are moved to the foundations in ascending order by suit. Because all cards are visible from the deal, FreeCell is a game of near-complete information — of the original 32,000 Microsoft deals, only one (#11982) is unwinnable.
 
 ## Rule choices
-The linked sources disagree; this implementation uses:
+FreeCell's rules are essentially settled; the decisions this implementation makes:
 - **Any card on an empty cascade** (standard FreeCell; some variants restrict empty columns).
 - **The strict supermove cap**, including the rule that a run's empty destination cascade doesn't count as maneuvering space for its own move.
 - **Time-and-completion scoring** — classic FreeCell awards no per-move points, so the win time bonus is the whole score.

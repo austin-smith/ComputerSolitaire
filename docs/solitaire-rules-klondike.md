@@ -49,7 +49,7 @@ Move all 52 cards to the four foundations, building each suit from Ace to King.
 You win when all cards are moved to the foundations in ascending order by suit.
 
 ## Rule choices
-The linked sources disagree; this implementation uses:
+Published Klondike rules differ mainly in how the stock is handled; this implementation uses:
 - **Unlimited stock passes in both draw modes** — several published rule sets cap 3-card draw at three passes.
 - **The classic −100 recycle penalty in 1-card draw**, where unlimited free passes would otherwise remove the mode's tension; 3-card recycles are free.
 - **Kings only on empty piles** (the standard rule; some variants allow any card).

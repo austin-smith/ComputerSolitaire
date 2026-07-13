@@ -48,7 +48,7 @@ Group moves are what set Yukon apart:
 You win when all 52 cards are moved to the foundations in ascending order by suit. With no stock to cycle and most cards visible or discoverable through play, skilled play wins considerably more often than in Klondike — roughly 80% of deals are estimated to be winnable with best play.
 
 ## Rule choices
-The linked sources disagree; this implementation uses:
+Yukon's play rules are essentially settled; the decisions this implementation makes:
 - **Kings only on empty piles** (the standard Yukon rule; some variants allow any card or group).
 - **Foundation rollbacks allowed** at −15, matching Klondike — pulling a banked card back down is sometimes the only way to untangle a pile.
 - **Klondike-style scoring minus the waste rows** — Yukon has no stock or waste, so only the foundation, reveal, and rollback values apply.

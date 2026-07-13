@@ -46,7 +46,7 @@ Complete eight King-to-Ace runs of a single suit. Each completed run is removed 
 You win when all eight runs are completed. With good play, roughly one in three 4-suit games is winnable; 2-suit games considerably more, and 1-suit games almost always.
 
 ## Rule choices
-The linked sources disagree; this implementation uses:
+Published Spider rules differ in scoring and stock handling; this implementation uses:
 - **Classic Spider scoring** — the 500-point start with −1 per move and +100 per run, rather than per-card schemes some sites use.
 - **Deals blocked over empty piles** (the standard rule; some implementations allow dealing across gaps).
 - **Suit-count difficulty** as deck composition — 1, 2, or 4 suits always totaling 104 cards, each mode keeping its own statistics.
