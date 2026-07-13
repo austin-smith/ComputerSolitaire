@@ -231,27 +231,59 @@ struct ContentView: View {
             view
             .toolbar {
 #if os(iOS)
-                ToolbarItemGroup(placement: .bottomBar) {
+                ToolbarItem(placement: .bottomBar) {
                     Menu {
-                        Button("New Game", systemImage: "plus") {
-                            startNewGameFromUI()
-                        }
-                        Button("Redeal", systemImage: "arrow.clockwise") {
-                            redealFromUI()
-                        }
-                        .disabled(!viewModel.canRedeal)
-                        Button("Auto Finish", systemImage: "bolt") {
-                            startAutoFinish()
-                        }
-                        .disabled(isAutoFinishDisabled)
-                        if isHintButtonVisible {
-                            Button("Hint", systemImage: "lightbulb") {
-                                triggerHint()
+                        Section {
+                            Button("New Game", systemImage: "plus") {
+                                startNewGameFromUI()
                             }
-                            .disabled(isHintDisabled)
+                            Button("Redeal", systemImage: "arrow.clockwise") {
+                                redealFromUI()
+                            }
+                            .disabled(!viewModel.canRedeal)
+                        }
+                        Section {
+                            Button("Statistics", systemImage: "chart.bar") {
+                                isShowingStats = true
+                            }
+                            Button("Rules & Scoring", systemImage: "book") {
+                                presentRulesAndScoring(initialSection: .rules)
+                            }
+                        }
+                        Section {
+                            Button("Settings", systemImage: "gearshape") {
+                                isShowingSettings = true
+                            }
                         }
                     } label: {
-                        Label("Game", systemImage: "ellipsis.circle")
+                        Label("More", systemImage: "ellipsis")
+                    }
+                }
+                ToolbarSpacer(.flexible, placement: .bottomBar)
+                if viewModel.isAutoFinishAvailable {
+                    ToolbarItem(placement: .bottomBar) {
+                        Button {
+                            startAutoFinish()
+                        } label: {
+                            // The bottom bar renders Labels icon-only.
+                            HStack(spacing: 5) {
+                                Image(systemName: "bolt")
+                                Text("Auto")
+                            }
+                        }
+                        .accessibilityLabel("Auto Finish")
+                        .disabled(isAutoFinishDisabled)
+                    }
+                    ToolbarSpacer(.fixed, placement: .bottomBar)
+                }
+                ToolbarItemGroup(placement: .bottomBar) {
+                    if isHintButtonVisible {
+                        Button {
+                            triggerHint()
+                        } label: {
+                            Label("Hint", systemImage: "lightbulb")
+                        }
+                        .disabled(isHintDisabled)
                     }
                     Button {
                         stopAutoFinish()
@@ -260,39 +292,26 @@ struct ContentView: View {
                         Label("Undo", systemImage: "arrow.uturn.backward")
                     }
                     .disabled(isUndoDisabled)
-                    Spacer(minLength: 0)
-                    Button {
-                        isShowingStats = true
-                    } label: {
-                        Label("Statistics", systemImage: "chart.bar")
-                    }
-                    Button {
-                        isShowingSettings = true
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
-                    }
                 }
 #endif
 #if os(macOS)
                 ToolbarSpacer(.flexible)
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button {
-                        startNewGameFromUI()
-                    } label: {
-                        Label("New Game", systemImage: "plus")
+                if viewModel.isAutoFinishAvailable {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            startAutoFinish()
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "bolt")
+                                Text("Auto")
+                            }
+                        }
+                        .accessibilityLabel("Auto Finish")
+                        .help("Auto Finish")
+                        .disabled(isAutoFinishDisabled)
                     }
-                    .labelStyle(.iconOnly)
-                    .help("New Game")
-                    Button {
-                        redealFromUI()
-                    } label: {
-                        Label("Redeal", systemImage: "arrow.clockwise")
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Redeal")
-                    .disabled(!viewModel.canRedeal)
+                    ToolbarSpacer(.fixed)
                 }
-                ToolbarSpacer(.fixed)
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button {
                         stopAutoFinish()
@@ -303,14 +322,6 @@ struct ContentView: View {
                     .labelStyle(.iconOnly)
                     .help("Undo")
                     .disabled(isUndoDisabled)
-                    Button {
-                        startAutoFinish()
-                    } label: {
-                        Label("Auto Finish", systemImage: "bolt")
-                    }
-                    .labelStyle(.iconOnly)
-                    .help("Auto Finish")
-                    .disabled(isAutoFinishDisabled)
                     if isHintButtonVisible {
                         Button {
                             triggerHint()
@@ -321,6 +332,25 @@ struct ContentView: View {
                         .help("Hint")
                         .disabled(isHintDisabled)
                     }
+                }
+                ToolbarSpacer(.fixed)
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button("New Game", systemImage: "plus") {
+                            startNewGameFromUI()
+                        }
+                        Button("Redeal", systemImage: "arrow.clockwise") {
+                            redealFromUI()
+                        }
+                        .disabled(!viewModel.canRedeal)
+                    } label: {
+                        Label("New Game", systemImage: "plus")
+                    }
+                    .labelStyle(.iconOnly)
+                    .help("New Game or Redeal")
+                }
+                ToolbarSpacer(.fixed)
+                ToolbarItemGroup(placement: .primaryAction) {
                     Button {
                         isShowingStats = true
                     } label: {
@@ -683,6 +713,7 @@ struct ContentView: View {
         .onChange(of: viewModel.isWin) { _, isWin in
             guard !isHydratingGame else { return }
             if isWin {
+                HapticManager.shared.play(.gameWon)
                 winCelebration.beginIfNeededForWin(
                     launchPiles: winCascadeLaunchPiles,
                     launchTargets: winCascadeLaunchTargets,
@@ -1040,6 +1071,7 @@ struct ContentView: View {
 
     private func startAutoFinish() {
         guard !isAutoFinishDisabled else { return }
+        HapticManager.shared.play(.autoFinishStart)
         isAutoFinishing = true
         queueAutoFinishStepIfPossible()
     }
