@@ -19,6 +19,7 @@ struct GameModePickerView: View {
     let entries: [Entry]
     let currentMode: GameMode
     let feltColor: Color
+    let cardBackColor: CardBackColor
     let onSelect: (GameMode) -> Void
 
     /// The family whose modes the detail step shows; nil shows the gallery.
@@ -62,7 +63,12 @@ struct GameModePickerView: View {
             }
         } label: {
             HStack(spacing: 12) {
-                MiniBoardView(variant: variant, feltColor: feltColor, scale: 0.62)
+                MiniBoardView(
+                    variant: variant,
+                    feltColor: feltColor,
+                    cardBackColor: cardBackColor,
+                    scale: 0.62
+                )
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
@@ -146,7 +152,11 @@ struct GameModePickerView: View {
             .padding(.horizontal, 2)
 
             HStack(spacing: 12) {
-                MiniBoardView(variant: variant, feltColor: feltColor)
+                MiniBoardView(
+                    variant: variant,
+                    feltColor: feltColor,
+                    cardBackColor: cardBackColor
+                )
 
                 Text(variant.subtitle)
                     .font(.caption)
@@ -239,6 +249,9 @@ struct GameModePickerOverlay: View {
     let onSelect: (GameMode) -> Void
     let onDismiss: () -> Void
 
+    @AppStorage(SettingsKey.cardBackColor)
+    private var cardBackColorRawValue = CardBackColor.defaultValue.id
+
     /// The overlay takes keyboard focus while presented so Escape reaches it;
     /// a custom overlay sits outside the window's cancel-action routing that
     /// sheets get for free.
@@ -294,6 +307,7 @@ struct GameModePickerOverlay: View {
             entries: entries,
             currentMode: currentMode,
             feltColor: feltColor,
+            cardBackColor: CardBackColor.from(rawValue: cardBackColorRawValue),
             onSelect: onSelect
         )
     }
@@ -304,6 +318,7 @@ struct GameModePickerOverlay: View {
 private struct MiniBoardView: View {
     let variant: GameVariant
     let feltColor: Color
+    let cardBackColor: CardBackColor
     var scale: CGFloat = 1
 
     private enum MiniCard {
@@ -511,7 +526,7 @@ private struct MiniBoardView: View {
         case .faceUp:
             return AnyShapeStyle(.white.opacity(0.95))
         case .faceDown:
-            return AnyShapeStyle(Color(red: 0.18, green: 0.24, blue: 0.5))
+            return AnyShapeStyle(cardBackColor.swatch)
         case .slot:
             return AnyShapeStyle(.white.opacity(0.06))
         }
