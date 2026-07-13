@@ -2,208 +2,99 @@ import Foundation
 import SwiftUI
 import SwiftData
 
+/// Statistics in two levels, mirroring the game picker's grammar: an
+/// overview of every game with aggregate highlights, and a per-game detail
+/// with the full breakdown. Opens deep-linked to the current game's detail.
 struct StatisticsView: View {
     let viewModel: SolitaireViewModel?
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedScope: Scope
-    /// The bucket within a multi-mode scope (Klondike draw counts, Spider
-    /// suit counts); ignored for single-mode scopes.
-    @State private var scopeMode: GameMode
-    @State private var stats = GameStatistics()
-    @State private var barHoverState: (label: String, x: CGFloat)?
-    @State private var isShowingCleanWinsInfo = false
-    @State private var isShowingResetConfirmation = false
-    private let durationFormatter: DateComponentsFormatter = {
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = [.day, .hour, .minute, .second]
-        formatter.unitsStyle = .abbreviated
-        formatter.zeroFormattingBehavior = .dropLeading
-        return formatter
-    }()
-
-    private enum Scope: String, CaseIterable, Identifiable {
-        // Mirrors GameVariant's presentation order, with the aggregate last.
-        case klondike
-        case spider
-        case freecell
-        case tripeaks
-        case pyramid
-        case yukon
-        case all
-
-        var id: String { rawValue }
-
-        init(variant: GameVariant) {
-            switch variant {
-            case .klondike:
-                self = .klondike
-            case .freecell:
-                self = .freecell
-            case .yukon:
-                self = .yukon
-            case .spider:
-                self = .spider
-            case .pyramid:
-                self = .pyramid
-            case .tripeaks:
-                self = .tripeaks
-            }
-        }
-
-        /// The variant this scope covers; nil for the aggregate scope.
-        var variant: GameVariant? {
-            switch self {
-            case .klondike:
-                return .klondike
-            case .freecell:
-                return .freecell
-            case .yukon:
-                return .yukon
-            case .spider:
-                return .spider
-            case .pyramid:
-                return .pyramid
-            case .tripeaks:
-                return .tripeaks
-            case .all:
-                return nil
-            }
-        }
-
-        var title: String {
-            switch self {
-            case .klondike, .freecell, .yukon, .spider, .pyramid, .tripeaks:
-                return variant?.title ?? ""
-            case .all:
-                return "All"
-            }
-        }
-    }
-
-    private struct HighScoreRow: Identifiable {
-        let label: String
-        let score: Int?
-
-        var id: String { label }
-    }
+    @State private var path: [GameVariant]
+    private let initialMode: GameMode
 
     init(viewModel: SolitaireViewModel?, initialMode: GameMode = .klondikeDrawThree) {
         self.viewModel = viewModel
-        _selectedScope = State(initialValue: Scope(variant: initialMode.variant))
-        _scopeMode = State(initialValue: initialMode)
-    }
-
-    /// The statistics bucket the current scope selection reads; nil for the
-    /// aggregate scope.
-    private var effectiveMode: GameMode? {
-        guard let variant = selectedScope.variant else { return nil }
-        let modes = GameMode.modes(for: variant)
-        guard modes.count > 1 else { return modes.first }
-        return modes.contains(scopeMode) ? scopeMode : GameMode(variant: variant)
-    }
-
-    private var effectiveScopeTitle: String {
-        guard let variant = selectedScope.variant else { return "All" }
-        guard GameMode.modes(for: variant).count > 1, let mode = effectiveMode else {
-            return variant.title
-        }
-        return "\(variant.title) (\(mode.optionTitle))"
+        self.initialMode = initialMode
+        _path = State(initialValue: [initialMode.variant])
     }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            Form {
-                Section {
-                    Picker("Statistics Scope", selection: $selectedScope) {
-                        ForEach(Scope.allCases) { scope in
-                            Text(scope.title).tag(scope)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-
-                    if let variant = selectedScope.variant, GameMode.modes(for: variant).count > 1 {
-                        Picker("Game Mode", selection: $scopeMode) {
-                            ForEach(GameMode.modes(for: variant), id: \.self) { mode in
-                                Text(mode.optionTitle).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                    }
-                }
-
-                Section {
-                    HStack(spacing: 0) {
-                        highlightCard(
-                            icon: "percent",
-                            label: "Win Rate",
-                            value: winRateLabel
-                        )
-                        Divider()
-                            .frame(height: 32)
-                        highlightCard(
-                            icon: secondaryHighlightIcon,
-                            label: secondaryHighlightLabel,
-                            value: secondaryHighlightValue
-                        )
-                        Divider()
-                            .frame(height: 32)
-                        highlightCard(
-                            icon: "trophy.fill",
-                            label: "Games Won",
-                            value: "\(stats.gamesWon)"
-                        )
-                    }
-                    .padding(.vertical, 2)
-                } header: {
-                    Text("Highlights")
-                }
-
-                Section {
-                    keyValueRow("Games Played", "\(stats.gamesPlayed)")
-                    keyValueRow("Wins", "\(stats.gamesWon)")
-                    VStack(spacing: 6) {
-                        keyValueRow("Win Rate", winRateLabel)
-                        if stats.gamesPlayed > 0 {
-                            winLossBar
-                        }
-                    }
-                    cleanWinsRow
-                } header: {
-                    Text("Games")
-                }
-
-                if selectedScope != .all {
-                    Section {
-                        keyValueRow("Total Time", durationLabel(displayTotalTimeSeconds(at: context.date)))
-                        keyValueRow("Avg Time", durationLabel(stats.averageTimeSeconds))
-                        keyValueRow("Best Time", bestTimeLabel)
-                        ForEach(highScoreRowsForSelectedScope) { row in
-                            keyValueRow(row.label, scoreLabel(row.score))
-                        }
-                    } header: {
-                        Text("Performance")
-                    }
-                }
-
-                Text("Tracked since \(trackedSinceLabel)")
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+        NavigationStack(path: $path) {
+            StatisticsOverviewView(
+                viewModel: viewModel,
+                onDone: { dismiss() }
+            )
+            .navigationDestination(for: GameVariant.self) { variant in
+                GameStatisticsDetailView(
+                    viewModel: viewModel,
+                    variant: variant,
+                    initialMode: initialMode,
+                    onDone: { dismiss() }
+                )
             }
         }
+    }
+}
+
+// MARK: - Overview
+
+/// Aggregate highlights plus one row per game — the two numbers that make
+/// games comparable at a glance — in the shared presentation order.
+private struct StatisticsOverviewView: View {
+    let viewModel: SolitaireViewModel?
+    let onDone: () -> Void
+    @Environment(\.modelContext) private var modelContext
+    @State private var aggregate = GameStatistics()
+    @State private var statsByVariant: [GameVariant: GameStatistics] = [:]
+    @State private var isShowingResetConfirmation = false
+
+    var body: some View {
+        Form {
+            Section {
+                HStack(spacing: 0) {
+                    statsHighlightCard(
+                        icon: "percent",
+                        label: "Win Rate",
+                        value: statsWinRateLabel(aggregate)
+                    )
+                    Divider()
+                        .frame(height: 32)
+                    statsHighlightCard(
+                        icon: "number",
+                        label: "Games Played",
+                        value: "\(aggregate.gamesPlayed)"
+                    )
+                    Divider()
+                        .frame(height: 32)
+                    statsHighlightCard(
+                        icon: "trophy.fill",
+                        label: "Games Won",
+                        value: "\(aggregate.gamesWon)"
+                    )
+                }
+                .padding(.vertical, 2)
+            } header: {
+                Text("Highlights")
+            }
+
+            Section {
+                ForEach(GameVariant.allCases, id: \.self) { variant in
+                    NavigationLink(value: variant) {
+                        gameRow(variant)
+                    }
+                }
+            } header: {
+                Text("Games")
+            }
+
+            Text("Tracked since \(statsTrackedSinceLabel(aggregate))")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        }
         .navigationTitle("Statistics")
-#if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-#else
-        .formStyle(.grouped)
-        .padding(16)
-        .frame(minWidth: 420, minHeight: 320)
-#endif
+        .statisticsFormChrome()
         .toolbar {
 #if os(macOS)
             ToolbarItem(placement: .automatic) {
@@ -219,38 +110,222 @@ struct StatisticsView: View {
             }
 #endif
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    dismiss()
+                Button("Done", action: onDone)
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .onAppear {
+            reload()
+        }
+        .confirmationDialog(
+            "Reset all statistics?",
+            isPresented: $isShowingResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Reset All Statistics", role: .destructive) {
+                resetAllStatistics()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will reset statistics for every game.")
+        }
+    }
+
+    private func gameRow(_ variant: GameVariant) -> some View {
+        let stats = statsByVariant[variant] ?? GameStatistics()
+        return HStack {
+            Text(variant.title)
+            Spacer(minLength: 16)
+            if stats.gamesPlayed == 0 {
+                Text("Not played yet")
+                    .font(.callout)
+                    .foregroundStyle(.tertiary)
+            } else {
+                Text("\(stats.gamesPlayed) played · \(statsWinRateLabel(stats)) won")
+                    .font(.system(.callout, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func reload() {
+        statsByVariant = GameVariant.allCases.reduce(into: [:]) { result, variant in
+            result[variant] = GameStatistics.aggregated(
+                GameMode.modes(for: variant).map { GameStatisticsStore.load(for: $0) }
+            )
+        }
+        aggregate = GameStatistics.aggregated(
+            GameMode.allCases.map { GameStatisticsStore.load(for: $0) }
+        )
+    }
+
+    private func resetAllStatistics() {
+        for mode in GameMode.allCases {
+            GameStatisticsStore.reset(for: mode)
+        }
+        // Stashed sessions must not finalize pre-reset play into the fresh
+        // buckets; the active session is handled after so its newer in-memory
+        // state wins the save slot.
+        GamePersistence.invalidateStatisticsTracking(for: GameMode.allCases, in: modelContext)
+        viewModel?.resetStatisticsTracking()
+        persistTrackingReset(of: viewModel, in: modelContext)
+        reload()
+    }
+}
+
+// MARK: - Per-game detail
+
+private struct GameStatisticsDetailView: View {
+    let viewModel: SolitaireViewModel?
+    let variant: GameVariant
+    let onDone: () -> Void
+    @Environment(\.modelContext) private var modelContext
+    /// The bucket within a multi-mode game (Klondike draw counts, Spider
+    /// suit counts); fixed for single-mode games.
+    @State private var scopeMode: GameMode
+    @State private var stats = GameStatistics()
+    @State private var barHoverState: (label: String, x: CGFloat)?
+    @State private var isShowingCleanWinsInfo = false
+    @State private var isShowingResetConfirmation = false
+
+    init(
+        viewModel: SolitaireViewModel?,
+        variant: GameVariant,
+        initialMode: GameMode,
+        onDone: @escaping () -> Void
+    ) {
+        self.viewModel = viewModel
+        self.variant = variant
+        self.onDone = onDone
+        _scopeMode = State(
+            initialValue: initialMode.variant == variant ? initialMode : GameMode(variant: variant)
+        )
+    }
+
+    private var effectiveMode: GameMode {
+        let modes = GameMode.modes(for: variant)
+        guard modes.count > 1 else { return modes.first ?? scopeMode }
+        return modes.contains(scopeMode) ? scopeMode : GameMode(variant: variant)
+    }
+
+    private var effectiveScopeTitle: String {
+        guard GameMode.modes(for: variant).count > 1 else { return variant.title }
+        return "\(variant.title) (\(effectiveMode.optionTitle))"
+    }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Form {
+                if GameMode.modes(for: variant).count > 1 {
+                    Section {
+                        Picker("Game Mode", selection: $scopeMode) {
+                            ForEach(GameMode.modes(for: variant), id: \.self) { mode in
+                                Text(mode.optionTitle).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
                 }
-                .keyboardShortcut(.cancelAction)
+
+                Section {
+                    HStack(spacing: 0) {
+                        statsHighlightCard(
+                            icon: "percent",
+                            label: "Win Rate",
+                            value: statsWinRateLabel(stats)
+                        )
+                        Divider()
+                            .frame(height: 32)
+                        statsHighlightCard(
+                            icon: "timer",
+                            label: "Best Time",
+                            value: bestTimeLabel
+                        )
+                        Divider()
+                            .frame(height: 32)
+                        statsHighlightCard(
+                            icon: "trophy.fill",
+                            label: "Games Won",
+                            value: "\(stats.gamesWon)"
+                        )
+                    }
+                    .padding(.vertical, 2)
+                } header: {
+                    Text("Highlights")
+                }
+
+                Section {
+                    statsKeyValueRow("Games Played", "\(stats.gamesPlayed)")
+                    statsKeyValueRow("Wins", "\(stats.gamesWon)")
+                    VStack(spacing: 6) {
+                        statsKeyValueRow("Win Rate", statsWinRateLabel(stats))
+                        if stats.gamesPlayed > 0 {
+                            winLossBar
+                        }
+                    }
+                    cleanWinsRow
+                } header: {
+                    Text("Games")
+                }
+
+                Section {
+                    statsKeyValueRow("Total Time", statsDurationLabel(displayTotalTimeSeconds(at: context.date)))
+                    statsKeyValueRow("Avg Time", statsDurationLabel(stats.averageTimeSeconds))
+                    statsKeyValueRow("Best Time", bestTimeLabel)
+                    statsKeyValueRow("High Score", statsScoreLabel(highScore(for: effectiveMode)))
+                } header: {
+                    Text("Performance")
+                }
+
+                Text("Tracked since \(statsTrackedSinceLabel(stats))")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+        }
+        .navigationTitle(variant.title)
+        .statisticsFormChrome()
+        .toolbar {
+#if os(macOS)
+            ToolbarItem(placement: .automatic) {
+                Button("Reset Stats") {
+                    isShowingResetConfirmation = true
+                }
+            }
+#else
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Reset Stats") {
+                    isShowingResetConfirmation = true
+                }
+            }
+#endif
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done", action: onDone)
+                    .keyboardShortcut(.cancelAction)
             }
         }
         .onAppear {
             loadStats()
-        }
-        .onChange(of: selectedScope) { _, _ in
-            if let variant = selectedScope.variant,
-               !GameMode.modes(for: variant).contains(scopeMode) {
-                scopeMode = GameMode(variant: variant)
-            }
-            loadStats()
-            barHoverState = nil
         }
         .onChange(of: scopeMode) { _, _ in
             loadStats()
             barHoverState = nil
         }
         .confirmationDialog(
-            resetDialogTitle,
+            "Reset \(effectiveScopeTitle) statistics?",
             isPresented: $isShowingResetConfirmation,
             titleVisibility: .visible
         ) {
-            Button(resetActionTitle, role: .destructive) {
+            Button("Reset \(effectiveScopeTitle) Statistics", role: .destructive) {
                 resetStatistics()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(resetMessage)
+            Text("This will reset only \(effectiveScopeTitle) games, times, win rates, and high scores.")
         }
     }
 
@@ -299,22 +374,13 @@ struct StatisticsView: View {
             }
     }
 
-    private var winRateLabel: String {
-        String(format: "%.1f%%", stats.winRate * 100)
-    }
-
     private var bestTimeLabel: String {
         guard let bestTimeSeconds = stats.bestTimeSeconds else { return "-" }
-        return durationLabel(bestTimeSeconds)
+        return statsDurationLabel(bestTimeSeconds)
     }
 
     /// Each mode bucket carries a single high score, routed to the field its
     /// wins record into (Klondike per draw count, Spider per suit count).
-    private var highScoreRowsForSelectedScope: [HighScoreRow] {
-        guard let mode = effectiveMode else { return [] }
-        return [HighScoreRow(label: "High Score", score: highScore(for: mode))]
-    }
-
     private func highScore(for mode: GameMode) -> Int? {
         switch mode {
         case .klondikeDrawOne:
@@ -332,76 +398,19 @@ struct StatisticsView: View {
         }
     }
 
-    private func scoreLabel(_ score: Int?) -> String {
-        score.map { "\($0)" } ?? "-"
-    }
-
-    private var secondaryHighlightIcon: String {
-        if selectedScope == .all {
-            return "number"
-        }
-        return "timer"
-    }
-
-    private var secondaryHighlightLabel: String {
-        if selectedScope == .all {
-            return "Games Played"
-        }
-        return "Best Time"
-    }
-
-    private var secondaryHighlightValue: String {
-        if selectedScope == .all {
-            return "\(stats.gamesPlayed)"
-        }
-        return bestTimeLabel
-    }
-
     private var cleanWinRateLabel: String {
-        return String(format: "%.1f%%", stats.cleanWinRate * 100)
-    }
-
-    private var trackedSinceLabel: String {
-        guard let trackedSince = stats.trackedSince else { return "-" }
-        return trackedSince.formatted(date: .abbreviated, time: .omitted)
+        String(format: "%.1f%%", stats.cleanWinRate * 100)
     }
 
     private func displayTotalTimeSeconds(at date: Date) -> Int {
         let liveElapsed: Int
-        if activeModeMatchesSelectedScope {
+        if activeModeMatchesScope {
             liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
         } else {
             liveElapsed = 0
         }
         let (sum, overflow) = stats.totalTimeSeconds.addingReportingOverflow(liveElapsed)
         return overflow ? Int.max : max(0, sum)
-    }
-
-    private func highlightCard(icon: String, label: String, value: String) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Text(value)
-                .font(.system(.headline, design: .monospaced, weight: .bold))
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder
-    private func keyValueRow(_ key: String, _ value: String) -> some View {
-        HStack {
-            Text(key)
-            Spacer(minLength: 16)
-            Text(value)
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.secondary)
-        }
     }
 
     private var cleanWinsRow: some View {
@@ -437,71 +446,103 @@ struct StatisticsView: View {
         .padding(.leading, 2)
     }
 
-    private func durationLabel(_ seconds: Int) -> String {
-        let total = max(0, seconds)
-        return durationFormatter.string(from: TimeInterval(total)) ?? "0s"
-    }
-
     private func resetStatistics() {
-        let affectedModes = effectiveMode.map { [$0] } ?? GameMode.allCases
-        for mode in affectedModes {
-            GameStatisticsStore.reset(for: mode)
-        }
-
-        // Stashed sessions of the affected modes must not finalize pre-reset
-        // play into the fresh buckets; the active session is handled below so
-        // its newer in-memory state wins the save slot.
-        GamePersistence.invalidateStatisticsTracking(for: affectedModes, in: modelContext)
-
-        if selectedScope == .all || activeModeMatchesSelectedScope {
+        GameStatisticsStore.reset(for: effectiveMode)
+        // The mode's stashed session must not finalize pre-reset play into
+        // the fresh bucket; an active session is handled after so its newer
+        // in-memory state wins the save slot.
+        GamePersistence.invalidateStatisticsTracking(for: [effectiveMode], in: modelContext)
+        if activeModeMatchesScope {
             viewModel?.resetStatisticsTracking()
-            persistTrackingResetIfNeeded()
+            persistTrackingReset(of: viewModel, in: modelContext)
         }
         loadStats()
         barHoverState = nil
     }
 
-    private var activeModeMatchesSelectedScope: Bool {
-        guard let mode = effectiveMode else { return true }
-        return viewModel?.gameMode == mode
-    }
-
-    private var resetDialogTitle: String {
-        selectedScope == .all
-            ? "Reset all statistics?"
-            : "Reset \(effectiveScopeTitle) statistics?"
-    }
-
-    private var resetActionTitle: String {
-        selectedScope == .all
-            ? "Reset All Statistics"
-            : "Reset \(effectiveScopeTitle) Statistics"
-    }
-
-    private var resetMessage: String {
-        selectedScope == .all
-            ? "This will reset statistics for every game."
-            : "This will reset only \(effectiveScopeTitle) games, times, win rates, and high scores."
+    private var activeModeMatchesScope: Bool {
+        viewModel?.gameMode == effectiveMode
     }
 
     private func loadStats() {
-        if let mode = effectiveMode {
-            stats = GameStatisticsStore.load(for: mode)
-        } else {
-            stats = GameStatistics.aggregated(
-                GameMode.allCases.map { GameStatisticsStore.load(for: $0) }
-            )
-        }
+        stats = GameStatisticsStore.load(for: effectiveMode)
     }
+}
 
-    private func persistTrackingResetIfNeeded() {
-        guard let viewModel else { return }
-        do {
-            try GamePersistence.save(viewModel.persistencePayload(), in: modelContext)
-        } catch {
+// MARK: - Shared pieces
+
+private let statsDurationFormatter: DateComponentsFormatter = {
+    let formatter = DateComponentsFormatter()
+    formatter.allowedUnits = [.day, .hour, .minute, .second]
+    formatter.unitsStyle = .abbreviated
+    formatter.zeroFormattingBehavior = .dropLeading
+    return formatter
+}()
+
+private func statsDurationLabel(_ seconds: Int) -> String {
+    let total = max(0, seconds)
+    return statsDurationFormatter.string(from: TimeInterval(total)) ?? "0s"
+}
+
+private func statsWinRateLabel(_ stats: GameStatistics) -> String {
+    String(format: "%.1f%%", stats.winRate * 100)
+}
+
+private func statsScoreLabel(_ score: Int?) -> String {
+    score.map { "\($0)" } ?? "-"
+}
+
+private func statsTrackedSinceLabel(_ stats: GameStatistics) -> String {
+    guard let trackedSince = stats.trackedSince else { return "-" }
+    return trackedSince.formatted(date: .abbreviated, time: .omitted)
+}
+
+private func statsHighlightCard(icon: String, label: String, value: String) -> some View {
+    VStack(spacing: 4) {
+        Image(systemName: icon)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
+        Text(value)
+            .font(.system(.headline, design: .monospaced, weight: .bold))
+        Text(label)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+    }
+    .frame(maxWidth: .infinity)
+    .accessibilityElement(children: .combine)
+}
+
+private func statsKeyValueRow(_ key: String, _ value: String) -> some View {
+    HStack {
+        Text(key)
+        Spacer(minLength: 16)
+        Text(value)
+            .font(.system(.body, design: .monospaced))
+            .foregroundStyle(.secondary)
+    }
+}
+
+private func persistTrackingReset(of viewModel: SolitaireViewModel?, in modelContext: ModelContext) {
+    guard let viewModel else { return }
+    do {
+        try GamePersistence.save(viewModel.persistencePayload(), in: modelContext)
+    } catch {
 #if DEBUG
-            print("Failed to persist reset tracking state: \(error)")
+        print("Failed to persist reset tracking state: \(error)")
 #endif
-        }
+    }
+}
+
+private extension View {
+    /// Platform chrome every statistics page shares.
+    func statisticsFormChrome() -> some View {
+#if os(iOS)
+        return navigationBarTitleDisplayMode(.inline)
+#else
+        return formStyle(.grouped)
+            .padding(16)
+            .frame(minWidth: 420, minHeight: 320)
+#endif
     }
 }

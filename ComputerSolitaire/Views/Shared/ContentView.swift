@@ -374,13 +374,9 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $isShowingStats) {
-#if os(iOS)
-                NavigationStack {
-                    StatisticsView(viewModel: viewModel, initialMode: viewModel.gameMode)
-                }
-#else
+                // StatisticsView owns its NavigationStack: it drills from the
+                // all-games overview into per-game detail on both platforms.
                 StatisticsView(viewModel: viewModel, initialMode: viewModel.gameMode)
-#endif
             }
         )
     }
