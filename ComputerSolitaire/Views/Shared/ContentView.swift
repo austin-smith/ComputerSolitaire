@@ -1556,24 +1556,29 @@ struct ContentView: View {
             previousStockCount = viewModel.state.stock.count
         }
 
-        GamePersistence.migrateLegacyRecordsIfNeeded(in: modelContext)
+        let migratedCurrentMode = GamePersistence.migrateLegacyRecordsIfNeeded(in: modelContext)
         GameStatisticsStore.migrateLegacyKlondikeStatisticsIfNeeded(activeDrawMode: drawMode)
         GameStatisticsStore.migrateLegacySpiderStatisticsIfNeeded(activeSuitCount: spiderSuitCount)
 
-        // The stored selection decides which game's slot the app opens into.
-        let storedMode = GameMode(
+        // The stored selection decides which game's slot the app opens into —
+        // except right after upgrading, when the game migrated out of the
+        // legacy single slot was the one on screen and wins over stored
+        // settings, which can lag its payload by one debounced autosave.
+        // `rememberSelectedGame()` re-syncs the stored selection on restore.
+        let launchMode = migratedCurrentMode ?? GameMode(
             variant: gameVariant,
             drawMode: drawMode,
             spiderSuitCount: spiderSuitCount
         )
         if restoreScreenshotFixtureIfRequested() {
             // Staged board loaded; shared post-load setup below still applies.
-        } else if let payload = GamePersistence.load(mode: storedMode, from: modelContext),
+        } else if let payload = GamePersistence.load(mode: launchMode, from: modelContext),
                   viewModel.restore(from: payload) {
             rememberSelectedGame()
         } else {
             winCelebration.reset(to: .idle)
-            viewModel.newGame(mode: storedMode)
+            viewModel.newGame(mode: launchMode)
+            rememberSelectedGame()
             persistGameNow()
         }
         winCelebration.syncForLoadedGame(

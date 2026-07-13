@@ -335,23 +335,33 @@ enum GamePersistence {
     }
 
     /// Re-keys records from earlier keying schemes (the single "current" slot,
-    /// per-variant slots) to their payload's mode slot.
+    /// per-variant slots) to their payload's mode slot. Returns the mode of
+    /// the game migrated out of the single legacy slot, if any: that game was
+    /// on screen when the old build last ran, so first hydration should open
+    /// it even when stored settings lag its payload (settings write
+    /// immediately; payloads save on a debounced autosave).
     // TODO: Remove (with `SavedGameRecord.legacyRecordKey`) once upgrades
     // from pre-per-mode releases no longer need supporting.
-    static func migrateLegacyRecordsIfNeeded(in modelContext: ModelContext) {
+    @discardableResult
+    static func migrateLegacyRecordsIfNeeded(in modelContext: ModelContext) -> GameMode? {
         do {
             let modeKeys = Set(GameMode.allCases.map(\.rawValue))
             let records = try modelContext.fetch(FetchDescriptor<SavedGameRecord>())
             var didChange = false
+            var migratedCurrentMode: GameMode?
 
             for record in records where !modeKeys.contains(record.key) {
                 didChange = true
+                let isLegacyCurrentSlot = record.key == SavedGameRecord.legacyRecordKey
                 guard let payload = try? JSONDecoder().decode(
                     SavedGamePayload.self,
                     from: record.snapshotData
                 ) else {
                     modelContext.delete(record)
                     continue
+                }
+                if isLegacyCurrentSlot {
+                    migratedCurrentMode = payload.gameMode
                 }
 
                 let targetKey = SavedGameRecord.key(
@@ -372,8 +382,10 @@ enum GamePersistence {
             if didChange {
                 try modelContext.save()
             }
+            return migratedCurrentMode
         } catch {
             // Leave the store untouched; hydration falls back to a fresh deal.
+            return nil
         }
     }
 

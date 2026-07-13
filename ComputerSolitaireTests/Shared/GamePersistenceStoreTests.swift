@@ -182,6 +182,22 @@ final class GamePersistenceStoreTests: XCTestCase {
         XCTAssertNil(try fetchRecord(forKey: SavedGameRecord.legacyRecordKey, in: context))
     }
 
+    // The game migrated out of the single legacy slot was on screen when the
+    // old build last ran; migration reports its mode so first hydration can
+    // open it even when stored settings lag the payload.
+    func testMigrationReportsModeOfLegacyCurrentGame() throws {
+        let context = try makeInMemoryContext()
+        let state = GameStateFixtures.seededFreeCellDeal(seed: 7)
+        try insertLegacyRecord(makePayload(state: state, movesCount: 5), in: context)
+
+        let migratedMode = GamePersistence.migrateLegacyRecordsIfNeeded(in: context)
+
+        XCTAssertEqual(migratedMode, .freecell)
+
+        // Later launches have no legacy slot and report nothing.
+        XCTAssertNil(GamePersistence.migrateLegacyRecordsIfNeeded(in: context))
+    }
+
     func testMigrationIsIdempotent() throws {
         let context = try makeInMemoryContext()
         try insertLegacyRecord(
