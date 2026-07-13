@@ -14,6 +14,8 @@ final class HapticManager {
         case invalidDrop
         case undoMove
         case settingsSelection
+        case autoFinishStart
+        case gameWon
     }
 
     private(set) var trigger: UInt64 = 0
@@ -55,6 +57,10 @@ private extension HapticManager.Event {
             return .error
         case .settingsSelection:
             return .impact
+        case .autoFinishStart:
+            return .impact
+        case .gameWon:
+            return .success
         }
     }
 }
