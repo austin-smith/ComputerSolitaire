@@ -269,6 +269,22 @@ struct RulesAndScoringView: View {
                     definition: "Turning the waste back into the stock. Pyramid allows two recycles (three passes)."
                 )
             ]
+        case .tripeaks:
+            return [
+                TermRow(
+                    term: "Peaks",
+                    definition: "Twenty-eight cards in three overlapping peaks; a card is uncovered once both cards covering it are gone, and flips face up."
+                ),
+                TermRow(term: "Stock", definition: "The face-down draw pile. One pass only — there are no recycles."),
+                TermRow(
+                    term: "Waste",
+                    definition: "The growing face-up pile; play any uncovered card one rank above or below its top."
+                ),
+                TermRow(
+                    term: "Chain",
+                    definition: "Consecutive discards without flipping the stock; each discard in a chain is worth one more point than the last."
+                )
+            ]
         }
     }
 
@@ -323,6 +339,15 @@ struct RulesAndScoringView: View {
                 "When the stock runs out, recycle the waste back into it — at most twice.",
                 "You win by removing all 28 pyramid cards; stock and waste may keep cards."
             ]
+        case .tripeaks:
+            return [
+                "Deal 28 cards into three overlapping peaks — three face-down rows topped by a face-up base row of ten. One card starts the waste; the remaining 23 form the stock.",
+                "Play any uncovered card that is one rank above or below the top waste card, regardless of suit. It becomes the new target.",
+                "Ranks wrap around: a King plays on an Ace and an Ace plays on a King or a Two.",
+                "A face-down card flips face up once both cards covering it are removed.",
+                "Tap the stock to flip one card onto the waste. The stock allows a single pass — there are no recycles.",
+                "You win by clearing all 28 peak cards; stock and waste may keep cards."
+            ]
         }
     }
 
@@ -369,6 +394,30 @@ struct RulesAndScoringView: View {
             return [
                 ScoringRow(move: "Remove a pair", points: Scoring.delta(for: .removePyramidPair), note: nil),
                 ScoringRow(move: "Remove a King", points: Scoring.delta(for: .removePyramidKing), note: nil),
+                ScoringRow(
+                    move: "Win time bonus",
+                    points: Scoring.timedMaxBonusDrawThree,
+                    note: "Reduced by elapsed time."
+                )
+            ]
+        case .tripeaks:
+            return [
+                ScoringRow(
+                    move: "Discard onto the waste",
+                    points: Scoring.delta(for: .triPeaksChainDiscard(chainLength: 1)),
+                    note: "Each consecutive discard is worth one more: 1, 2, 3…"
+                ),
+                ScoringRow(
+                    move: "Flip a stock card",
+                    points: Scoring.delta(for: .triPeaksStockFlip),
+                    note: "Also resets the chain."
+                ),
+                ScoringRow(move: "Clear a peak", points: Scoring.delta(for: .triPeaksPeakClear), note: nil),
+                ScoringRow(
+                    move: "Clear the board",
+                    points: Scoring.delta(for: .triPeaksBoardClear),
+                    note: "Replaces the third peak's bonus."
+                ),
                 ScoringRow(
                     move: "Win time bonus",
                     points: Scoring.timedMaxBonusDrawThree,

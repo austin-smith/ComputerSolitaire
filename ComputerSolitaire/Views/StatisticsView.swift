@@ -25,6 +25,7 @@ struct StatisticsView: View {
         case yukon
         case spider
         case pyramid
+        case tripeaks
         case all
 
         var id: String { rawValue }
@@ -41,6 +42,8 @@ struct StatisticsView: View {
                 self = .spider
             case .pyramid:
                 self = .pyramid
+            case .tripeaks:
+                self = .tripeaks
             }
         }
 
@@ -57,6 +60,8 @@ struct StatisticsView: View {
                 return .spider
             case .pyramid:
                 return .pyramid
+            case .tripeaks:
+                return .tripeaks
             case .all:
                 return nil
             }
@@ -64,7 +69,7 @@ struct StatisticsView: View {
 
         var title: String {
             switch self {
-            case .klondike, .freecell, .yukon, .spider, .pyramid:
+            case .klondike, .freecell, .yukon, .spider, .pyramid, .tripeaks:
                 return variant?.title ?? ""
             case .all:
                 return "All"
@@ -273,7 +278,7 @@ struct StatisticsView: View {
                 HighScoreRow(label: "High Score (3-card)", score: stats.highScoreDrawThree),
                 HighScoreRow(label: "High Score (1-card)", score: stats.highScoreDrawOne)
             ]
-        case .freecell, .yukon, .pyramid:
+        case .freecell, .yukon, .pyramid, .tripeaks:
             return [HighScoreRow(label: "High Score", score: stats.highScore)]
         case .spider:
             return [
@@ -430,6 +435,8 @@ struct StatisticsView: View {
             return "Reset Spider statistics?"
         case .pyramid:
             return "Reset Pyramid statistics?"
+        case .tripeaks:
+            return "Reset TriPeaks statistics?"
         case .all:
             return "Reset all statistics?"
         }
@@ -447,6 +454,8 @@ struct StatisticsView: View {
             return "Reset Spider Statistics"
         case .pyramid:
             return "Reset Pyramid Statistics"
+        case .tripeaks:
+            return "Reset TriPeaks Statistics"
         case .all:
             return "Reset All Statistics"
         }
@@ -464,8 +473,10 @@ struct StatisticsView: View {
             return "This will reset only Spider games, times, win rates, and high scores."
         case .pyramid:
             return "This will reset only Pyramid games, times, win rates, and high scores."
+        case .tripeaks:
+            return "This will reset only TriPeaks games, times, win rates, and high scores."
         case .all:
-            return "This will reset Klondike, FreeCell, Yukon, Spider, and Pyramid statistics."
+            return "This will reset Klondike, FreeCell, Yukon, Spider, Pyramid, and TriPeaks statistics."
         }
     }
 

@@ -56,6 +56,10 @@ private extension AutoFinishPlanner {
             // Pyramid has no deterministic mop-up phase: which pair to remove
             // matters to the last move, so the game never auto-finishes.
             return false
+        case .tripeaks:
+            // TriPeaks has no deterministic mop-up phase either: play order
+            // matters to the last card, so the game never auto-finishes.
+            return false
         }
     }
 
@@ -152,7 +156,7 @@ private extension AutoFinishPlanner {
             }
             state.freeCells[slot] = nil
 
-        case .waste, .foundation, .pyramid:
+        case .waste, .foundation, .pyramid, .triPeaks:
             return false
         }
 

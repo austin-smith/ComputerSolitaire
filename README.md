@@ -13,7 +13,7 @@ Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 ## Features
 
 - Fully native apps for iOS, iPadOS, and macOS
-- Multiple game variants: **Klondike** (both 1-card and 3-card draw), **FreeCell**, **Yukon**, **Spider** (1, 2, or 4 suits), and **Pyramid**
+- Multiple game variants: **Klondike** (both 1-card and 3-card draw), **FreeCell**, **Yukon**, **Spider** (1, 2, or 4 suits), **Pyramid**, and **TriPeaks**
 - Automatic game persistence and resume
 - Customizable table appearance
 - Other things you enjoy
@@ -27,3 +27,4 @@ Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 | **Yukon** | Klondike's wilder sibling — no stock, and any face-up card moves with everything stacked on it | [Rules](docs/solitaire-rules-yukon.md) |
 | **Spider** | Two decks, ten piles — build full suit runs from King to Ace, with 1/2/4-suit difficulty | [Rules](docs/solitaire-rules-spider.md) |
 | **Pyramid** | Pair exposed cards totaling 13 to dismantle a 28-card pyramid | [Rules](docs/solitaire-rules-pyramid.md) |
+| **TriPeaks** | Chain uncovered cards one rank up or down to level three peaks | [Rules](docs/solitaire-rules-tripeaks.md) |

@@ -143,8 +143,8 @@ struct SavedGamePayload: Codable {
             switch state.variant {
             case .klondike:
                 return DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
-            case .pyramid:
-                // Pyramid always draws a single card to the waste.
+            case .pyramid, .tripeaks:
+                // Both always draw a single card to the waste.
                 return DrawMode.one.rawValue
             case .freecell, .yukon, .spider:
                 return DrawMode.three.rawValue
@@ -223,13 +223,13 @@ struct SavedGamePayload: Codable {
         )
     }
 
-    /// Klondike fans up to a draw's worth of waste cards; Pyramid shows a single
-    /// waste card; the stockless variants keep no waste at all.
+    /// Klondike fans up to a draw's worth of waste cards; Pyramid and TriPeaks
+    /// show a single waste card; the stockless variants keep no waste at all.
     private static func sanitizedWasteDrawCount(for state: GameState, stockDrawCount: Int) -> Int {
         switch state.variant {
         case .klondike:
             return min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
-        case .pyramid:
+        case .pyramid, .tripeaks:
             return min(max(0, state.wasteDrawCount), min(1, state.waste.count))
         case .freecell, .yukon, .spider:
             return 0
@@ -609,6 +609,7 @@ private extension GameState {
     var allCards: [Card] {
         stock + waste + freeCells.compactMap { $0 } + foundations.flatMap { $0 }
             + tableau.flatMap { $0 } + pyramid.compactMap { $0 } + discard
+            + triPeaks.compactMap { $0 }
     }
 
     var isValidForPersistence: Bool {
@@ -636,7 +637,7 @@ private extension GameState {
 
     private var expectedIdentityCounts: [CardIdentity: Int] {
         switch variant {
-        case .klondike, .freecell, .yukon, .pyramid:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks:
             var counts: [CardIdentity: Int] = [:]
             for suit in Suit.allCases {
                 for rank in Rank.allCases {
@@ -662,6 +663,8 @@ private extension GameState {
             return SpiderPersistenceRules.hasValidLayout(state: self)
         case .pyramid:
             return PyramidPersistenceRules.hasValidLayout(state: self)
+        case .tripeaks:
+            return TriPeaksPersistenceRules.hasValidLayout(state: self)
         }
     }
 }

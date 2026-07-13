@@ -484,6 +484,8 @@ final class SolitaireViewModel {
             configureSpiderNewGame()
         case .pyramid:
             configurePyramidNewGame()
+        case .tripeaks:
+            configureTriPeaksNewGame()
         }
     }
 
@@ -497,6 +499,8 @@ final class SolitaireViewModel {
             configureSpiderRedeal()
         case .pyramid:
             configurePyramidRedeal()
+        case .tripeaks:
+            configureTriPeaksRedeal()
         }
     }
 
@@ -511,6 +515,8 @@ final class SolitaireViewModel {
             return sanitizeWastelessRedealState(state)
         case .pyramid:
             return sanitizePyramidRedealState(state)
+        case .tripeaks:
+            return sanitizeTriPeaksRedealState(state)
         }
     }
 
@@ -548,7 +554,7 @@ final class SolitaireViewModel {
                 cardIndex: cardIndex,
                 card: card
             )
-        case .freecell, .pyramid:
+        case .freecell, .pyramid, .tripeaks:
             return false
         }
     }
@@ -595,8 +601,8 @@ final class SolitaireViewModel {
             return canSelectFreeCellTableauCards(cards)
         case .spider:
             return SharedGameRules.isDescendingSameSuitRun(cards)
-        case .pyramid:
-            // Pyramid has no tableau piles.
+        case .pyramid, .tripeaks:
+            // Pyramid and TriPeaks have no tableau piles.
             return false
         }
     }
@@ -605,7 +611,7 @@ final class SolitaireViewModel {
         switch state.variant {
         case .klondike:
             return scoringDrawCount
-        case .freecell, .yukon, .spider, .pyramid:
+        case .freecell, .yukon, .spider, .pyramid, .tripeaks:
             return 0
         }
     }
@@ -627,6 +633,8 @@ extension SolitaireViewModel {
             handleSpiderStockTap()
         case .pyramid:
             handlePyramidStockTap()
+        case .tripeaks:
+            handleTriPeaksStockTap()
         case .freecell, .yukon:
             break
         }
@@ -640,6 +648,9 @@ extension SolitaireViewModel {
             return !(state.stock.isEmpty && state.waste.isEmpty)
         case .pyramid:
             return !state.stock.isEmpty || PyramidGameRules.canRecycleWaste(in: state)
+        case .tripeaks:
+            // Single pass with no recycles: an empty stock is dead.
+            return !state.stock.isEmpty
         case .spider:
             // Spider's stock renders through its own view; recorded for honesty.
             return !state.stock.isEmpty
@@ -653,7 +664,7 @@ extension SolitaireViewModel {
         case .klondike:
             let count = min(state.wasteDrawCount, stockDrawCount)
             return Array(state.waste.suffix(count))
-        case .pyramid:
+        case .pyramid, .tripeaks:
             return Array(state.waste.suffix(min(1, state.wasteDrawCount)))
         case .freecell, .yukon, .spider:
             return []
@@ -662,6 +673,8 @@ extension SolitaireViewModel {
 
     func handleWasteTap() {
         guard state.variant.dealsFromStock else { return }
+        // The TriPeaks waste top is the match target, never a mover.
+        guard state.variant != .tripeaks else { return }
         guard let top = state.waste.last, state.wasteDrawCount > 0 else { return }
         HapticManager.shared.play(.cardPickUp)
 
@@ -687,6 +700,8 @@ extension SolitaireViewModel {
     @discardableResult
     func startDragFromWaste() -> Bool {
         guard state.variant.dealsFromStock else { return false }
+        // The TriPeaks waste top is the match target, never a mover.
+        guard state.variant != .tripeaks else { return false }
         guard let top = state.waste.last, state.wasteDrawCount > 0 else { return false }
         clearHint()
         selection = Selection(source: .waste, cards: [top])
@@ -711,6 +726,12 @@ extension SolitaireViewModel {
             var card = state.stock.removeLast()
             card.isFaceUp = true
             state.waste.append(card)
+        }
+        if state.variant == .tripeaks {
+            // A stock flip breaks the scoring chain. This lives here — not in
+            // the TriPeaks stock handler — so any draw path preserves the
+            // invariant; `TriPeaksPlanner.apply(.draw)` mirrors it.
+            state.triPeaksChainLength = 0
         }
         setWasteDrawCount(drawCount)
         incrementMovesCount()
@@ -810,6 +831,9 @@ extension SolitaireViewModel {
             return true
 
         case .pyramid, .waste, .discard:
+            if state.variant == .tripeaks {
+                return performTriPeaksMove(selection: selection, to: destination)
+            }
             return performPyramidMove(selection: selection, to: destination)
         }
     }
@@ -834,6 +858,8 @@ extension SolitaireViewModel {
             flipTopCardIfNeeded(in: pile)
         case .pyramid(let index):
             state.pyramid[index] = nil
+        case .triPeaks(let index):
+            state.triPeaks[index] = nil
         }
     }
 
@@ -841,7 +867,7 @@ extension SolitaireViewModel {
         switch state.variant {
         case .klondike, .yukon, .spider:
             flipFaceDownTopCardIfNeeded(in: pileIndex)
-        case .freecell, .pyramid:
+        case .freecell, .pyramid, .tripeaks:
             break
         }
     }
@@ -891,6 +917,10 @@ extension SolitaireViewModel {
             applySpiderMoveScore(for: source, destination: destination)
         case .pyramid:
             applyPyramidMoveScore(for: destination)
+        case .tripeaks:
+            // TriPeaks chain scoring reads the before/after states, so
+            // `performTriPeaksMove` applies it directly.
+            break
         }
     }
 

@@ -15,6 +15,7 @@ enum DragOrigin: Hashable {
     case freeCell(Int)
     case tableau(pile: Int, index: Int)
     case pyramid(Int)
+    case triPeaks(Int)
 }
 
 struct DropTargetGeometry: Equatable {

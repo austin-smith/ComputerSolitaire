@@ -11,6 +11,13 @@ enum ScoringAction {
     case spiderCompletedRun
     case removePyramidPair
     case removePyramidKing
+    /// The n-th consecutive TriPeaks discard in a chain scores n points.
+    case triPeaksChainDiscard(chainLength: Int)
+    case triPeaksPeakClear
+    /// Clearing the third peak always clears the whole board, so this bonus
+    /// replaces (not joins) the third `triPeaksPeakClear`.
+    case triPeaksBoardClear
+    case triPeaksStockFlip
 }
 
 enum Scoring {
@@ -43,6 +50,14 @@ enum Scoring {
             return 10
         case .removePyramidKing:
             return 5
+        case .triPeaksChainDiscard(let chainLength):
+            return max(0, chainLength)
+        case .triPeaksPeakClear:
+            return 15
+        case .triPeaksBoardClear:
+            return 30
+        case .triPeaksStockFlip:
+            return -5
         }
     }
 

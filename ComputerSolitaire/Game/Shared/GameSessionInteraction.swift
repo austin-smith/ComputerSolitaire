@@ -62,14 +62,24 @@ extension SolitaireViewModel {
                 return PyramidGameRules.canRemovePair(sourceIndex, index, in: state.pyramid)
             case .waste:
                 return PyramidGameRules.canRemovePairWithWasteTop(pyramidIndex: index, in: state)
-            case .foundation, .freeCell, .tableau:
+            case .foundation, .freeCell, .tableau, .triPeaks:
                 return false
             }
 
         case .waste:
-            guard state.variant == .pyramid else { return false }
-            guard case .pyramid(let sourceIndex) = selection.source else { return false }
-            return PyramidGameRules.canRemovePairWithWasteTop(pyramidIndex: sourceIndex, in: state)
+            switch state.variant {
+            case .pyramid:
+                guard case .pyramid(let sourceIndex) = selection.source else { return false }
+                return PyramidGameRules.canRemovePairWithWasteTop(
+                    pyramidIndex: sourceIndex,
+                    in: state
+                )
+            case .tripeaks:
+                guard case .triPeaks(let sourceIndex) = selection.source else { return false }
+                return TriPeaksGameRules.canPlay(index: sourceIndex, in: state)
+            case .klondike, .freecell, .yukon, .spider:
+                return false
+            }
 
         case .discard:
             guard state.variant == .pyramid else { return false }

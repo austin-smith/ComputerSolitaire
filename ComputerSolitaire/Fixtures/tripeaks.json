@@ -1,0 +1,579 @@
+{
+  "gameStartedAt" : 721692797,
+  "hasAppliedTimeBonus" : false,
+  "hasStartedTrackedGame" : false,
+  "hintRequestsInCurrentGame" : 0,
+  "history" : [
+
+  ],
+  "isCurrentGameFinalized" : false,
+  "movesCount" : 0,
+  "savedAt" : 721692800,
+  "schemaVersion" : 1,
+  "score" : 0,
+  "scoringDrawCount" : 1,
+  "state" : {
+    "discard" : [
+
+    ],
+    "foundations" : [
+      [
+
+      ],
+      [
+
+      ],
+      [
+
+      ],
+      [
+
+      ]
+    ],
+    "freeCells" : [
+      null,
+      null,
+      null,
+      null
+    ],
+    "pyramid" : [
+
+    ],
+    "stock" : [
+      {
+        "id" : "46444998-0C37-4CE8-9046-5319CA381712",
+        "isFaceUp" : false,
+        "rank" : 11,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "CFC157DB-6F2A-4622-B2C9-609654910960",
+        "isFaceUp" : false,
+        "rank" : 12,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "43331753-7583-4EB0-97B6-1D1E3AF5B5E5",
+        "isFaceUp" : false,
+        "rank" : 10,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "86872539-C441-45F0-8F63-B96CC5CA1738",
+        "isFaceUp" : false,
+        "rank" : 7,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "3878DB9B-5D6B-4D08-B3A2-C6B7C220C474",
+        "isFaceUp" : false,
+        "rank" : 13,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "678A1691-D6B2-4C05-AC34-2F728AD84E78",
+        "isFaceUp" : false,
+        "rank" : 8,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "ABA9229B-5ED5-4E9C-A64D-21D82060D953",
+        "isFaceUp" : false,
+        "rank" : 1,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "F7402D0D-B944-40D3-81C5-04249216F544",
+        "isFaceUp" : false,
+        "rank" : 5,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "85959F63-3DDD-4950-B0E9-37F8F756FB22",
+        "isFaceUp" : false,
+        "rank" : 7,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "824C7BE0-FC4A-4B9E-8C7B-AA9EB59EAA4C",
+        "isFaceUp" : false,
+        "rank" : 2,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "F3862E56-7C39-4F19-BB10-C90129EE7753",
+        "isFaceUp" : false,
+        "rank" : 9,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "11BAAEB7-BD59-4575-B037-3F3A4EAF0B52",
+        "isFaceUp" : false,
+        "rank" : 4,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "A9D5AE1E-CAB0-4AB3-9941-33C9DE1A142B",
+        "isFaceUp" : false,
+        "rank" : 3,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "FAC9261C-4724-4681-92A6-F299B1364B44",
+        "isFaceUp" : false,
+        "rank" : 2,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "D6157CE6-5FB7-43D1-AF68-5638FCFC10D6",
+        "isFaceUp" : false,
+        "rank" : 8,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "64EDE57D-6E90-472E-93FB-D81CD40D2D9A",
+        "isFaceUp" : false,
+        "rank" : 9,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "2E2CAFC7-5632-4C92-9B01-28F741A01504",
+        "isFaceUp" : false,
+        "rank" : 11,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "0CA80C04-9BC7-4D2D-A1F1-47D9D0ABF58E",
+        "isFaceUp" : false,
+        "rank" : 6,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "2E21C973-467A-4B22-8B3C-DB4F115F008D",
+        "isFaceUp" : false,
+        "rank" : 10,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "E7BF27DF-C127-498D-9C6E-E07C29CBDF05",
+        "isFaceUp" : false,
+        "rank" : 5,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "A8EA7196-6361-42BF-924A-FBC58DFCEB6F",
+        "isFaceUp" : false,
+        "rank" : 9,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "970D822D-7465-4599-99B1-194C1DFB7BF7",
+        "isFaceUp" : false,
+        "rank" : 13,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "C9B85FC3-2695-4891-A7F9-0422E041BD89",
+        "isFaceUp" : false,
+        "rank" : 8,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      }
+    ],
+    "tableau" : [
+
+    ],
+    "triPeaks" : [
+      {
+        "id" : "20A0891C-EB9A-44E5-8A4F-D2B8528D776A",
+        "isFaceUp" : false,
+        "rank" : 3,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "B4C983DB-99EA-493E-B375-BD6B6B4CA059",
+        "isFaceUp" : false,
+        "rank" : 13,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "BEF4C95A-BAE1-4A26-A246-217AFD1688C2",
+        "isFaceUp" : false,
+        "rank" : 6,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "3F876D9E-6AA2-497F-AB4F-D616CEBE1205",
+        "isFaceUp" : false,
+        "rank" : 10,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "B388CED6-E0CF-4EEE-97A2-E96890108C3B",
+        "isFaceUp" : false,
+        "rank" : 1,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "EB46D4EA-1440-4F2D-919A-5813AA4AFFA0",
+        "isFaceUp" : false,
+        "rank" : 2,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "BE145FCF-3B05-48D9-B27F-6CCDEFC28FD0",
+        "isFaceUp" : false,
+        "rank" : 1,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "1BCF8505-7747-4EBE-870C-7D5BF8269529",
+        "isFaceUp" : false,
+        "rank" : 4,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "6D243E91-481C-42B2-AB08-6477C09F206A",
+        "isFaceUp" : false,
+        "rank" : 6,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "C4B648AA-2E4B-44B1-81B1-C95B5C10F556",
+        "isFaceUp" : false,
+        "rank" : 3,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "361C6779-404A-4CE4-BB71-299864BEBDAE",
+        "isFaceUp" : false,
+        "rank" : 12,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "3EB55592-C543-4340-BE1D-7754601F6FC9",
+        "isFaceUp" : false,
+        "rank" : 5,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "C5AE5569-0EE9-429A-A902-7DF2B099BFA2",
+        "isFaceUp" : false,
+        "rank" : 3,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "1AB05C2D-5A45-40B0-AFC8-12BF511D455C",
+        "isFaceUp" : false,
+        "rank" : 11,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "1575141F-7C5B-4E26-92B9-5933675A0A31",
+        "isFaceUp" : false,
+        "rank" : 4,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "BE8F881F-8CDF-44F1-A973-DE0931FC701A",
+        "isFaceUp" : false,
+        "rank" : 7,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "9852BA0D-E28E-4AC6-98A7-25767FFEF177",
+        "isFaceUp" : false,
+        "rank" : 12,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "BFD78635-2BBB-407C-9EA1-DA2036FB99F2",
+        "isFaceUp" : false,
+        "rank" : 5,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "2515004F-400E-41B9-A6A8-C8C84A52DA66",
+        "isFaceUp" : true,
+        "rank" : 10,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      },
+      {
+        "id" : "88464E44-A96D-4FCA-AB4B-0938E148D786",
+        "isFaceUp" : true,
+        "rank" : 12,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "33D74A72-C368-410F-9543-3D26ED995CC3",
+        "isFaceUp" : true,
+        "rank" : 2,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "400BC501-5F0A-44FE-96E4-B60D893D1B95",
+        "isFaceUp" : true,
+        "rank" : 9,
+        "suit" : {
+          "hearts" : {
+
+          }
+        }
+      },
+      {
+        "id" : "95C345E7-C5EE-44C8-9A5B-F3C36C8A8B80",
+        "isFaceUp" : true,
+        "rank" : 8,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      },
+      {
+        "id" : "C8A4341D-585B-4517-815A-F24336487D48",
+        "isFaceUp" : true,
+        "rank" : 1,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "2AF79E5C-433F-47D0-8781-0BEE52FC61AC",
+        "isFaceUp" : true,
+        "rank" : 11,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "9EE6FB8F-0D62-40F3-B6F1-8DF5146C8965",
+        "isFaceUp" : true,
+        "rank" : 13,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "CB78112D-C325-4B68-AB0C-2FB577D07AAD",
+        "isFaceUp" : true,
+        "rank" : 4,
+        "suit" : {
+          "clubs" : {
+
+          }
+        }
+      },
+      {
+        "id" : "C6046CC0-5A73-4308-B90C-8DDEC3531371",
+        "isFaceUp" : true,
+        "rank" : 6,
+        "suit" : {
+          "diamonds" : {
+
+          }
+        }
+      }
+    ],
+    "triPeaksChainLength" : 0,
+    "variant" : "tripeaks",
+    "waste" : [
+      {
+        "id" : "D30DF373-B29B-443F-BD43-F4A73A9F85F4",
+        "isFaceUp" : true,
+        "rank" : 7,
+        "suit" : {
+          "spades" : {
+
+          }
+        }
+      }
+    ],
+    "wasteDrawCount" : 1,
+    "wasteRecyclesUsed" : 0
+  },
+  "stockDrawCount" : 1,
+  "undosUsedInCurrentGame" : 0,
+  "usedRedealInCurrentGame" : false
+}

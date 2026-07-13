@@ -21,8 +21,9 @@ enum GameRules {
             return YukonGameRules.canMoveToTableau(card: card, destinationPile: destinationPile)
         case .spider:
             return SpiderGameRules.canMoveToTableau(card: card, destinationPile: destinationPile)
-        case .pyramid:
-            // Pyramid has no tableau piles; its pair moves flow through PyramidGameRules.
+        case .pyramid, .tripeaks:
+            // Neither has tableau piles; their moves flow through
+            // PyramidGameRules and TriPeaksGameRules.
             return false
         }
     }

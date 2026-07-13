@@ -144,6 +144,27 @@ func seededDeal(variant: GameVariant, seed: UInt64, spiderSuitCount: SpiderSuitC
             pyramid: pyramid,
             discard: []
         )
+
+    case .tripeaks:
+        // Mirrors GameState.newTriPeaksGame (and GameStateFixtures.seededTriPeaksDeal).
+        var deck = seededDeck(seed: seed, faceUp: false)
+        var triPeaks: [Card?] = []
+        for index in 0..<TriPeaksGeometry.cardCount {
+            var card = deck.removeLast()
+            card.isFaceUp = TriPeaksGeometry.row(of: index) == TriPeaksGeometry.rowCount - 1
+            triPeaks.append(card)
+        }
+        var starter = deck.removeLast()
+        starter.isFaceUp = true
+        return GameState(
+            variant: .tripeaks,
+            stock: deck,
+            waste: [starter],
+            wasteDrawCount: 1,
+            foundations: Array(repeating: [], count: 4),
+            tableau: [],
+            triPeaks: triPeaks
+        )
     }
 }
 
@@ -183,6 +204,10 @@ func fingerprint(_ state: GameState) -> UInt64 {
     mix(0xFA)
     for card in state.discard { mix(card: card) }
     mix(UInt8(min(255, max(0, state.wasteRecyclesUsed))))
+    for slot in state.triPeaks {
+        mix(0xF9)
+        if let card = slot { mix(card: card) }
+    }
     return hash
 }
 
@@ -216,6 +241,16 @@ func pyramidStockTap(_ state: GameState) -> GameState? {
 
 func pyramidCleared(_ state: GameState) -> Int {
     state.pyramid.count(where: { $0 == nil })
+}
+
+/// Mirrors handleTriPeaksStockTap in the session: draw one, no recycles ever.
+/// The planner's apply is the same pure logic.
+func triPeaksStockTap(_ state: GameState) -> GameState? {
+    TriPeaksPlanner.apply(.draw, to: state)
+}
+
+func triPeaksCleared(_ state: GameState) -> Int {
+    state.triPeaks.count(where: { $0 == nil })
 }
 
 /// Mirrors drawFromStock / recycleWaste in the session.
@@ -252,14 +287,15 @@ enum Outcome {
 /// Yukon/FreeCell games finish or die well under this; Klondike needs headroom
 /// for stock cycling, and Spider for grooming 104 cards across five deals.
 /// (Pyramid is structurally bounded near 100 actions: three 24-card passes,
-/// two resets, and at most 26 removal moves.)
+/// two resets, and at most 26 removal moves. TriPeaks is bounded at 51: every
+/// action consumes a peak card or a stock card.)
 func actionCap(for variant: GameVariant) -> Int {
     switch variant {
     case .klondike:
         return 1_200
     case .spider:
         return 1_000
-    case .freecell, .yukon, .pyramid:
+    case .freecell, .yukon, .pyramid, .tripeaks:
         return 600
     }
 }
@@ -515,6 +551,56 @@ func playPyramidFollowingHints(seed: UInt64) -> Outcome {
     return .actionCap(foundation: pyramidCleared(state))
 }
 
+func playTriPeaksFollowingHints(seed: UInt64) -> Outcome {
+    // Replicates HintPlanner's TriPeaks path without its wall-clock deadline:
+    // follow each planned line — winning or max-clear — to its end, then replan;
+    // noProgress means not one more peak card is clearable. Every TriPeaks move
+    // consumes a card, so for this deterministic follower any revisit is a proven
+    // infinite loop. The loss column records peak cards cleared (TriPeaks banks
+    // no foundations).
+    var state = seededDeal(variant: .tripeaks, seed: seed)
+    var plan: [String: TriPeaksPlanner.Move] = [:]
+    var seen: Set<UInt64> = [fingerprint(state)]
+    var actions = 0
+    while actions < actionCap(for: .tripeaks) {
+        if state.isWon { return .win(moves: actions) }
+
+        let key = TriPeaksPlanner.stateKey(for: state)
+        var hint = plan[key].flatMap { TriPeaksPlanner.materialize($0, in: state) }
+        if hint == nil {
+            plan.removeAll()
+            switch TriPeaksPlanner.bestLine(in: state) {
+            case .winningLine(let line), .bestEffortLine(let line, _):
+                plan = TriPeaksPlanner.keyedMoves(along: line, from: state)
+            case .noProgress:
+                return .deadlock(foundation: triPeaksCleared(state))
+            }
+            hint = plan[key].flatMap { TriPeaksPlanner.materialize($0, in: state) }
+        }
+        guard let hint else {
+            return .deadlock(foundation: triPeaksCleared(state))
+        }
+
+        switch hint {
+        case .move(let move):
+            guard let next = apply(move.selection, move.destination, to: state, stockDrawCount: 1) else {
+                fatalError("Seed \(seed): illegal TriPeaks hint")
+            }
+            state = next
+        case .stockTap:
+            guard let next = triPeaksStockTap(state) else {
+                fatalError("Seed \(seed): TriPeaks stock tap with nothing to tap")
+            }
+            state = next
+        }
+        actions += 1
+        if !seen.insert(fingerprint(state)).inserted {
+            return .stalemateLoop(foundation: triPeaksCleared(state))
+        }
+    }
+    return .actionCap(foundation: triPeaksCleared(state))
+}
+
 // MARK: - Control player
 
 // The random-moves floor calibrates each variant's deal universe. Deliberately
@@ -535,9 +621,15 @@ func playRandom(
     // for them a revisit is a proven infinite loop.)
     var state = seededDeal(variant: variant, seed: seed, spiderSuitCount: spiderSuitCount)
     var generator = SeededRandomNumberGenerator(seed: seed ^ 0xDEADBEEF)
-    let lossProgress: (GameState) -> Int = variant == .pyramid
-        ? pyramidCleared
-        : foundationCount
+    let lossProgress: (GameState) -> Int
+    switch variant {
+    case .pyramid:
+        lossProgress = pyramidCleared
+    case .tripeaks:
+        lossProgress = triPeaksCleared
+    case .klondike, .freecell, .yukon, .spider:
+        lossProgress = foundationCount
+    }
     var actions = 0
     while actions < actionCap(for: variant) {
         if state.isWon { return .win(moves: actions) }
@@ -557,6 +649,8 @@ func playRandom(
             canTapStock = SpiderGameRules.canDealFromStock(state: state)
         case .pyramid:
             canTapStock = !state.stock.isEmpty || PyramidGameRules.canRecycleWaste(in: state)
+        case .tripeaks:
+            canTapStock = !state.stock.isEmpty
         case .freecell, .yukon:
             canTapStock = false
         }
@@ -571,6 +665,8 @@ func playRandom(
                 tapped = spiderStockDeal(state)
             case .pyramid:
                 tapped = pyramidStockTap(state)
+            case .tripeaks:
+                tapped = triPeaksStockTap(state)
             case .klondike, .freecell, .yukon:
                 tapped = stockTap(state, drawCount: drawCount)
             }
@@ -696,10 +792,21 @@ func run(
         label = "spider \(spiderSuitCount.rawValue)-suit"
     case .pyramid:
         label = "pyramid"
+    case .tripeaks:
+        label = "tripeaks"
     }
-    // Pyramid banks no foundations; its loss column records pyramid cards cleared.
-    let lossProgressLabel = variant == .pyramid ? "pyramid-cleared-at-loss" : "foundation-at-loss"
-    let tracksOverBanking = variant != .pyramid
+    // Pyramid and TriPeaks bank no foundations; their loss columns record
+    // board cards cleared.
+    let lossProgressLabel: String
+    switch variant {
+    case .pyramid:
+        lossProgressLabel = "pyramid-cleared-at-loss"
+    case .tripeaks:
+        lossProgressLabel = "tripeaks-cleared-at-loss"
+    case .klondike, .freecell, .yukon, .spider:
+        lossProgressLabel = "foundation-at-loss"
+    }
+    let tracksOverBanking = variant != .pyramid && variant != .tripeaks
 
     let start = DispatchTime.now()
     let followerResults = mapInParallel(
@@ -717,6 +824,8 @@ func run(
             return playSpiderFollowingHints(seed: seed, suitCount: spiderSuitCount)
         case .pyramid:
             return (playPyramidFollowingHints(seed: seed), 0)
+        case .tripeaks:
+            return (playTriPeaksFollowingHints(seed: seed), 0)
         }
     }
     let seconds = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1e9
@@ -780,7 +889,7 @@ setvbuf(stdout, nil, _IOLBF, 0)
 
 func exitWithUsage() -> Never {
     print(
-        "usage: run.sh <yukon|klondike|freecell|spider|pyramid|all> [deals >= 1] "
+        "usage: run.sh <yukon|klondike|freecell|spider|pyramid|tripeaks|all> [deals >= 1] "
             + "[klondike draw count: 1 or 3 | spider suit count: 1, 2, or 4]"
     )
     exit(1)
@@ -816,6 +925,8 @@ case "spider":
     }
 case "pyramid":
     run(variant: .pyramid, seeds: seeds, drawCount: 1)
+case "tripeaks":
+    run(variant: .tripeaks, seeds: seeds, drawCount: 1)
 case "all":
     run(variant: .yukon, seeds: seeds, drawCount: 3)
     run(variant: .klondike, seeds: seeds, drawCount: 1)
@@ -825,6 +936,7 @@ case "all":
         run(variant: .spider, seeds: seeds, drawCount: 3, spiderSuitCount: suitCount)
     }
     run(variant: .pyramid, seeds: seeds, drawCount: 1)
+    run(variant: .tripeaks, seeds: seeds, drawCount: 1)
 default:
     exitWithUsage()
 }

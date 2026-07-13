@@ -1,6 +1,11 @@
 import SwiftUI
 import Observation
 
+/// The stock and waste piles shared by every variant that deals from a stock:
+/// Klondike, Spider (stock only), Pyramid, and TriPeaks compose these into
+/// their top rows. Variant behavior stays in the view model (`handleStockTap`,
+/// `handleWasteTap`, `canInteractWithStock`, `visibleWasteCards`); these views
+/// only render and forward interaction.
 struct StockView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
@@ -73,6 +78,10 @@ struct WasteView: View {
     let cardSize: CGSize
     let fanSpacing: CGFloat
     var isTargeted: Bool = false
+    /// Whether tapping the waste does anything. TriPeaks turns this off — its
+    /// waste top is the match target, never a mover — so the pile neither
+    /// handles taps nor advertises itself to VoiceOver as a button.
+    var isTapEnabled: Bool = true
     let isHintTargeted: Bool
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
@@ -151,14 +160,18 @@ struct WasteView: View {
             }
         )
         .onTapGesture {
+            guard isTapEnabled else { return }
             viewModel.handleWasteTap()
         }
         .zIndex(isDragSource || isSelected ? 10 : 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Waste")
         .accessibilityValue(accessibleTopCard?.accessibilityName ?? "Empty")
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isTapEnabled ? .isButton : [])
         .accessibilityAddTraits(isAccessibleTopCardSelected ? .isSelected : [])
+        // Declared explicitly because the installed tap gesture would otherwise
+        // let assistive technologies infer interactivity even when disabled.
+        .accessibilityRespondsToUserInteraction(isTapEnabled)
         .accessibilityHidden(accessibleTopCard == nil)
     }
 }
