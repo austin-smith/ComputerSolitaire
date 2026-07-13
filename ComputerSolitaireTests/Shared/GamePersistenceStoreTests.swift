@@ -198,6 +198,43 @@ final class GamePersistenceStoreTests: XCTestCase {
         XCTAssertNil(GamePersistence.migrateLegacyRecordsIfNeeded(in: context))
     }
 
+    // The migrated current game's own qualifier steers its family's
+    // pooled-bucket split — stored settings can lag the payload, and the
+    // history must land in the bucket of the game that actually opens.
+    func testMigratedCurrentModeSteersLegacyKlondikeStatisticsSplit() throws {
+        let context = try makeInMemoryContext()
+        let suiteName = "test.migration.stats.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let state = GameStateFixtures.seededKlondikeDeal(seed: 7)
+        try insertLegacyRecord(
+            makePayload(state: state, movesCount: 5, stockDrawCount: DrawMode.one.rawValue),
+            in: context
+        )
+        let legacyStats = GameStatistics(
+            trackedSince: DateFixtures.reference,
+            gamesPlayed: 8,
+            gamesWon: 3
+        )
+        defaults.set(
+            try JSONEncoder().encode(legacyStats),
+            forKey: GameStatisticsStore.legacyKlondikeDefaultsKey
+        )
+
+        let migratedMode = GamePersistence.migrateLegacyRecordsIfNeeded(in: context)
+        // Mirrors hydration: stored settings (draw-three here) lose to the
+        // migrated game's own mode.
+        GameStatisticsStore.migrateLegacyKlondikeStatisticsIfNeeded(
+            activeDrawMode: migratedMode?.drawMode ?? .three,
+            userDefaults: defaults
+        )
+
+        XCTAssertEqual(migratedMode, .klondikeDrawOne)
+        XCTAssertEqual(GameStatisticsStore.load(for: .klondikeDrawOne, userDefaults: defaults).gamesPlayed, 8)
+        XCTAssertEqual(GameStatisticsStore.load(for: .klondikeDrawThree, userDefaults: defaults).gamesPlayed, 0)
+    }
+
     func testMigrationIsIdempotent() throws {
         let context = try makeInMemoryContext()
         try insertLegacyRecord(
@@ -286,11 +323,15 @@ final class GamePersistenceStoreTests: XCTestCase {
         return ModelContext(container)
     }
 
-    private func makePayload(state: GameState, movesCount: Int) -> SavedGamePayload {
+    private func makePayload(
+        state: GameState,
+        movesCount: Int,
+        stockDrawCount: Int = DrawMode.three.rawValue
+    ) -> SavedGamePayload {
         SavedGamePayload(
             state: state,
             movesCount: movesCount,
-            stockDrawCount: DrawMode.three.rawValue,
+            stockDrawCount: stockDrawCount,
             history: []
         )
     }

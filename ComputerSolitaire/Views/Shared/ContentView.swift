@@ -1557,8 +1557,16 @@ struct ContentView: View {
         }
 
         let migratedCurrentMode = GamePersistence.migrateLegacyRecordsIfNeeded(in: modelContext)
-        GameStatisticsStore.migrateLegacyKlondikeStatisticsIfNeeded(activeDrawMode: drawMode)
-        GameStatisticsStore.migrateLegacySpiderStatisticsIfNeeded(activeSuitCount: spiderSuitCount)
+        // The pooled-bucket splits assign history to the mode in active use.
+        // The migrated game's own qualifier is the freshest signal for its
+        // family (stored settings can lag the payload); the other family
+        // still splits by its stored setting.
+        GameStatisticsStore.migrateLegacyKlondikeStatisticsIfNeeded(
+            activeDrawMode: migratedCurrentMode?.drawMode ?? drawMode
+        )
+        GameStatisticsStore.migrateLegacySpiderStatisticsIfNeeded(
+            activeSuitCount: migratedCurrentMode?.spiderSuitCount ?? spiderSuitCount
+        )
 
         // The stored selection decides which game's slot the app opens into —
         // except right after upgrading, when the game migrated out of the
