@@ -1,7 +1,7 @@
 import SwiftUI
 import Observation
 
-struct SpiderTopRowView: View {
+struct ScorpionTopRowView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
     let columnSpacing: CGFloat
@@ -14,25 +14,27 @@ struct SpiderTopRowView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: columnSpacing) {
-            // Stock on the left like Klondike's, one clear column, then the
-            // eight banked-run piles aligned over tableau columns 3-10.
+            // Stock on the left like Spider's, two clear columns, then the
+            // four banked-run piles aligned over tableau columns 4-7.
             TableauStockView(
                 viewModel: viewModel,
                 cardSize: cardSize,
                 isHintTargeted: isStockHinted,
                 hintHighlightOpacity: hintHighlightOpacity,
                 hintWiggleToken: hintWiggleToken,
-                dealDescription: "Deals one card to each pile"
+                dealDescription: "Deals one card onto each of the first three piles"
             )
             .frame(width: cardSize.width, alignment: .leading)
 
-            Color.clear
-                .frame(width: cardSize.width, height: cardSize.height)
-                .accessibilityHidden(true)
+            ForEach(0..<2) { _ in
+                Color.clear
+                    .frame(width: cardSize.width, height: cardSize.height)
+                    .accessibilityHidden(true)
+            }
 
-            // Iterate the piles the state actually holds, not a fixed 0..<8:
+            // Iterate the piles the state actually holds, not a fixed 0..<4:
             // during a game switch this row can re-evaluate against the
-            // incoming variant's four-foundation state before the board
+            // incoming variant's eight-foundation state before the board
             // replaces it.
             ForEach(Array(viewModel.state.foundations.enumerated()), id: \.offset) { index, pile in
                 CompletedRunPileView(

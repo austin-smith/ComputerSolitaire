@@ -448,6 +448,18 @@ struct TopRowView: View {
                     hiddenCardIDs: hiddenCardIDs,
                     hintWiggleToken: hintWiggleToken
                 )
+            case .scorpion:
+                ScorpionTopRowView(
+                    viewModel: viewModel,
+                    cardSize: cardSize,
+                    columnSpacing: columnSpacing,
+                    isStockHinted: isStockHinted,
+                    hintHighlightOpacity: hintHighlightOpacity,
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
+                    hiddenCardIDs: hiddenCardIDs,
+                    hintWiggleToken: hintWiggleToken
+                )
             case .pyramid:
                 PyramidTopRowView(
                     viewModel: viewModel,
@@ -742,9 +754,11 @@ struct TableauPileView: View {
                     let isAccessibilityElement = (isValidRunOrigin || isExposedFaceDownCard)
                         && !isDragged
                         && !isHidden
-                    // Yukon groups need not be ordered; every other multi-card
-                    // pickup is a run.
-                    let multiCardNoun = viewModel.state.variant == .yukon ? "group" : "run"
+                    // Yukon and Scorpion groups need not be ordered; every
+                    // other multi-card pickup is a run.
+                    let isGroupMoveVariant = viewModel.state.variant == .yukon
+                        || viewModel.state.variant == .scorpion
+                    let multiCardNoun = isGroupMoveVariant ? "group" : "run"
                     let accessibilityHint = isExposedFaceDownCard
                         ? "Flip card"
                         : selectableCards.count > 1

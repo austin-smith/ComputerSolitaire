@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// One of Spider's eight banked-run piles. Runs arrive here automatically, so
-/// unlike `FoundationView` this pile is never a tap, drag, or drop target; it
-/// still publishes its frames so the win cascade can launch cards from it.
-/// The pile arrives by value — this view must stay renderable against any
-/// game's state, because during a game switch it can re-evaluate after the
-/// board's state has already changed variant.
-struct SpiderCompletedRunPileView: View {
+/// A banked-run pile for the variants that complete runs in place (Spider's
+/// eight, Scorpion's four). Runs arrive here automatically, so unlike
+/// `FoundationView` this pile is never a tap, drag, or drop target; it still
+/// publishes its frames so the win cascade can launch cards from it. The pile
+/// arrives by value — this view must stay renderable against any game's state,
+/// because during a game switch it can re-evaluate after the board's state has
+/// already changed variant.
+struct CompletedRunPileView: View {
     let pile: [Card]
     let index: Int
     let cardSize: CGSize

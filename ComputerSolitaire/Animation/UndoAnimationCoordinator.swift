@@ -3,7 +3,12 @@ import Foundation
 
 struct UndoAnimationItem: Identifiable {
     let id: UUID
+    /// The card as it should render at the current flight phase. Plans build
+    /// items with the pre-undo face; when the flight starts, the driver swaps
+    /// in `endFaceUp` so the card visibly flips in the air — the mirror of the
+    /// forward deal/draw flights — instead of snapping faces on landing.
     let card: Card
+    let endFaceUp: Bool
     let startFrame: CGRect
     let endFrame: CGRect
 }
@@ -27,11 +32,21 @@ enum UndoAnimationCoordinator {
         var targets: [UUID: UndoAnimationEndTarget] = [:]
         let cardIDs = context.cardIDs
 
+        func endFaceUp(_ id: UUID, fallback: Card) -> Bool {
+            (afterCards[id] ?? fallback).isFaceUp
+        }
+
         switch context.action {
         case .moveSelection:
             for id in cardIDs {
                 guard let card = beforeCards[id] ?? afterCards[id], let startFrame = cardFrames[id] else { continue }
-                items.append(UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame))
+                items.append(UndoAnimationItem(
+                    id: id,
+                    card: card,
+                    endFaceUp: endFaceUp(id, fallback: card),
+                    startFrame: startFrame,
+                    endFrame: startFrame
+                ))
                 targets[id] = .card(id)
             }
             return Plan(items: items, targets: targets, needsPostUndoFrames: true)
@@ -47,18 +62,33 @@ enum UndoAnimationCoordinator {
                 ) else {
                     continue
                 }
-                items.append(UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame))
+                items.append(UndoAnimationItem(
+                    id: id,
+                    card: card,
+                    endFaceUp: endFaceUp(id, fallback: card),
+                    startFrame: startFrame,
+                    endFrame: startFrame
+                ))
                 targets[id] = .stock(index)
             }
             return Plan(items: items, targets: targets, needsPostUndoFrames: false)
 
         case .recycleWaste:
+            // These cards sit face down on the stock when the flight begins,
+            // so the pre-undo face keeps the takeoff honest; they flip face up
+            // in the air on their way back to the waste.
             for (index, id) in cardIDs.enumerated() {
-                guard let card = afterCards[id] ?? beforeCards[id],
+                guard let card = beforeCards[id] ?? afterCards[id],
                       let startFrame = stockAnchorFrame(for: index, stockFrame: stockFrame) else {
                     continue
                 }
-                items.append(UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame))
+                items.append(UndoAnimationItem(
+                    id: id,
+                    card: card,
+                    endFaceUp: endFaceUp(id, fallback: card),
+                    startFrame: startFrame,
+                    endFrame: startFrame
+                ))
                 targets[id] = .card(id)
             }
             return Plan(items: items, targets: targets, needsPostUndoFrames: true)
@@ -70,7 +100,13 @@ enum UndoAnimationCoordinator {
             for (index, id) in cardIDs.enumerated() {
                 guard let card = beforeCards[id] ?? afterCards[id],
                       let startFrame = cardFrames[id] else { continue }
-                items.append(UndoAnimationItem(id: id, card: card, startFrame: startFrame, endFrame: startFrame))
+                items.append(UndoAnimationItem(
+                    id: id,
+                    card: card,
+                    endFaceUp: endFaceUp(id, fallback: card),
+                    startFrame: startFrame,
+                    endFrame: startFrame
+                ))
                 targets[id] = .stock(index)
             }
             return Plan(items: items, targets: targets, needsPostUndoFrames: false)

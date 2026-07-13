@@ -106,6 +106,9 @@ struct ContentView: View {
     @State private var drawAnimationCards: [DrawAnimationCard] = []
     @State private var drawingCardIDs: Set<UUID> = []
     @State private var drawAnimationToken = UUID()
+    @State private var dealAnimationCards: [DrawAnimationCard] = []
+    @State private var dealingCardIDs: Set<UUID> = []
+    @State private var dealAnimationToken = UUID()
     @State private var undoAnimationItems: [UndoAnimationItem] = []
     @State private var undoAnimationTargets: [UUID: UndoAnimationEndTarget] = [:]
     @State private var undoAnimationProgress: CGFloat = 0
@@ -719,6 +722,15 @@ struct ContentView: View {
             previousWasteCount = newValue
             previousStockCount = stockCount
         }
+        .onChange(of: viewModel.latestTableauDealEvent) { _, event in
+            // The tableau-deal variants send stock cards straight onto piles —
+            // no waste change for the draw animation to key on. The session
+            // publishes each deal as an explicit event (never set by restores,
+            // undos, or game switches), so a hydrated game whose last move was
+            // a deal can never replay the flight.
+            guard let event else { return }
+            startDealAnimation(for: event.dealtCardIDs)
+        }
         .animation(.spring(response: 0.35, dampingFraction: 0.86), value: viewModel.state)
         .animation(.easeInOut(duration: 0.12), value: activeTarget)
         .overlay {
@@ -726,6 +738,13 @@ struct ContentView: View {
                 ZStack {
                     DrawOverlayView(
                         cards: drawAnimationCards,
+                        cardSize: effectiveCardSize,
+                        isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts
+                    )
+                    .zIndex(50)
+                    DrawOverlayView(
+                        cards: dealAnimationCards,
                         cardSize: effectiveCardSize,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts
@@ -833,7 +852,9 @@ struct ContentView: View {
     }
 
     private var effectiveHiddenCardIDs: Set<UUID> {
-        hiddenCardIDs.union(winCelebration.hiddenFoundationCardIDs)
+        hiddenCardIDs
+            .union(winCelebration.hiddenFoundationCardIDs)
+            .union(dealingCardIDs)
     }
 
     private var isWinCascadeAnimating: Bool {
@@ -914,6 +935,9 @@ struct ContentView: View {
     private func startNewGameFromUI() {
         stopAutoFinish()
         winCelebration.reset(to: .idle)
+        // New Game replaces the board as thoroughly as a game switch: stale
+        // flights (deal, draw, undo) must not animate over the fresh deal.
+        resetTransientBoardState()
         isScreenshotSession = false
         viewModel.newGame()
         persistGameNow()
@@ -938,6 +962,8 @@ struct ContentView: View {
         guard viewModel.canRedeal else { return }
         stopAutoFinish()
         winCelebration.reset(to: .idle)
+        // Redeal replaces the board like New Game does; see above.
+        resetTransientBoardState()
         viewModel.redeal()
         persistGameNow()
     }
@@ -988,6 +1014,7 @@ struct ContentView: View {
         drawAnimationCards = []
         drawingCardIDs = []
         drawAnimationToken = UUID()
+        cancelDealAnimation()
         undoAnimationItems = []
         undoAnimationTargets = [:]
         undoAnimationProgress = 0
@@ -1278,6 +1305,67 @@ struct ContentView: View {
         }
     }
 
+    /// Flies a stock-onto-tableau deal (Spider, Scorpion). The session records
+    /// the dealt IDs in stock order and `removeLast()` deals, so the reversed
+    /// order is pile order — leftmost pile's card takes off first. The real
+    /// cards hide immediately (in the same update as the deal, so they never
+    /// pop in) while their landing frames publish; the overlay then flies.
+    private func startDealAnimation(for dealtCardIDs: [UUID]) {
+        // Deals serialize: a rapid follow-up supersedes any active flight.
+        // Clearing first is glitch-free — the superseded flight's cards are
+        // real-rendered the moment they unhide — and keeps a failed follow-up
+        // plan from stranding the prior overlay (its cleanup is token-gated).
+        cancelDealAnimation()
+        let lookup = cardLookup(in: viewModel.state)
+        let dealtCards = dealtCardIDs.reversed().compactMap { lookup[$0] }
+        guard !dealtCards.isEmpty, stockFrame != .zero else { return }
+
+        dealingCardIDs = Set(dealtCards.map(\.id))
+        let token = UUID()
+        dealAnimationToken = token
+        DispatchQueue.main.async {
+            resolveDealAnimation(for: dealtCards, token: token, attemptsRemaining: 24)
+        }
+    }
+
+    private func cancelDealAnimation() {
+        dealAnimationCards = []
+        dealingCardIDs = []
+        dealAnimationToken = UUID()
+    }
+
+    private func resolveDealAnimation(for dealtCards: [Card], token: UUID, attemptsRemaining: Int) {
+        guard dealAnimationToken == token else { return }
+        let framesReady = dealtCards.allSatisfy { cardFrames[$0.id] != nil }
+        if !framesReady, attemptsRemaining > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                resolveDealAnimation(for: dealtCards, token: token, attemptsRemaining: attemptsRemaining - 1)
+            }
+            return
+        }
+
+        guard let plan = DealAnimationCoordinator.makeDealPlan(
+            dealtCards: dealtCards,
+            cardFrames: cardFrames,
+            stockFrame: stockFrame
+        ) else {
+            cancelDealAnimation()
+            return
+        }
+
+        dealAnimationCards = plan.cards
+        // The plan drops cards without a landing frame (banked on arrival);
+        // trimming the hidden set to the flying cards un-hides those.
+        dealingCardIDs = plan.cardIDs
+
+        let total = plan.maxDelay + plan.travelDuration + plan.settleDuration
+        DispatchQueue.main.asyncAfter(deadline: .now() + total) {
+            guard dealAnimationToken == token else { return }
+            dealAnimationCards = []
+            dealingCardIDs = []
+        }
+    }
+
     private func destination(for target: DropTarget) -> Destination {
         switch target {
         case .freeCell(let index):
@@ -1327,6 +1415,9 @@ struct ContentView: View {
         guard !viewModel.isWin else { return }
         guard let snapshot = viewModel.peekUndoSnapshot() else { return }
         HapticManager.shared.play(.undoMove)
+        // Undo mutates the position a live deal flight refers to; land the
+        // flight before its reverse begins so the two never run concurrently.
+        cancelDealAnimation()
 
         let currentFrames = cardFrames
         let beforeState = viewModel.state
@@ -1433,7 +1524,13 @@ struct ContentView: View {
         let resolvedItems = undoAnimationItems.compactMap { item -> UndoAnimationItem? in
             guard let target = undoAnimationTargets[item.id],
                   let endFrame = resolveUndoTargetFrame(target) else { return nil }
-            return UndoAnimationItem(id: item.id, card: item.card, startFrame: item.startFrame, endFrame: endFrame)
+            return UndoAnimationItem(
+                id: item.id,
+                card: item.card,
+                endFaceUp: item.endFaceUp,
+                startFrame: item.startFrame,
+                endFrame: endFrame
+            )
         }
 
         let hasMovement = resolvedItems.contains { item in
@@ -1445,7 +1542,27 @@ struct ContentView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) {
                 undoAnimationProgress = 1
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+            // One turn later — once the overlay views exist with their takeoff
+            // faces — hand each card its post-undo face. CardView animates the
+            // change, so a card returning to the stock turns face down in the
+            // air instead of snapping on landing.
+            DispatchQueue.main.async {
+                guard isUndoAnimating else { return }
+                undoAnimationItems = undoAnimationItems.map { item in
+                    var flownCard = item.card
+                    flownCard.isFaceUp = item.endFaceUp
+                    return UndoAnimationItem(
+                        id: item.id,
+                        card: flownCard,
+                        endFaceUp: item.endFaceUp,
+                        startFrame: item.startFrame,
+                        endFrame: item.endFrame
+                    )
+                }
+            }
+            // Slightly past the flight spring AND the mid-air flip (which
+            // starts a turn late and runs 0.32s) so neither gets clipped.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
                 finishUndoAnimation()
             }
             return
@@ -1571,6 +1688,7 @@ struct ContentView: View {
                 UndoAnimationItem(
                     id: id,
                     card: card,
+                    endFaceUp: (afterCards[id] ?? card).isFaceUp,
                     startFrame: startFrame,
                     endFrame: startFrame
                 )
@@ -1719,7 +1837,7 @@ struct ContentView: View {
             return [viewModel.state.discard]
         case .tripeaks, .golf:
             return [viewModel.state.waste]
-        case .klondike, .freecell, .yukon, .spider:
+        case .klondike, .freecell, .yukon, .spider, .scorpion:
             return viewModel.state.foundations
         }
     }
@@ -1730,7 +1848,7 @@ struct ContentView: View {
             return [.discard]
         case .tripeaks, .golf:
             return [.waste]
-        case .klondike, .freecell, .yukon, .spider:
+        case .klondike, .freecell, .yukon, .spider, .scorpion:
             return viewModel.state.foundations.indices.map(DropTarget.foundation)
         }
     }

@@ -281,6 +281,8 @@ private extension AutoMoveAdvisor {
             return YukonAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .spider:
             return SpiderAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
+        case .scorpion:
+            return ScorpionAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .pyramid, .tripeaks, .golf:
             // Unreachable: Pyramid, TriPeaks, and Golf dispatch wholesale
             // before the tableau flow.
@@ -318,6 +320,12 @@ private extension AutoMoveAdvisor {
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
             )
+        case .scorpion:
+            return ScorpionAutoMoveAdvisor.allowsTableauTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
         case .pyramid, .tripeaks, .golf:
             // Unreachable: Pyramid, TriPeaks, and Golf dispatch wholesale
             // before the tableau flow.
@@ -347,6 +355,12 @@ private extension AutoMoveAdvisor {
             )
         case .spider:
             return SpiderAutoMoveAdvisor.isRedundantEmptyColumnTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
+        case .scorpion:
+            return ScorpionAutoMoveAdvisor.isRedundantEmptyColumnTransfer(
                 selection: selection,
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
@@ -388,6 +402,12 @@ private extension AutoMoveAdvisor {
                 in: state,
                 destinations: &destinations
             )
+        case .scorpion:
+            ScorpionAutoMoveAdvisor.appendAuxiliaryDestinations(
+                for: selection,
+                in: state,
+                destinations: &destinations
+            )
         case .pyramid, .tripeaks, .golf:
             // Unreachable: Pyramid, TriPeaks, and Golf dispatch wholesale
             // before the tableau flow.
@@ -405,6 +425,8 @@ private extension AutoMoveAdvisor {
             YukonAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .spider:
             SpiderAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
+        case .scorpion:
+            ScorpionAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .pyramid, .tripeaks, .golf:
             // Unreachable: Pyramid, TriPeaks, and Golf dispatch wholesale
             // before the tableau flow.
@@ -412,14 +434,16 @@ private extension AutoMoveAdvisor {
         }
     }
 
-    /// Effects a landing triggers on the destination pile. Spider banks any
-    /// run the landing completed; the other variants have none.
+    /// Effects a landing triggers on the destination pile. Spider and Scorpion
+    /// bank any run the landing completed; the other variants have none.
     static func applyVariantTableauDestinationEffects(on state: inout GameState, pileIndex: Int) {
         switch state.variant {
         case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf:
             break
         case .spider:
             SpiderAutoMoveAdvisor.applyTableauDestinationEffects(on: &state, pileIndex: pileIndex)
+        case .scorpion:
+            ScorpionAutoMoveAdvisor.applyTableauDestinationEffects(on: &state, pileIndex: pileIndex)
         }
     }
 }

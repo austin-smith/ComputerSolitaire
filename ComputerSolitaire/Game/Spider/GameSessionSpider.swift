@@ -37,6 +37,7 @@ extension SolitaireViewModel {
             )
         )
         let completedRunCount = SpiderGameRules.dealStockRow(in: &state) ?? 0
+        publishTableauDealEvent(dealtCardIDs: dealtCardIDs)
         incrementMovesCount()
         applyScore(.spiderMove)
         applyCompletedSpiderRunEffects(count: completedRunCount)
