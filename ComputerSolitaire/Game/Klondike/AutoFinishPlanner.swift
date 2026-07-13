@@ -52,6 +52,10 @@ private extension AutoFinishPlanner {
             // Spider banks completed runs automatically; there is never a
             // foundation run left for auto-finish to play.
             return false
+        case .pyramid:
+            // Pyramid has no deterministic mop-up phase: which pair to remove
+            // matters to the last move, so the game never auto-finishes.
+            return false
         }
     }
 
@@ -148,7 +152,7 @@ private extension AutoFinishPlanner {
             }
             state.freeCells[slot] = nil
 
-        case .waste, .foundation:
+        case .waste, .foundation, .pyramid:
             return false
         }
 

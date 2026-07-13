@@ -4,6 +4,9 @@ enum DropTarget: Hashable {
     case foundation(Int)
     case tableau(Int)
     case freeCell(Int)
+    case pyramid(Int)
+    case waste
+    case discard
 }
 
 enum DragOrigin: Hashable {
@@ -11,6 +14,7 @@ enum DragOrigin: Hashable {
     case foundation(Int)
     case freeCell(Int)
     case tableau(pile: Int, index: Int)
+    case pyramid(Int)
 }
 
 struct DropTargetGeometry: Equatable {
@@ -30,6 +34,12 @@ enum DropTargetHitArea {
     static let tableauHorizontalGrace: CGFloat = 24
     static let tableauTopGrace: CGFloat = 20
     static let tableauBottomGrace: CGFloat = 24
+
+    // Pyramid slots overlap their neighbors, so their grace stays small to keep
+    // adjacent cards distinguishable as targets.
+    static let pyramidHorizontalGrace: CGFloat = 8
+    static let pyramidTopGrace: CGFloat = 8
+    static let pyramidBottomGrace: CGFloat = 8
 }
 
 extension CGRect {

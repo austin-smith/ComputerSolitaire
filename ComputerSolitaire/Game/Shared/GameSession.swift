@@ -462,17 +462,6 @@ final class SolitaireViewModel {
         score = Scoring.clamped(initialScore)
     }
 
-    func handleStockTap() {
-        switch state.variant {
-        case .klondike:
-            handleKlondikeStockTap()
-        case .freecell, .yukon:
-            break
-        case .spider:
-            handleSpiderStockTap()
-        }
-    }
-
     func setScoringDrawCount(_ count: Int) {
         scoringDrawCount = count
     }
@@ -493,6 +482,8 @@ final class SolitaireViewModel {
             configureWastelessNewGame()
         case .spider:
             configureSpiderNewGame()
+        case .pyramid:
+            configurePyramidNewGame()
         }
     }
 
@@ -504,6 +495,8 @@ final class SolitaireViewModel {
             configureWastelessRedeal()
         case .spider:
             configureSpiderRedeal()
+        case .pyramid:
+            configurePyramidRedeal()
         }
     }
 
@@ -516,6 +509,8 @@ final class SolitaireViewModel {
             return sanitizeKlondikeRedealState(state, stockDrawCount: stockDrawCount)
         case .freecell, .yukon, .spider:
             return sanitizeWastelessRedealState(state)
+        case .pyramid:
+            return sanitizePyramidRedealState(state)
         }
     }
 
@@ -553,7 +548,7 @@ final class SolitaireViewModel {
                 cardIndex: cardIndex,
                 card: card
             )
-        case .freecell:
+        case .freecell, .pyramid:
             return false
         }
     }
@@ -600,6 +595,9 @@ final class SolitaireViewModel {
             return canSelectFreeCellTableauCards(cards)
         case .spider:
             return SharedGameRules.isDescendingSameSuitRun(cards)
+        case .pyramid:
+            // Pyramid has no tableau piles.
+            return false
         }
     }
 
@@ -607,7 +605,7 @@ final class SolitaireViewModel {
         switch state.variant {
         case .klondike:
             return scoringDrawCount
-        case .freecell, .yukon, .spider:
+        case .freecell, .yukon, .spider, .pyramid:
             return 0
         }
     }
@@ -615,6 +613,110 @@ final class SolitaireViewModel {
     func refreshAutoFinishAvailability() {
         isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: state)
         isHintAvailable = !isWin && HintAdvisor.anyPlayerMoveExists(in: state)
+    }
+}
+
+// MARK: - Stock & waste (variants that deal from a stock)
+
+extension SolitaireViewModel {
+    func handleStockTap() {
+        switch state.variant {
+        case .klondike:
+            handleKlondikeStockTap()
+        case .spider:
+            handleSpiderStockTap()
+        case .pyramid:
+            handlePyramidStockTap()
+        case .freecell, .yukon:
+            break
+        }
+    }
+
+    /// Whether tapping the stock slot can still do anything: draw, or recycle the
+    /// waste (Pyramid stops recycling once its passes are spent).
+    var canInteractWithStock: Bool {
+        switch state.variant {
+        case .klondike:
+            return !(state.stock.isEmpty && state.waste.isEmpty)
+        case .pyramid:
+            return !state.stock.isEmpty || PyramidGameRules.canRecycleWaste(in: state)
+        case .spider:
+            // Spider's stock renders through its own view; recorded for honesty.
+            return !state.stock.isEmpty
+        case .freecell, .yukon:
+            return false
+        }
+    }
+
+    func visibleWasteCards() -> [Card] {
+        switch state.variant {
+        case .klondike:
+            let count = min(state.wasteDrawCount, stockDrawCount)
+            return Array(state.waste.suffix(count))
+        case .pyramid:
+            return Array(state.waste.suffix(min(1, state.wasteDrawCount)))
+        case .freecell, .yukon, .spider:
+            return []
+        }
+    }
+
+    func handleWasteTap() {
+        guard state.variant.dealsFromStock else { return }
+        guard let top = state.waste.last, state.wasteDrawCount > 0 else { return }
+        HapticManager.shared.play(.cardPickUp)
+
+        // An active selection pairing with the waste top wins over auto-moving
+        // the waste card, so tap-select-then-tap-waste removes the pair the
+        // player chose (Pyramid; no selection can land on the waste elsewhere).
+        if selection != nil, tryMoveSelection(to: .waste) {
+            return
+        }
+
+        let wasteSelection = Selection(source: .waste, cards: [top])
+        if queueBestAutoMove(for: wasteSelection) {
+            return
+        }
+        if selection?.source == .waste {
+            selection = nil
+            return
+        }
+        isDragging = false
+        selection = wasteSelection
+    }
+
+    @discardableResult
+    func startDragFromWaste() -> Bool {
+        guard state.variant.dealsFromStock else { return false }
+        guard let top = state.waste.last, state.wasteDrawCount > 0 else { return false }
+        clearHint()
+        selection = Selection(source: .waste, cards: [top])
+        isDragging = true
+        return true
+    }
+
+    func drawFromStock() {
+        guard !state.stock.isEmpty else { return }
+        clearHint()
+        let drawCount = min(stockDrawCount, state.stock.count)
+        let drawnCardIDs = (0..<drawCount).map { offset in
+            state.stock[state.stock.count - 1 - offset].id
+        }
+        pushHistory(
+            undoContext: UndoAnimationContext(
+                action: .drawFromStock,
+                cardIDs: drawnCardIDs
+            )
+        )
+        for _ in 0..<drawCount {
+            var card = state.stock.removeLast()
+            card.isFaceUp = true
+            state.waste.append(card)
+        }
+        setWasteDrawCount(drawCount)
+        incrementMovesCount()
+        SoundManager.shared.play(.cardDrawFromStock)
+        HapticManager.shared.play(.stockDraw)
+        refreshAutoFinishAvailability()
     }
 }
 
@@ -706,6 +808,9 @@ extension SolitaireViewModel {
             SoundManager.shared.play(.cardPlaced)
             refreshAutoFinishAvailability()
             return true
+
+        case .pyramid, .waste, .discard:
+            return performPyramidMove(selection: selection, to: destination)
         }
     }
 
@@ -727,6 +832,8 @@ extension SolitaireViewModel {
             cards.removeSubrange(index..<cards.count)
             state.tableau[pile] = cards
             flipTopCardIfNeeded(in: pile)
+        case .pyramid(let index):
+            state.pyramid[index] = nil
         }
     }
 
@@ -734,7 +841,7 @@ extension SolitaireViewModel {
         switch state.variant {
         case .klondike, .yukon, .spider:
             flipFaceDownTopCardIfNeeded(in: pileIndex)
-        case .freecell:
+        case .freecell, .pyramid:
             break
         }
     }
@@ -782,6 +889,8 @@ extension SolitaireViewModel {
             applyYukonMoveScore(for: source, destination: destination)
         case .spider:
             applySpiderMoveScore(for: source, destination: destination)
+        case .pyramid:
+            applyPyramidMoveScore(for: destination)
         }
     }
 

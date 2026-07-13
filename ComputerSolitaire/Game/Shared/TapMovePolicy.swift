@@ -101,6 +101,9 @@ private extension TapMovePolicy {
             case .spider:
                 // Unreachable: Spider foundations are never player destinations.
                 tier = 100
+            case .pyramid:
+                // Unreachable: Pyramid moves never target a foundation.
+                tier = 0
             }
             return Priority(tier: tier, buildLength: 0, pileOrder: -index)
 
@@ -132,6 +135,18 @@ private extension TapMovePolicy {
 
         case .freeCell(let index):
             return Priority(tier: 20, buildLength: 0, pileOrder: -index)
+
+        case .discard:
+            // Removing a King is always pure progress.
+            return Priority(tier: 100, buildLength: 0, pileOrder: 0)
+
+        case .pyramid(let index):
+            // A pyramid pair removes two board cards, a waste pair only one; ties
+            // break on the lowest partner slot for determinism.
+            return Priority(tier: 80, buildLength: 0, pileOrder: -index)
+
+        case .waste:
+            return Priority(tier: 60, buildLength: 0, pileOrder: 0)
         }
     }
 

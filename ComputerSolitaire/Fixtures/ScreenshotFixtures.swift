@@ -32,7 +32,8 @@ enum ScreenshotFixtures {
         ScreenshotFixture(name: "klondike-draw3", title: "Klondike – Draw 3"),
         ScreenshotFixture(name: "freecell", title: "FreeCell – fresh deal"),
         ScreenshotFixture(name: "yukon", title: "Yukon – fresh deal"),
-        ScreenshotFixture(name: "spider", title: "Spider – 2 suits")
+        ScreenshotFixture(name: "spider", title: "Spider – 2 suits"),
+        ScreenshotFixture(name: "pyramid", title: "Pyramid – fresh deal")
     ]
 
     static func payloadFromLaunchArguments() -> SavedGamePayload? {

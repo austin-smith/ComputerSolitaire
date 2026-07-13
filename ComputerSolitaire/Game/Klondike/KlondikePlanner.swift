@@ -177,6 +177,9 @@ private extension KlondikePlanner {
                    !nextState.tableau[pile][topIndex].isFaceUp {
                     nextState.tableau[pile][topIndex].isFaceUp = true
                 }
+            case .pyramid:
+                // Unreachable: this planner only searches Klondike states.
+                return nil
             }
             switch destination {
             case .foundation(let index):
@@ -187,6 +190,9 @@ private extension KlondikePlanner {
             case .freeCell(let index):
                 guard selection.cards.count == 1, let card = selection.cards.first else { return nil }
                 nextState.freeCells[index] = card
+            case .pyramid, .waste, .discard:
+                // Unreachable: this planner only searches Klondike states.
+                return nil
             }
             return nextState
         case .stockTap:

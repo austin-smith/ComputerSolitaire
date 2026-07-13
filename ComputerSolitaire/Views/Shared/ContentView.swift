@@ -346,6 +346,10 @@ struct ContentView: View {
             .onChange(of: gameVariantRawValue) { _, newValue in
                 guard hasLoadedGame, !isHydratingGame else { return }
                 let variant = GameVariant(rawValue: newValue) ?? .klondike
+                // Restoring a game whose variant differs from the stored setting
+                // syncs the setting to the game; that write lands here after
+                // hydration ends and must not re-deal over the restored board.
+                guard variant != viewModel.gameVariant else { return }
                 stopAutoFinish()
                 winCelebration.reset(to: .idle)
                 isScreenshotSession = false
@@ -364,6 +368,11 @@ struct ContentView: View {
                 // deck, so it always starts a new game (as variant changes do).
                 guard viewModel.gameVariant == .spider else { return }
                 let suitCount = SpiderSuitCount(rawValue: newValue) ?? .two
+                // Restoring a game whose suit count differs from the stored
+                // setting syncs the setting to the game; that write lands here
+                // after hydration ends and must not re-deal over the restored
+                // board.
+                guard suitCount != viewModel.state.spiderSuitCount else { return }
                 stopAutoFinish()
                 winCelebration.reset(to: .idle)
                 isScreenshotSession = false
@@ -503,24 +512,43 @@ struct ContentView: View {
                         dragGesture: dragGesture(for:)
                     )
                     .frame(width: boardContentWidth, alignment: .leading)
-                    TableauRowView(
-                        viewModel: viewModel,
-                        cardSize: cardSize,
-                        columnSpacing: metrics.columnSpacing,
-                        faceDownOffset: metrics.tableauFaceDownOffset,
-                        faceUpOffset: metrics.tableauFaceUpOffset,
-                        maxPileHeight: metrics.tableauMaxHeight,
-                        activeTarget: activeTarget,
-                        hintedTarget: hintedTarget,
-                        hintHighlightOpacity: hintHighlightOpacity,
-                        isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts,
-                        hiddenCardIDs: effectiveHiddenCardIDs,
-                        hintedCardIDs: viewModel.hintedCardIDs,
-                        hintWiggleToken: viewModel.hintWiggleToken,
-                        dragGesture: dragGesture(for:)
-                    )
-                    .frame(width: boardContentWidth, alignment: .leading)
+                    if viewModel.gameVariant == .pyramid {
+                        PyramidBoardView(
+                            viewModel: viewModel,
+                            cardSize: cardSize,
+                            columnSpacing: metrics.columnSpacing,
+                            maxBoardHeight: metrics.tableauMaxHeight,
+                            activeTarget: activeTarget,
+                            hintedTarget: hintedTarget,
+                            hintHighlightOpacity: hintHighlightOpacity,
+                            isCardTiltEnabled: isCardTiltEnabled,
+                            cardTilts: $cardTilts,
+                            hiddenCardIDs: effectiveHiddenCardIDs,
+                            hintedCardIDs: viewModel.hintedCardIDs,
+                            hintWiggleToken: viewModel.hintWiggleToken,
+                            dragGesture: dragGesture(for:)
+                        )
+                        .frame(width: boardContentWidth, alignment: .leading)
+                    } else {
+                        TableauRowView(
+                            viewModel: viewModel,
+                            cardSize: cardSize,
+                            columnSpacing: metrics.columnSpacing,
+                            faceDownOffset: metrics.tableauFaceDownOffset,
+                            faceUpOffset: metrics.tableauFaceUpOffset,
+                            maxPileHeight: metrics.tableauMaxHeight,
+                            activeTarget: activeTarget,
+                            hintedTarget: hintedTarget,
+                            hintHighlightOpacity: hintHighlightOpacity,
+                            isCardTiltEnabled: isCardTiltEnabled,
+                            cardTilts: $cardTilts,
+                            hiddenCardIDs: effectiveHiddenCardIDs,
+                            hintedCardIDs: viewModel.hintedCardIDs,
+                            hintWiggleToken: viewModel.hintWiggleToken,
+                            dragGesture: dragGesture(for:)
+                        )
+                        .frame(width: boardContentWidth, alignment: .leading)
+                    }
                     Spacer(minLength: 0)
                 }
                 .allowsHitTesting(!isWinCascadeAnimating)
@@ -580,7 +608,8 @@ struct ContentView: View {
             guard !isHydratingGame else { return }
             if isWin {
                 winCelebration.beginIfNeededForWin(
-                    foundations: viewModel.state.foundations,
+                    launchPiles: winCascadeLaunchPiles,
+                    launchTargets: winCascadeLaunchTargets,
                     dropFrames: dropFrames,
                     boardViewportSize: boardViewportSize
                 )
@@ -880,6 +909,8 @@ struct ContentView: View {
             started = viewModel.startDragFromFreeCell(index: index)
         case .tableau(let pile, let index):
             started = viewModel.startDragFromTableau(pileIndex: pile, cardIndex: index)
+        case .pyramid(let index):
+            started = viewModel.startDragFromPyramid(index: index)
         }
 
         if started, let firstCard = viewModel.selection?.cards.first {
@@ -1070,6 +1101,12 @@ struct ContentView: View {
             return .foundation(index)
         case .tableau(let index):
             return .tableau(index)
+        case .pyramid(let index):
+            return .pyramid(index)
+        case .waste:
+            return .waste
+        case .discard:
+            return .discard
         }
     }
 
@@ -1081,6 +1118,12 @@ struct ContentView: View {
             return .foundation(index)
         case .tableau(let index):
             return .tableau(index)
+        case .pyramid(let index):
+            return .pyramid(index)
+        case .waste:
+            return .waste
+        case .discard:
+            return .discard
         }
     }
 
@@ -1253,6 +1296,8 @@ struct ContentView: View {
         for pile in state.tableau {
             for card in pile { lookup[card.id] = card }
         }
+        for card in state.pyramid.compactMap({ $0 }) { lookup[card.id] = card }
+        for card in state.discard { lookup[card.id] = card }
         return lookup
     }
 
@@ -1262,6 +1307,8 @@ struct ContentView: View {
         case freeCell(Int)
         case foundation(pile: Int, index: Int)
         case tableau(pile: Int, index: Int)
+        case pyramid(Int)
+        case discard(Int)
     }
 
     private func cardLocations(in state: GameState) -> [UUID: CardLocation] {
@@ -1287,6 +1334,14 @@ struct ContentView: View {
             for (index, card) in cards.enumerated() {
                 locations[card.id] = .tableau(pile: pile, index: index)
             }
+        }
+        for (index, card) in state.pyramid.enumerated() {
+            if let card {
+                locations[card.id] = .pyramid(index)
+            }
+        }
+        for (index, card) in state.discard.enumerated() {
+            locations[card.id] = .discard(index)
         }
 
         return locations
@@ -1391,7 +1446,8 @@ struct ContentView: View {
             persistGameNow()
         }
         winCelebration.syncForLoadedGame(
-            foundations: viewModel.state.foundations,
+            launchPiles: winCascadeLaunchPiles,
+            launchTargets: winCascadeLaunchTargets,
             isWin: viewModel.isWin,
             dropFrames: dropFrames,
             boardViewportSize: boardViewportSize
@@ -1428,11 +1484,26 @@ struct ContentView: View {
         guard winCelebration.phase == .completed else { return }
         guard winCelebration.cards.isEmpty else { return }
         winCelebration.syncForLoadedGame(
-            foundations: viewModel.state.foundations,
+            launchPiles: winCascadeLaunchPiles,
+            launchTargets: winCascadeLaunchTargets,
             isWin: true,
             dropFrames: dropFrames,
             boardViewportSize: boardViewportSize
         )
+    }
+
+    /// The cascade erupts from the foundations, except in Pyramid where every
+    /// removed card lives on the discard.
+    private var winCascadeLaunchPiles: [[Card]] {
+        viewModel.gameVariant == .pyramid
+            ? [viewModel.state.discard]
+            : viewModel.state.foundations
+    }
+
+    private var winCascadeLaunchTargets: [DropTarget] {
+        viewModel.gameVariant == .pyramid
+            ? [.discard]
+            : viewModel.state.foundations.indices.map(DropTarget.foundation)
     }
 
     private func syncLifecyclePauseState() {

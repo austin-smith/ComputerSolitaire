@@ -54,6 +54,26 @@ extension SolitaireViewModel {
             guard state.freeCells.indices.contains(index) else { return false }
             guard selection.cards.count == 1 else { return false }
             return GameRules.canMoveToFreeCell(destination: state.freeCells[index])
+
+        case .pyramid(let index):
+            guard state.variant == .pyramid else { return false }
+            switch selection.source {
+            case .pyramid(let sourceIndex):
+                return PyramidGameRules.canRemovePair(sourceIndex, index, in: state.pyramid)
+            case .waste:
+                return PyramidGameRules.canRemovePairWithWasteTop(pyramidIndex: index, in: state)
+            case .foundation, .freeCell, .tableau:
+                return false
+            }
+
+        case .waste:
+            guard state.variant == .pyramid else { return false }
+            guard case .pyramid(let sourceIndex) = selection.source else { return false }
+            return PyramidGameRules.canRemovePairWithWasteTop(pyramidIndex: sourceIndex, in: state)
+
+        case .discard:
+            guard state.variant == .pyramid else { return false }
+            return PyramidGameRules.canRemoveKing(selection: selection, in: state)
         }
     }
 }

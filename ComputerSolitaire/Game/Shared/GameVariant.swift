@@ -5,6 +5,7 @@ enum GameVariant: String, CaseIterable, Codable {
     case freecell
     case yukon
     case spider
+    case pyramid
 
     var title: String {
         switch self {
@@ -16,6 +17,8 @@ enum GameVariant: String, CaseIterable, Codable {
             return "Yukon"
         case .spider:
             return "Spider"
+        case .pyramid:
+            return "Pyramid"
         }
     }
 
@@ -29,12 +32,14 @@ enum GameVariant: String, CaseIterable, Codable {
             return "Move any face-up stack"
         case .spider:
             return "Build full suit runs"
+        case .pyramid:
+            return "Pair cards that total 13"
         }
     }
 
     var boardColumnCount: Int {
         switch self {
-        case .klondike, .yukon:
+        case .klondike, .yukon, .pyramid:
             return 7
         case .freecell:
             return 8
@@ -47,12 +52,21 @@ enum GameVariant: String, CaseIterable, Codable {
     /// face-down top flips it).
     var dealsFaceDownTableauCards: Bool {
         switch self {
-        case .klondike, .yukon:
+        case .klondike, .yukon, .spider:
             return true
-        case .freecell:
+        case .freecell, .pyramid:
             return false
-        case .spider:
+        }
+    }
+
+    /// Whether the variant deals from a stock into a waste pile. Spider has a
+    /// stock but deals it onto the tableau, never into a waste.
+    var dealsFromStock: Bool {
+        switch self {
+        case .klondike, .pyramid:
             return true
+        case .freecell, .yukon, .spider:
+            return false
         }
     }
 
@@ -61,7 +75,7 @@ enum GameVariant: String, CaseIterable, Codable {
     /// build one foundation per suit.
     var foundationPileCount: Int {
         switch self {
-        case .klondike, .freecell, .yukon:
+        case .klondike, .freecell, .yukon, .pyramid:
             return 4
         case .spider:
             return 8
@@ -71,7 +85,7 @@ enum GameVariant: String, CaseIterable, Codable {
     /// How many cards a deal uses. Spider plays with two decks.
     var deckCardCount: Int {
         switch self {
-        case .klondike, .freecell, .yukon:
+        case .klondike, .freecell, .yukon, .pyramid:
             return 52
         case .spider:
             return 104
@@ -79,13 +93,14 @@ enum GameVariant: String, CaseIterable, Codable {
     }
 
     /// Whether the player builds foundations by moving cards onto them.
-    /// Spider's completed runs move to a foundation automatically, so its
-    /// foundations are never a drag, drop, or tap target.
+    /// Spider's completed runs move to a foundation automatically, and
+    /// Pyramid's foundations stay empty (removed pairs go to its discard),
+    /// so neither treats foundations as a drag, drop, or tap target.
     var playerBuildsFoundations: Bool {
         switch self {
         case .klondike, .freecell, .yukon:
             return true
-        case .spider:
+        case .spider, .pyramid:
             return false
         }
     }

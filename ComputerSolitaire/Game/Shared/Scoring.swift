@@ -9,6 +9,8 @@ enum ScoringAction {
     case recycleWasteInDrawOne
     case spiderMove
     case spiderCompletedRun
+    case removePyramidPair
+    case removePyramidKing
 }
 
 enum Scoring {
@@ -37,6 +39,10 @@ enum Scoring {
             return -1
         case .spiderCompletedRun:
             return 100
+        case .removePyramidPair:
+            return 10
+        case .removePyramidKing:
+            return 5
         }
     }
 

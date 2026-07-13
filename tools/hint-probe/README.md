@@ -24,6 +24,7 @@ tools/hint-probe/run.sh klondike 500 3
 tools/hint-probe/run.sh freecell 500
 tools/hint-probe/run.sh spider 500       # all three suit counts
 tools/hint-probe/run.sh spider 500 4     # third arg narrows to one suit count
+tools/hint-probe/run.sh pyramid 500
 ```
 
 The number is how many seeded deals the run plays (seeds 1 through N; default
@@ -63,6 +64,7 @@ consecutive runs, serial and parallel.
 | `spider` 1-suit | **95.4%** | 0.0% |
 | `spider` 2-suit | **49.2%** | 0.0% |
 | `spider` 4-suit | **2.8%** | 0.0% |
+| `pyramid` | **80.2%** | 15.2% |
 
 Reading the table honestly:
 
@@ -99,6 +101,14 @@ Reading the table honestly:
   (+9 points at 2-suit), quadratic suited-run bonus, break penalty 2 → 3
   (+2 points at 4-suit), and the cached fill-then-deal preparation line
   (kills the fill/unfill oscillation the empty-column bonus otherwise causes).
+- **Pyramid (80.2% vs 15.2%)**: the solver's own verdict sweep proves 79.5% of
+  deals winnable at its default budget (0.8% proved unwinnable, 19.8% undecided
+  — hard deals whose reachable graphs exceed the budget), so the follower
+  converts essentially every deal the search can prove. Losses record pyramid
+  cards cleared instead of foundation cards (Pyramid banks no foundations;
+  median 22 of 28 cleared on lost deals), and the over-banking detector does
+  not apply. Wins are efficient by structure — the whole game is bounded near
+  100 actions — so the hint value is the win-rate gap, not move count.
 - These figures use the planners' full node budgets. The app additionally
   clips each interactive search at a fraction of a second so the UI never
   hitches; that clip rarely binds, so in-app quality is at most a hair below

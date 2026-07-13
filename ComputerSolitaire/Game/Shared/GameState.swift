@@ -8,6 +8,14 @@ struct GameState: Equatable, Codable {
     var freeCells: [Card?]
     var foundations: [[Card]]
     var tableau: [[Card]]
+    /// Pyramid layout: 28 row-major slots (row r occupies indices
+    /// r(r+1)/2 ..< (r+1)(r+2)/2); nil means removed. Empty for the other variants.
+    var pyramid: [Card?]
+    /// Cards removed from play in Pyramid (pairs and Kings). Empty for the other variants.
+    var discard: [Card]
+    /// Completed waste-to-stock recycles; Pyramid allows
+    /// `PyramidGameRules.maxWasteRecycles`. Zero for the other variants.
+    var wasteRecyclesUsed: Int
 
     enum CodingKeys: String, CodingKey {
         case variant
@@ -17,6 +25,9 @@ struct GameState: Equatable, Codable {
         case freeCells
         case foundations
         case tableau
+        case pyramid
+        case discard
+        case wasteRecyclesUsed
     }
 
     init(
@@ -26,7 +37,10 @@ struct GameState: Equatable, Codable {
         wasteDrawCount: Int,
         freeCells: [Card?] = Array(repeating: nil, count: 4),
         foundations: [[Card]],
-        tableau: [[Card]]
+        tableau: [[Card]],
+        pyramid: [Card?] = [],
+        discard: [Card] = [],
+        wasteRecyclesUsed: Int = 0
     ) {
         self.variant = variant
         self.stock = stock
@@ -35,6 +49,9 @@ struct GameState: Equatable, Codable {
         self.freeCells = freeCells
         self.foundations = foundations
         self.tableau = tableau
+        self.pyramid = pyramid
+        self.discard = discard
+        self.wasteRecyclesUsed = wasteRecyclesUsed
     }
 
     init(from decoder: Decoder) throws {
@@ -47,11 +64,21 @@ struct GameState: Equatable, Codable {
             ?? Array(repeating: nil, count: 4)
         foundations = try container.decode([[Card]].self, forKey: .foundations)
         tableau = try container.decode([[Card]].self, forKey: .tableau)
+        pyramid = try container.decodeIfPresent([Card?].self, forKey: .pyramid) ?? []
+        discard = try container.decodeIfPresent([Card].self, forKey: .discard) ?? []
+        wasteRecyclesUsed = try container.decodeIfPresent(Int.self, forKey: .wasteRecyclesUsed) ?? 0
     }
 
-    /// The game is won once every foundation holds a full Ace-to-King run.
     var isWon: Bool {
-        foundations.allSatisfy { $0.count == Rank.allCases.count }
+        switch variant {
+        case .klondike, .freecell, .yukon, .spider:
+            // Won once every foundation holds a full run (Ace-to-King on the
+            // build-up variants, a banked King-to-Ace run per Spider foundation).
+            return foundations.allSatisfy { $0.count == Rank.allCases.count }
+        case .pyramid:
+            // Won once every pyramid slot is cleared; stock and waste may keep cards.
+            return !pyramid.isEmpty && pyramid.allSatisfy { $0 == nil }
+        }
     }
 
     static func newGame() -> GameState {
@@ -68,6 +95,8 @@ struct GameState: Equatable, Codable {
             return newYukonGame()
         case .spider:
             return newSpiderGame(suitCount: spiderSuitCount)
+        case .pyramid:
+            return newPyramidGame()
         }
     }
 }
