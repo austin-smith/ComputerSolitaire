@@ -407,6 +407,62 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         print("Golf fixture — seed \(seed), photogenic \(bestScore)")
     }
 
+    /// The staged Forty Thieves board is a fresh deal with the first card
+    /// drawn to the waste. All forty board cards are visible, but the eye
+    /// lands on the ten exposed column ends, so seeds are scanned for the
+    /// most photogenic spread there with a first build available.
+    func testGenerateFortyThievesFixture() throws {
+        try skipUnlessGenerating()
+
+        var bestSeed: UInt64?
+        var bestScore = Int.min
+        for seed in Self.candidateSeeds {
+            let deal = GameStateFixtures.seededFortyThievesDeal(seed: seed)
+            let score = fortyThievesDealScore(of: deal)
+            if score > bestScore {
+                bestScore = score
+                bestSeed = seed
+            }
+        }
+        let seed = try XCTUnwrap(bestSeed)
+
+        let viewModel = SolitaireViewModel()
+        viewModel.state = GameStateFixtures.seededFortyThievesDeal(seed: seed)
+        viewModel.configureFortyThievesNewGame()
+        viewModel.handleStockTap()
+
+        let savedAt = DateFixtures.reference
+        let payload = SavedGamePayload(
+            savedAt: savedAt,
+            state: viewModel.state,
+            movesCount: viewModel.movesCount,
+            score: viewModel.score,
+            gameStartedAt: savedAt.addingTimeInterval(-Self.stagedElapsedSeconds),
+            stockDrawCount: DrawMode.one.rawValue,
+            history: [],
+            hasStartedTrackedGame: false
+        )
+
+        XCTAssertNotNil(payload.sanitizedForRestore(), "Generated fixture failed the validity gate")
+        let restoredViewModel = SolitaireViewModel()
+        XCTAssertTrue(restoredViewModel.restore(from: payload), "Generated fixture failed to restore")
+        XCTAssertEqual(
+            restoredViewModel.gameVariant,
+            .fortyThieves,
+            "Fixture did not restore as Forty Thieves"
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fortythieves.json")
+        try data.write(to: outputURL)
+
+        print("SCREENSHOT-FIXTURE-OUTPUT: \(outputURL.path)")
+        print("Forty Thieves fixture — seed \(seed), photogenic \(bestScore)")
+    }
+
     // MARK: - Photogenic scoring
 
     private struct Candidate {
@@ -509,6 +565,28 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
             }
             score += min(playableCount, 3) * 4
         }
+        return score
+    }
+
+    /// Scores a fresh Forty Thieves deal by the eleven cards the eye lands on
+    /// (the ten exposed column ends plus the first drawn stock card): rank
+    /// variety, red/black balance, all four suits, a few face cards, and a
+    /// couple of same-suit builds among the tops to suggest a first move.
+    private func fortyThievesDealScore(of deal: GameState) -> Int {
+        let exposed = deal.tableau.compactMap { $0.last }
+        let visible = exposed + Array(deal.stock.suffix(1))
+        var score = 0
+        score += Set(visible.map(\.rank)).count * 6
+        let redCount = visible.count(where: { $0.suit.isRed })
+        score -= abs(redCount * 2 - visible.count) * 4
+        score += Set(visible.map(\.suit)).count == Suit.allCases.count ? 8 : 0
+        score += visible.count(where: { $0.rank >= .jack }) >= 3 ? 6 : 0
+        let buildCount = exposed.count { card in
+            exposed.contains { top in
+                FortyThievesGameRules.canMoveToTableau(card: card, destinationPile: [top])
+            }
+        }
+        score += min(buildCount, 2) * 4
         return score
     }
 

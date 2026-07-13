@@ -98,6 +98,11 @@ private extension TapMovePolicy {
                 // No stock to refill the board: an eager unsafe foundation move can
                 // strand a card another pile still needs as a landing spot.
                 tier = isSafeFoundationMove(card: card, in: state) ? 100 : 60
+            case .fortyThieves:
+                // Foundations are locked on top of the strand risk, so the
+                // safety gate matters even more; the shared rule assumes one
+                // foundation per suit, so Forty Thieves brings its own.
+                tier = FortyThievesGameRules.isSafeFoundationMove(card: card, in: state) ? 100 : 60
             case .spider:
                 // Unreachable: Spider foundations are never player destinations.
                 tier = 100
@@ -123,6 +128,16 @@ private extension TapMovePolicy {
                 }
                 return Priority(
                     tier: tier,
+                    buildLength: topSameSuitRunLength(of: pile) + selection.cards.count,
+                    pileOrder: -index
+                )
+            }
+            if state.variant == .fortyThieves {
+                // Every legal landing builds by suit, so ties break on the
+                // longer suited run; empty columns are Forty Thieves' scarcest
+                // resource and stay the last resort.
+                return Priority(
+                    tier: pile.isEmpty ? 40 : 80,
                     buildLength: topSameSuitRunLength(of: pile) + selection.cards.count,
                     pileOrder: -index
                 )

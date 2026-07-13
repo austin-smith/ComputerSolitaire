@@ -493,7 +493,7 @@ final class SolitaireViewModel {
 
     @discardableResult
     func startDragFromFoundation(index: Int) -> Bool {
-        guard state.variant.playerBuildsFoundations else { return false }
+        guard state.variant.allowsFoundationRollback else { return false }
         guard let top = state.foundations[index].last else { return false }
         clearHint()
         selection = Selection(source: .foundation(pile: index), cards: [top])
@@ -554,6 +554,8 @@ final class SolitaireViewModel {
             configureTriPeaksNewGame()
         case .golf:
             configureGolfNewGame()
+        case .fortyThieves:
+            configureFortyThievesNewGame()
         }
     }
 
@@ -571,6 +573,8 @@ final class SolitaireViewModel {
             configureTriPeaksRedeal()
         case .golf:
             configureGolfRedeal()
+        case .fortyThieves:
+            configureFortyThievesRedeal()
         }
     }
 
@@ -589,6 +593,8 @@ final class SolitaireViewModel {
             return sanitizeTriPeaksRedealState(state)
         case .golf:
             return sanitizeGolfRedealState(state)
+        case .fortyThieves:
+            return sanitizeFortyThievesRedealState(state)
         }
     }
 
@@ -633,7 +639,7 @@ final class SolitaireViewModel {
                 cardIndex: cardIndex,
                 card: card
             )
-        case .freecell, .pyramid, .tripeaks:
+        case .freecell, .pyramid, .tripeaks, .fortyThieves:
             return false
         }
     }
@@ -680,7 +686,7 @@ final class SolitaireViewModel {
             return canSelectFreeCellTableauCards(cards)
         case .spider:
             return SharedGameRules.isDescendingSameSuitRun(cards)
-        case .golf:
+        case .golf, .fortyThieves:
             // Only the exposed card of a column can ever move.
             return cards.count == 1
         case .pyramid, .tripeaks:
@@ -718,6 +724,8 @@ extension SolitaireViewModel {
             handleTriPeaksStockTap()
         case .golf:
             handleGolfStockTap()
+        case .fortyThieves:
+            handleFortyThievesStockTap()
         case .freecell, .yukon:
             break
         }
@@ -731,7 +739,7 @@ extension SolitaireViewModel {
             return !(state.stock.isEmpty && state.waste.isEmpty)
         case .pyramid:
             return !state.stock.isEmpty || PyramidGameRules.canRecycleWaste(in: state)
-        case .tripeaks, .golf:
+        case .tripeaks, .golf, .fortyThieves:
             // Single pass with no recycles: an empty stock is dead.
             return !state.stock.isEmpty
         case .spider:
@@ -747,7 +755,7 @@ extension SolitaireViewModel {
         case .klondike:
             let count = min(state.wasteDrawCount, stockDrawCount)
             return Array(state.waste.suffix(count))
-        case .pyramid, .tripeaks, .golf:
+        case .pyramid, .tripeaks, .golf, .fortyThieves:
             return Array(state.waste.suffix(min(1, state.wasteDrawCount)))
         case .freecell, .yukon, .spider:
             return []
@@ -835,7 +843,7 @@ extension SolitaireViewModel {
     }
 
     func selectFromFoundation(index: Int) {
-        guard state.variant.playerBuildsFoundations else { return }
+        guard state.variant.allowsFoundationRollback else { return }
         guard let top = state.foundations[index].last else { return }
         selection = Selection(source: .foundation(pile: index), cards: [top])
     }
@@ -953,7 +961,7 @@ extension SolitaireViewModel {
         switch state.variant {
         case .klondike, .yukon, .spider:
             flipFaceDownTopCardIfNeeded(in: pileIndex)
-        case .freecell, .pyramid, .tripeaks, .golf:
+        case .freecell, .pyramid, .tripeaks, .golf, .fortyThieves:
             break
         }
     }
@@ -1011,6 +1019,8 @@ extension SolitaireViewModel {
             // Golf stroke scoring reads the after state, so `performGolfMove`
             // applies it directly.
             break
+        case .fortyThieves:
+            applyFortyThievesMoveScore(for: source, destination: destination)
         }
     }
 

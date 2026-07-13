@@ -31,6 +31,9 @@ enum HintAdvisor {
         if state.variant == .golf, !state.stock.isEmpty {
             return true
         }
+        if state.variant == .fortyThieves, !state.stock.isEmpty {
+            return true
+        }
         for selection in AutoMoveAdvisor.candidateSelections(in: state) {
             // Foundation rollbacks only count as available moves where the hint
             // stack can actually turn one into a hint: Yukon's planner searches
@@ -95,6 +98,14 @@ enum HintAdvisor {
 /// not one more column card is clearable. Its ratchet matches TriPeaks' —
 /// every Golf move consumes a card — so a followed line can never revisit a
 /// position.
+/// Forty Thieves hints work like Spider's: cached `FortyThievesPlanner`
+/// improving lines that may include stock taps, followed to their end before
+/// re-planning (its single-card tableau moves are just as reversible until a
+/// card banks or the stock turns). When no improving line exists but stock
+/// remains, the fallback is a single stock tap — unlike Spider's deal
+/// preparation it costs nothing and strictly shrinks the stock, so it can
+/// never cycle — and silence comes only when the stock is out and nothing
+/// searched improves.
 final class HintPlanner {
     /// How long a single interactive hint request may spend searching.
     private static let freeCellSearchBudget: TimeInterval = 0.3
@@ -108,6 +119,7 @@ final class HintPlanner {
     /// the rare hard deal beats truncating a provably winnable position into
     /// a best-effort line.
     private static let golfSearchBudget: TimeInterval = 0.5
+    private static let fortyThievesSearchBudget: TimeInterval = 0.3
 
     private var freeCellPlan: [String: FreeCellSolver.Move] = [:]
     private var yukonPlan: [String: YukonPlanner.PlannedMove] = [:]
@@ -115,6 +127,7 @@ final class HintPlanner {
     private var pyramidPlan: [String: PyramidPlanner.Move] = [:]
     private var triPeaksPlan: [String: TriPeaksPlanner.Move] = [:]
     private var golfPlan: [String: GolfPlanner.Move] = [:]
+    private var fortyThievesPlan: [String: FortyThievesPlanner.PlannedAction] = [:]
 
     func bestHint(in state: GameState, stockDrawCount: Int) -> HintAdvisor.Hint? {
         switch state.variant {
@@ -138,6 +151,8 @@ final class HintPlanner {
             return triPeaksHint(in: state)
         case .golf:
             return golfHint(in: state)
+        case .fortyThieves:
+            return fortyThievesHint(in: state)
         }
     }
 }
@@ -338,6 +353,42 @@ private extension HintPlanner {
             spiderPlan = SpiderPlanner.keyedActions(along: preparation, from: state)
             return plannedSpiderHint(for: key, in: state)
         }
+    }
+
+    func fortyThievesHint(in state: GameState) -> HintAdvisor.Hint? {
+        let key = FortyThievesPlanner.stateKey(for: state)
+        if let hint = plannedFortyThievesHint(for: key, in: state) {
+            return hint
+        }
+
+        fortyThievesPlan.removeAll()
+        let limits = FortyThievesPlanner.Limits(
+            deadline: Date().addingTimeInterval(Self.fortyThievesSearchBudget)
+        )
+        switch FortyThievesPlanner.bestLine(in: state, limits: limits) {
+        case .line(let line):
+            fortyThievesPlan = FortyThievesPlanner.keyedActions(along: line, from: state)
+            return plannedFortyThievesHint(for: key, in: state)
+
+        case .noProgress:
+            // The searched region holds no improvement, so the way forward is
+            // the next stock card — what a strong player does with a
+            // groomed-but-stuck board. Deliberately offered for truncated
+            // no-progress too, not just exhaustive proof (Spider's measured
+            // lesson: hints withheld are games stalled), and deliberately not
+            // cached: the fallback tap is one action, strictly monotone, and
+            // the fresh waste top may unlock an improving line worth a fresh
+            // search. Silence only when the stock is out too — then the shared
+            // candidate scan in `anyPlayerMoveExists` is the exact loss test.
+            guard !state.stock.isEmpty else { return nil }
+            return .stockTap
+        }
+    }
+
+    func plannedFortyThievesHint(for key: String, in state: GameState) -> HintAdvisor.Hint? {
+        // materialize re-validates the cached action against the live state.
+        guard let action = fortyThievesPlan[key] else { return nil }
+        return FortyThievesPlanner.materialize(action, in: state)
     }
 
     func plannedSpiderHint(for key: String, in state: GameState) -> HintAdvisor.Hint? {

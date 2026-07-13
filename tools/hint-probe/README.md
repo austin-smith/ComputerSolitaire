@@ -27,6 +27,7 @@ tools/hint-probe/run.sh spider 500 4     # third arg narrows to one suit count
 tools/hint-probe/run.sh pyramid 500
 tools/hint-probe/run.sh tripeaks 500
 tools/hint-probe/run.sh golf 500
+tools/hint-probe/run.sh fortythieves 500
 ```
 
 The number is how many seeded deals the run plays (seeds 1 through N; default
@@ -69,6 +70,7 @@ consecutive runs, serial and parallel.
 | `pyramid` | **80.2%** | 15.2% |
 | `tripeaks` | **95.4%** | 0.0% |
 | `golf` | **22.6%** | 0.0% |
+| `fortythieves` | **3.4%** | 0.0% |
 
 Reading the table honestly:
 
@@ -137,6 +139,25 @@ Reading the table honestly:
   structurally bounded at 51 actions. Budget history: the TriPeaks-sized 200k
   node cap measured 13.6% (61% of deals undecided); the shipped 1M cap with
   12-byte packed search nodes decides 92% of deals and is the baseline above.
+- **Forty Thieves (3.4% vs 0.0%)**: the low absolute rate is the variant's
+  class, not a broken planner — expert human play wins roughly 10–30% of
+  deals, and a greedy bounded best-first search is far below expert; treat
+  3.4% as the regression floor, not an achievement (the Spider 4-suit
+  framing). The random control winning zero says strict Forty Thieves wins
+  (same-suit building, single cards, one stock pass) are never stumbled into;
+  the entire hint column is planner skill, and the banked-at-loss gap (median
+  33 vs 13) is the per-deal quality signal on the lost majority. Every
+  follower loss is an honest deadlock — no action caps, no loops — and
+  revisit events measure zero (the no-progress fallback is a bare stock tap,
+  strictly monotone, unlike Spider's score-losing deal preparation), so
+  Forty Thieves revisits are gated to zero like Yukon's. `losses with >=40
+  banked: 167` is legitimately high — Forty Thieves losses strand well-banked
+  boards by nature — and is the recorded baseline; treat increases as
+  regressions. Tuning directions already measured flat or negative:
+  empty-column weight 15 (3.6%, within noise), burial weight 3 (2.4%),
+  node budget 60k (flat — the early-exit floor binds first), a twin-lag
+  banking penalty targeting the over-banking count (flat at 166, +40%
+  wall-clock).
 - These figures use the planners' full node budgets. The app additionally
   clips each interactive search at a fraction of a second so the UI never
   hitches; that clip rarely binds, so in-app quality is at most a hair below
@@ -150,16 +171,18 @@ add its sources to `run.sh`, then run 500 deals. Acceptance gates:
 - The hint column must **decisively beat the random control**.
 - **Zero stalemate-loops** for the hint player, machine-enforced: the probe
   exits nonzero if any hint follower loops in any variant. **Revisit events**
-  are additionally gated to zero for Yukon (its planner measures zero, so any
-  revisit is a regression signal); Spider's are reported but not gated — see
-  the baseline notes for why a few transients per 500 deals are structural
-  there. (Revisits are reported without reclassifying the game, so win rates
-  stay honestly measured; the exit code is what enforces the gates.)
+  are additionally gated to zero for Yukon and Forty Thieves (their planners
+  measure zero, so any revisit is a regression signal); Spider's are reported
+  but not gated — see the baseline notes for why a few transients per 500
+  deals are structural there. (Revisits are reported without reclassifying
+  the game, so win rates stay honestly measured; the exit code is what
+  enforces the gates.)
 - **Watch the over-banking detector** (`losses with >=40 banked`): it should
   be zero for stockless variants (Yukon and FreeCell measure zero). The
-  Klondike draw-1 baseline records a single such loss, and Spider records
-  6/7/1 by suit count (its losses can strand nearly-done boards); treat any
-  increase as a regression.
+  Klondike draw-1 baseline records a single such loss, Spider records
+  6/7/1 by suit count (its losses can strand nearly-done boards), and Forty
+  Thieves records 167 — legitimately high, its losses strand well-banked
+  boards by nature; treat any increase as a regression.
 - Record the measured numbers in the table above; they become the variant's
   regression baseline. Mechanical refactors must reproduce every figure
   exactly; deliberate quality changes must move the hint column up, never

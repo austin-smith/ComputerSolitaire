@@ -1719,7 +1719,7 @@ struct ContentView: View {
             return [viewModel.state.discard]
         case .tripeaks, .golf:
             return [viewModel.state.waste]
-        case .klondike, .freecell, .yukon, .spider:
+        case .klondike, .freecell, .yukon, .spider, .fortyThieves:
             return viewModel.state.foundations
         }
     }
@@ -1730,7 +1730,7 @@ struct ContentView: View {
             return [.discard]
         case .tripeaks, .golf:
             return [.waste]
-        case .klondike, .freecell, .yukon, .spider:
+        case .klondike, .freecell, .yukon, .spider, .fortyThieves:
             return viewModel.state.foundations.indices.map(DropTarget.foundation)
         }
     }

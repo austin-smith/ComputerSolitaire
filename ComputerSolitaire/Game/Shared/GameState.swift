@@ -86,7 +86,7 @@ struct GameState: Equatable, Codable {
 
     var isWon: Bool {
         switch variant {
-        case .klondike, .freecell, .yukon, .spider:
+        case .klondike, .freecell, .yukon, .spider, .fortyThieves:
             // Won once every foundation holds a full run (Ace-to-King on the
             // build-up variants, a banked King-to-Ace run per Spider foundation).
             return foundations.allSatisfy { $0.count == Rank.allCases.count }
@@ -122,6 +122,8 @@ struct GameState: Equatable, Codable {
             return newTriPeaksGame()
         case .golf:
             return newGolfGame()
+        case .fortyThieves:
+            return newFortyThievesGame()
         }
     }
 }
