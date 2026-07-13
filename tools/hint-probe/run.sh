@@ -1,6 +1,6 @@
 #!/bin/bash
 # Compiles the hint-quality probe against the UI-free Game sources and runs it.
-# Usage: tools/hint-probe/run.sh <yukon|klondike|freecell|spider|pyramid|all> [seeds] [klondike draw count | spider suit count]
+# Usage: tools/hint-probe/run.sh <yukon|klondike|freecell|spider|pyramid|tripeaks|all> [seeds] [klondike draw count | spider suit count]
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -36,6 +36,11 @@ SOURCES=(
   ComputerSolitaire/Game/Pyramid/GameRulesPyramid.swift
   ComputerSolitaire/Game/Pyramid/AutoMoveAdvisorPyramid.swift
   ComputerSolitaire/Game/Pyramid/PyramidPlanner.swift
+  ComputerSolitaire/Game/TriPeaks/TriPeaksGeometry.swift
+  ComputerSolitaire/Game/TriPeaks/GameStateTriPeaks.swift
+  ComputerSolitaire/Game/TriPeaks/GameRulesTriPeaks.swift
+  ComputerSolitaire/Game/TriPeaks/AutoMoveAdvisorTriPeaks.swift
+  ComputerSolitaire/Game/TriPeaks/TriPeaksPlanner.swift
 )
 
 for source in "${SOURCES[@]}"; do

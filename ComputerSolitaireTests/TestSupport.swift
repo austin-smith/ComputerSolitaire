@@ -154,6 +154,81 @@ enum GameStateFixtures {
     /// the pyramid top-down (nil = removed) and is padded with removed slots; any
     /// cards not on the board, in the stock, or in the waste land on the discard so
     /// persistence-facing tests still see 52 cards.
+    /// A reproducible TriPeaks deal matching the shape of `GameState.newTriPeaksGame`.
+    /// Mirrored by the hint probe's `seededTriPeaksDeal` so seeds are comparable.
+    static func seededTriPeaksDeal(seed: UInt64) -> GameState {
+        var deck = seededDeck(seed: seed, faceUp: false)
+        var triPeaks: [Card?] = []
+        for index in 0..<TriPeaksGeometry.cardCount {
+            var card = deck.removeLast()
+            card.isFaceUp = TriPeaksGeometry.row(of: index) == TriPeaksGeometry.rowCount - 1
+            triPeaks.append(card)
+        }
+        var starter = deck.removeLast()
+        starter.isFaceUp = true
+        return GameState(
+            variant: .tripeaks,
+            stock: deck,
+            waste: [starter],
+            wasteDrawCount: 1,
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: Array(repeating: [], count: 4),
+            tableau: [],
+            triPeaks: triPeaks
+        )
+    }
+
+    /// Hand-constructed TriPeaks position for rules and planner tests. `slots`
+    /// fills the peaks top-down (nil = played) and is padded with played slots;
+    /// each present card's face is forced to the uncovered rule so the layout
+    /// always passes validation. Cards not on the board, in the stock, or in the
+    /// waste can be buried at the bottom of the waste so persistence-facing
+    /// tests still see 52 cards without changing the match target.
+    static func triPeaksState(
+        slots: [Card?],
+        stock: [Card] = [],
+        waste: [Card],
+        chainLength: Int = 0,
+        fillWasteFromRemainder: Bool = false
+    ) -> GameState {
+        var triPeaks = slots
+        if triPeaks.count < TriPeaksGeometry.cardCount {
+            triPeaks.append(
+                contentsOf: [Card?](repeating: nil, count: TriPeaksGeometry.cardCount - triPeaks.count)
+            )
+        }
+        for index in triPeaks.indices {
+            guard var card = triPeaks[index] else { continue }
+            card.isFaceUp = TriPeaksGeometry.isUncovered(index, in: triPeaks)
+            triPeaks[index] = card
+        }
+        var fullWaste = waste.map { card in
+            var faceUp = card
+            faceUp.isFaceUp = true
+            return faceUp
+        }
+        if fillWasteFromRemainder {
+            func identity(_ card: Card) -> Int {
+                (Suit.allCases.firstIndex(of: card.suit) ?? 0) * 16 + card.rank.rawValue
+            }
+            let usedIdentities = Set((triPeaks.compactMap { $0 } + stock + fullWaste).map(identity))
+            fullWaste = TestCards.fullDeck(faceUp: true).filter { card in
+                !usedIdentities.contains(identity(card))
+            } + fullWaste
+        }
+        return GameState(
+            variant: .tripeaks,
+            stock: stock,
+            waste: fullWaste,
+            wasteDrawCount: min(1, fullWaste.count),
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: Array(repeating: [], count: 4),
+            tableau: [],
+            triPeaks: triPeaks,
+            triPeaksChainLength: chainLength
+        )
+    }
+
     static func pyramidState(
         slots: [Card?],
         stock: [Card] = [],

@@ -5,10 +5,14 @@ import Foundation
 /// state looks like after a move.
 enum AutoMoveAdvisor {
     static func legalDestinations(for selection: Selection, in state: GameState) -> [Destination] {
-        // Pyramid removes pairs instead of building piles, so its move set is
-        // generated wholesale rather than through the pile-oriented flow below.
+        // Pyramid and TriPeaks remove cards instead of building piles, so their
+        // move sets are generated wholesale rather than through the
+        // pile-oriented flow below.
         if state.variant == .pyramid {
             return PyramidAutoMoveAdvisor.legalDestinations(for: selection, in: state)
+        }
+        if state.variant == .tripeaks {
+            return TriPeaksAutoMoveAdvisor.legalDestinations(for: selection, in: state)
         }
 
         guard selectionMatchesState(selection, in: state) else { return [] }
@@ -62,6 +66,9 @@ enum AutoMoveAdvisor {
         if state.variant == .pyramid {
             return PyramidAutoMoveAdvisor.candidateSelections(in: state)
         }
+        if state.variant == .tripeaks {
+            return TriPeaksAutoMoveAdvisor.candidateSelections(in: state)
+        }
 
         var selections: [Selection] = []
 
@@ -112,6 +119,13 @@ enum AutoMoveAdvisor {
                 in: state
             )
         }
+        if state.variant == .tripeaks {
+            return TriPeaksAutoMoveAdvisor.simulatedState(
+                afterMoving: selection,
+                to: destination,
+                in: state
+            )
+        }
 
         guard selectionMatchesState(selection, in: state) else { return nil }
         guard legalDestinations(for: selection, in: state).contains(destination) else { return nil }
@@ -133,8 +147,8 @@ enum AutoMoveAdvisor {
         case .tableau(let pile, let index):
             nextState.tableau[pile].removeSubrange(index..<nextState.tableau[pile].count)
             applyVariantTableauSourceRemovalEffects(on: &nextState, pileIndex: pile)
-        case .pyramid:
-            // Unreachable: Pyramid states dispatch wholesale above.
+        case .pyramid, .triPeaks:
+            // Unreachable: Pyramid and TriPeaks states dispatch wholesale above.
             return nil
         }
 
@@ -149,7 +163,7 @@ enum AutoMoveAdvisor {
             guard selection.cards.count == 1, let card = selection.cards.first else { return nil }
             nextState.freeCells[index] = card
         case .pyramid, .waste, .discard:
-            // Unreachable: Pyramid states dispatch wholesale above.
+            // Unreachable: Pyramid and TriPeaks states dispatch wholesale above.
             return nil
         }
 
@@ -187,6 +201,12 @@ enum AutoMoveAdvisor {
             guard selection.cards.count == 1 else { return false }
             guard state.pyramid.indices.contains(index),
                   let card = state.pyramid[index] else { return false }
+            return card.id == selection.cards[0].id
+
+        case .triPeaks(let index):
+            guard selection.cards.count == 1 else { return false }
+            guard state.triPeaks.indices.contains(index),
+                  let card = state.triPeaks[index] else { return false }
             return card.id == selection.cards[0].id
         }
     }
@@ -248,8 +268,9 @@ private extension AutoMoveAdvisor {
             return YukonAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .spider:
             return SpiderAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
-        case .pyramid:
-            // Unreachable: Pyramid dispatches wholesale before the tableau flow.
+        case .pyramid, .tripeaks:
+            // Unreachable: Pyramid and TriPeaks dispatch wholesale before the
+            // tableau flow.
             return false
         }
     }
@@ -284,8 +305,9 @@ private extension AutoMoveAdvisor {
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
             )
-        case .pyramid:
-            // Unreachable: Pyramid dispatches wholesale before the tableau flow.
+        case .pyramid, .tripeaks:
+            // Unreachable: Pyramid and TriPeaks dispatch wholesale before the
+            // tableau flow.
             return false
         }
     }
@@ -316,8 +338,9 @@ private extension AutoMoveAdvisor {
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
             )
-        case .pyramid:
-            // Unreachable: Pyramid dispatches wholesale before the tableau flow.
+        case .pyramid, .tripeaks:
+            // Unreachable: Pyramid and TriPeaks dispatch wholesale before the
+            // tableau flow.
             return false
         }
     }
@@ -352,8 +375,9 @@ private extension AutoMoveAdvisor {
                 in: state,
                 destinations: &destinations
             )
-        case .pyramid:
-            // Unreachable: Pyramid dispatches wholesale before the tableau flow.
+        case .pyramid, .tripeaks:
+            // Unreachable: Pyramid and TriPeaks dispatch wholesale before the
+            // tableau flow.
             break
         }
     }
@@ -368,8 +392,9 @@ private extension AutoMoveAdvisor {
             YukonAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .spider:
             SpiderAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
-        case .pyramid:
-            // Unreachable: Pyramid dispatches wholesale before the tableau flow.
+        case .pyramid, .tripeaks:
+            // Unreachable: Pyramid and TriPeaks dispatch wholesale before the
+            // tableau flow.
             break
         }
     }
@@ -378,7 +403,7 @@ private extension AutoMoveAdvisor {
     /// run the landing completed; the other variants have none.
     static func applyVariantTableauDestinationEffects(on state: inout GameState, pileIndex: Int) {
         switch state.variant {
-        case .klondike, .freecell, .yukon, .pyramid:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks:
             break
         case .spider:
             SpiderAutoMoveAdvisor.applyTableauDestinationEffects(on: &state, pileIndex: pileIndex)

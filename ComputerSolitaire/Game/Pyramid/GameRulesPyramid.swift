@@ -66,7 +66,7 @@ enum PyramidGameRules {
             return PyramidGeometry.isExposed(index, in: state.pyramid)
         case .waste:
             return state.waste.last?.id == card.id
-        case .foundation, .freeCell, .tableau:
+        case .foundation, .freeCell, .tableau, .triPeaks:
             return false
         }
     }

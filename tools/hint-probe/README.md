@@ -25,6 +25,7 @@ tools/hint-probe/run.sh freecell 500
 tools/hint-probe/run.sh spider 500       # all three suit counts
 tools/hint-probe/run.sh spider 500 4     # third arg narrows to one suit count
 tools/hint-probe/run.sh pyramid 500
+tools/hint-probe/run.sh tripeaks 500
 ```
 
 The number is how many seeded deals the run plays (seeds 1 through N; default
@@ -65,6 +66,7 @@ consecutive runs, serial and parallel.
 | `spider` 2-suit | **49.2%** | 0.0% |
 | `spider` 4-suit | **2.8%** | 0.0% |
 | `pyramid` | **80.2%** | 15.2% |
+| `tripeaks` | **95.4%** | 0.0% |
 
 Reading the table honestly:
 
@@ -109,6 +111,15 @@ Reading the table honestly:
   median 22 of 28 cleared on lost deals), and the over-banking detector does
   not apply. Wins are efficient by structure — the whole game is bounded near
   100 actions — so the hint value is the win-rate gap, not move count.
+- **TriPeaks (95.4% vs 0.0%)**: the solver's own verdict sweep proves 95.6% of
+  deals winnable at its default budget (0.2% proved unwinnable, 4.1% undecided
+  over 10,000 deals), so the follower converts essentially every deal the
+  search can prove — and the random control winning zero says single-pass
+  TriPeaks wins are never stumbled into; the entire hint column is solver
+  skill. Losses record peak cards cleared (TriPeaks banks no foundations;
+  median 27 of 28 cleared on lost deals — best-effort lines leave almost
+  nothing behind), and the over-banking detector does not apply. The game is
+  structurally bounded at 51 actions, so the hint value is the win-rate gap.
 - These figures use the planners' full node budgets. The app additionally
   clips each interactive search at a fraction of a second so the UI never
   hitches; that clip rarely binds, so in-app quality is at most a hair below

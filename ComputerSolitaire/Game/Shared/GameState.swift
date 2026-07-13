@@ -16,6 +16,13 @@ struct GameState: Equatable, Codable {
     /// Completed waste-to-stock recycles; Pyramid allows
     /// `PyramidGameRules.maxWasteRecycles`. Zero for the other variants.
     var wasteRecyclesUsed: Int
+    /// TriPeaks layout: 28 row-major slots (three apexes, then rows of 6, 9,
+    /// and the 10-card base — see `TriPeaksGeometry.rowRanges`); nil means
+    /// played onto the waste. Empty for the other variants.
+    var triPeaks: [Card?]
+    /// Consecutive TriPeaks tableau discards since the last stock flip; the
+    /// n-th discard in a chain scores n. Zero for the other variants.
+    var triPeaksChainLength: Int
 
     enum CodingKeys: String, CodingKey {
         case variant
@@ -28,6 +35,8 @@ struct GameState: Equatable, Codable {
         case pyramid
         case discard
         case wasteRecyclesUsed
+        case triPeaks
+        case triPeaksChainLength
     }
 
     init(
@@ -40,7 +49,9 @@ struct GameState: Equatable, Codable {
         tableau: [[Card]],
         pyramid: [Card?] = [],
         discard: [Card] = [],
-        wasteRecyclesUsed: Int = 0
+        wasteRecyclesUsed: Int = 0,
+        triPeaks: [Card?] = [],
+        triPeaksChainLength: Int = 0
     ) {
         self.variant = variant
         self.stock = stock
@@ -52,6 +63,8 @@ struct GameState: Equatable, Codable {
         self.pyramid = pyramid
         self.discard = discard
         self.wasteRecyclesUsed = wasteRecyclesUsed
+        self.triPeaks = triPeaks
+        self.triPeaksChainLength = triPeaksChainLength
     }
 
     init(from decoder: Decoder) throws {
@@ -67,6 +80,8 @@ struct GameState: Equatable, Codable {
         pyramid = try container.decodeIfPresent([Card?].self, forKey: .pyramid) ?? []
         discard = try container.decodeIfPresent([Card].self, forKey: .discard) ?? []
         wasteRecyclesUsed = try container.decodeIfPresent(Int.self, forKey: .wasteRecyclesUsed) ?? 0
+        triPeaks = try container.decodeIfPresent([Card?].self, forKey: .triPeaks) ?? []
+        triPeaksChainLength = try container.decodeIfPresent(Int.self, forKey: .triPeaksChainLength) ?? 0
     }
 
     var isWon: Bool {
@@ -78,6 +93,9 @@ struct GameState: Equatable, Codable {
         case .pyramid:
             // Won once every pyramid slot is cleared; stock and waste may keep cards.
             return !pyramid.isEmpty && pyramid.allSatisfy { $0 == nil }
+        case .tripeaks:
+            // Won once every peak slot is cleared; stock and waste may keep cards.
+            return !triPeaks.isEmpty && triPeaks.allSatisfy { $0 == nil }
         }
     }
 
@@ -97,6 +115,8 @@ struct GameState: Equatable, Codable {
             return newSpiderGame(suitCount: spiderSuitCount)
         case .pyramid:
             return newPyramidGame()
+        case .tripeaks:
+            return newTriPeaksGame()
         }
     }
 }

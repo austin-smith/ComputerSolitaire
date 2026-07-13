@@ -529,6 +529,20 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
+                    } else if viewModel.gameVariant == .tripeaks {
+                        TriPeaksBoardView(
+                            viewModel: viewModel,
+                            cardSize: cardSize,
+                            columnSpacing: metrics.columnSpacing,
+                            maxBoardHeight: metrics.tableauMaxHeight,
+                            isCardTiltEnabled: isCardTiltEnabled,
+                            cardTilts: $cardTilts,
+                            hiddenCardIDs: effectiveHiddenCardIDs,
+                            hintedCardIDs: viewModel.hintedCardIDs,
+                            hintWiggleToken: viewModel.hintWiggleToken,
+                            dragGesture: dragGesture(for:)
+                        )
+                        .frame(width: boardContentWidth, alignment: .leading)
                     } else {
                         TableauRowView(
                             viewModel: viewModel,
@@ -911,6 +925,8 @@ struct ContentView: View {
             started = viewModel.startDragFromTableau(pileIndex: pile, cardIndex: index)
         case .pyramid(let index):
             started = viewModel.startDragFromPyramid(index: index)
+        case .triPeaks(let index):
+            started = viewModel.startDragFromTriPeaks(index: index)
         }
 
         if started, let firstCard = viewModel.selection?.cards.first {
@@ -1298,6 +1314,7 @@ struct ContentView: View {
         }
         for card in state.pyramid.compactMap({ $0 }) { lookup[card.id] = card }
         for card in state.discard { lookup[card.id] = card }
+        for card in state.triPeaks.compactMap({ $0 }) { lookup[card.id] = card }
         return lookup
     }
 
@@ -1309,6 +1326,7 @@ struct ContentView: View {
         case tableau(pile: Int, index: Int)
         case pyramid(Int)
         case discard(Int)
+        case triPeaks(Int)
     }
 
     private func cardLocations(in state: GameState) -> [UUID: CardLocation] {
@@ -1342,6 +1360,11 @@ struct ContentView: View {
         }
         for (index, card) in state.discard.enumerated() {
             locations[card.id] = .discard(index)
+        }
+        for (index, card) in state.triPeaks.enumerated() {
+            if let card {
+                locations[card.id] = .triPeaks(index)
+            }
         }
 
         return locations
@@ -1493,17 +1516,28 @@ struct ContentView: View {
     }
 
     /// The cascade erupts from the foundations, except in Pyramid where every
-    /// removed card lives on the discard.
+    /// removed card lives on the discard, and in TriPeaks where every played
+    /// card lives on the waste.
     private var winCascadeLaunchPiles: [[Card]] {
-        viewModel.gameVariant == .pyramid
-            ? [viewModel.state.discard]
-            : viewModel.state.foundations
+        switch viewModel.gameVariant {
+        case .pyramid:
+            return [viewModel.state.discard]
+        case .tripeaks:
+            return [viewModel.state.waste]
+        case .klondike, .freecell, .yukon, .spider:
+            return viewModel.state.foundations
+        }
     }
 
     private var winCascadeLaunchTargets: [DropTarget] {
-        viewModel.gameVariant == .pyramid
-            ? [.discard]
-            : viewModel.state.foundations.indices.map(DropTarget.foundation)
+        switch viewModel.gameVariant {
+        case .pyramid:
+            return [.discard]
+        case .tripeaks:
+            return [.waste]
+        case .klondike, .freecell, .yukon, .spider:
+            return viewModel.state.foundations.indices.map(DropTarget.foundation)
+        }
     }
 
     private func syncLifecyclePauseState() {

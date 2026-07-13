@@ -305,6 +305,56 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         print("Pyramid fixture — seed \(seed), photogenic \(bestScore)")
     }
 
+    /// The staged TriPeaks board is a fresh deal — face-up base row, one waste
+    /// starter. Seeds are scanned for the most photogenic base row with a first
+    /// play available off the waste top.
+    func testGenerateTriPeaksFixture() throws {
+        try skipUnlessGenerating()
+
+        var bestSeed: UInt64?
+        var bestScore = Int.min
+        for seed in Self.candidateSeeds {
+            let deal = GameStateFixtures.seededTriPeaksDeal(seed: seed)
+            let score = triPeaksDealScore(of: deal)
+            if score > bestScore {
+                bestScore = score
+                bestSeed = seed
+            }
+        }
+        let seed = try XCTUnwrap(bestSeed)
+
+        let viewModel = SolitaireViewModel()
+        viewModel.state = GameStateFixtures.seededTriPeaksDeal(seed: seed)
+        viewModel.configureTriPeaksNewGame()
+
+        let savedAt = DateFixtures.reference
+        let payload = SavedGamePayload(
+            savedAt: savedAt,
+            state: viewModel.state,
+            movesCount: viewModel.movesCount,
+            score: viewModel.score,
+            gameStartedAt: savedAt.addingTimeInterval(-Self.stagedElapsedSeconds),
+            stockDrawCount: DrawMode.one.rawValue,
+            history: [],
+            hasStartedTrackedGame: false
+        )
+
+        XCTAssertNotNil(payload.sanitizedForRestore(), "Generated fixture failed the validity gate")
+        let restoredViewModel = SolitaireViewModel()
+        XCTAssertTrue(restoredViewModel.restore(from: payload), "Generated fixture failed to restore")
+        XCTAssertEqual(restoredViewModel.gameVariant, .tripeaks, "Fixture did not restore as TriPeaks")
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tripeaks.json")
+        try data.write(to: outputURL)
+
+        print("SCREENSHOT-FIXTURE-OUTPUT: \(outputURL.path)")
+        print("TriPeaks fixture — seed \(seed), photogenic \(bestScore)")
+    }
+
     // MARK: - Photogenic scoring
 
     private struct Candidate {
@@ -364,6 +414,27 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         let hasExposedPair = exposedRanks.contains { exposedRanks.contains(PyramidGameRules.pairSum - $0) }
         score += hasExposedPair ? 8 : 0
         score += exposed.contains(where: { $0.rank == .king }) ? 4 : 0
+        return score
+    }
+
+    /// Scores a fresh TriPeaks deal by its face-up cards (the ten-card base row
+    /// plus the waste starter): rank variety, red/black balance, all four
+    /// suits, a few face cards, and several playable base cards to suggest an
+    /// opening chain.
+    private func triPeaksDealScore(of deal: GameState) -> Int {
+        let visible = deal.triPeaks.compactMap { $0 }.filter(\.isFaceUp)
+        var score = 0
+        score += Set(visible.map(\.rank)).count * 6
+        let redCount = visible.count(where: { $0.suit.isRed })
+        score -= abs(redCount * 2 - visible.count) * 4
+        score += Set(visible.map(\.suit)).count == Suit.allCases.count ? 8 : 0
+        score += visible.count(where: { $0.rank >= .jack }) >= 3 ? 6 : 0
+        if let wasteTop = deal.waste.last {
+            let playableCount = visible.count { card in
+                TriPeaksGameRules.ranksAdjacentWithWrap(card.rank, wasteTop.rank)
+            }
+            score += min(playableCount, 3) * 4
+        }
         return score
     }
 

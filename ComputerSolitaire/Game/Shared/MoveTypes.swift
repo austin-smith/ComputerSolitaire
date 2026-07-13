@@ -8,6 +8,8 @@ struct Selection: Equatable {
         case tableau(pile: Int, index: Int)
         /// A single card at a pyramid slot (Pyramid only).
         case pyramid(index: Int)
+        /// A single uncovered card at a TriPeaks slot (TriPeaks only).
+        case triPeaks(index: Int)
     }
 
     let source: Source
@@ -20,7 +22,9 @@ enum Destination: Equatable {
     case freeCell(Int)
     /// Remove the selection together with the card at this pyramid slot (Pyramid only).
     case pyramid(Int)
-    /// Remove the selection together with the top waste card (Pyramid only).
+    /// The waste pile. Pyramid removes the selection together with the top
+    /// waste card; TriPeaks plays the selection onto the waste, making it the
+    /// new match target.
     case waste
     /// Remove a lone King from play (Pyramid only).
     case discard
