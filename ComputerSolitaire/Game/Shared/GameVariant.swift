@@ -10,6 +10,7 @@ enum GameVariant: String, CaseIterable, Codable {
     case tripeaks
     case pyramid
     case golf
+    case fortyThieves = "fortythieves"
     case yukon
     case scorpion
 
@@ -29,6 +30,8 @@ enum GameVariant: String, CaseIterable, Codable {
             return "TriPeaks"
         case .golf:
             return "Golf"
+        case .fortyThieves:
+            return "Forty Thieves"
         case .scorpion:
             return "Scorpion"
         }
@@ -50,6 +53,8 @@ enum GameVariant: String, CaseIterable, Codable {
             return "Chain up or down the ranks"
         case .golf:
             return "Play one rank up or down"
+        case .fortyThieves:
+            return "Two decks, build down by suit"
         case .scorpion:
             return "Untangle runs suit by suit"
         }
@@ -61,7 +66,7 @@ enum GameVariant: String, CaseIterable, Codable {
             return 7
         case .freecell:
             return 8
-        case .spider, .tripeaks:
+        case .spider, .tripeaks, .fortyThieves:
             return 10
         }
     }
@@ -73,7 +78,7 @@ enum GameVariant: String, CaseIterable, Codable {
         switch self {
         case .klondike, .yukon, .spider, .scorpion:
             return true
-        case .freecell, .pyramid, .tripeaks, .golf:
+        case .freecell, .pyramid, .tripeaks, .golf, .fortyThieves:
             return false
         }
     }
@@ -82,7 +87,7 @@ enum GameVariant: String, CaseIterable, Codable {
     /// Scorpion have stocks but deal them onto the tableau, never into a waste.
     var dealsFromStock: Bool {
         switch self {
-        case .klondike, .pyramid, .tripeaks, .golf:
+        case .klondike, .pyramid, .tripeaks, .golf, .fortyThieves:
             return true
         case .freecell, .yukon, .spider, .scorpion:
             return false
@@ -90,23 +95,24 @@ enum GameVariant: String, CaseIterable, Codable {
     }
 
     /// How many foundation piles the variant plays with. Spider banks its
-    /// eight completed King-to-Ace runs in foundations, Scorpion its four; the
+    /// eight completed King-to-Ace runs in foundations and Scorpion its four,
+    /// Forty Thieves builds two foundations per suit from its two decks; the
     /// other variants build one foundation per suit.
     var foundationPileCount: Int {
         switch self {
         case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion:
             return 4
-        case .spider:
+        case .spider, .fortyThieves:
             return 8
         }
     }
 
-    /// How many cards a deal uses. Spider plays with two decks.
+    /// How many cards a deal uses. Spider and Forty Thieves play with two decks.
     var deckCardCount: Int {
         switch self {
         case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion:
             return 52
-        case .spider:
+        case .spider, .fortyThieves:
             return 104
         }
     }
@@ -118,9 +124,22 @@ enum GameVariant: String, CaseIterable, Codable {
     /// so none of them treats foundations as a drag, drop, or tap target.
     var playerBuildsFoundations: Bool {
         switch self {
-        case .klondike, .freecell, .yukon:
+        case .klondike, .freecell, .yukon, .fortyThieves:
             return true
         case .spider, .pyramid, .tripeaks, .golf, .scorpion:
+            return false
+        }
+    }
+
+    /// Whether a card already on a foundation may be picked back up (a scored
+    /// rollback in Klondike, FreeCell, and Yukon). Forty Thieves builds its
+    /// foundations but locks them: a placed card never returns to play. The
+    /// variants that never build foundations have nothing to roll back.
+    var allowsFoundationRollback: Bool {
+        switch self {
+        case .klondike, .freecell, .yukon:
+            return true
+        case .spider, .pyramid, .tripeaks, .golf, .fortyThieves, .scorpion:
             return false
         }
     }

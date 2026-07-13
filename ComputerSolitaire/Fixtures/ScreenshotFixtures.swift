@@ -36,6 +36,7 @@ enum ScreenshotFixtures {
         ScreenshotFixture(name: "pyramid", title: "Pyramid – fresh deal"),
         ScreenshotFixture(name: "tripeaks", title: "TriPeaks – fresh deal"),
         ScreenshotFixture(name: "golf", title: "Golf – fresh deal"),
+        ScreenshotFixture(name: "fortythieves", title: "Forty Thieves – fresh deal"),
         ScreenshotFixture(name: "scorpion", title: "Scorpion – fresh deal")
     ]
 

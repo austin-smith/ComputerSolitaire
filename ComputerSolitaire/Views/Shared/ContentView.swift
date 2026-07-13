@@ -109,6 +109,9 @@ struct ContentView: View {
     @State private var dealAnimationCards: [DrawAnimationCard] = []
     @State private var dealingCardIDs: Set<UUID> = []
     @State private var dealAnimationToken = UUID()
+    /// The move count when the active deal flight took off; a later move means
+    /// gameplay has mutated the position the flight refers to.
+    @State private var dealAnimationMovesCount = 0
     @State private var undoAnimationItems: [UndoAnimationItem] = []
     @State private var undoAnimationTargets: [UUID: UndoAnimationEndTarget] = [:]
     @State private var undoAnimationProgress: CGFloat = 0
@@ -731,6 +734,17 @@ struct ContentView: View {
             guard let event else { return }
             startDealAnimation(for: event.dealtCardIDs)
         }
+        .onChange(of: viewModel.movesCount) { _, movesCount in
+            // The board stays live during a deal flight, and a move that lands
+            // mid-flight can relocate a card the overlay is still flying toward
+            // (a Scorpion group move carries an in-flight card away with the
+            // cards beneath it). Land the flight rather than finish it against
+            // a stale frame — the same rule the undo path applies. The deal's
+            // own move is exempt: its count is the baseline taken at takeoff.
+            guard movesCount != dealAnimationMovesCount else { return }
+            guard !dealingCardIDs.isEmpty || !dealAnimationCards.isEmpty else { return }
+            cancelDealAnimation()
+        }
         .animation(.spring(response: 0.35, dampingFraction: 0.86), value: viewModel.state)
         .animation(.easeInOut(duration: 0.12), value: activeTarget)
         .overlay {
@@ -1321,6 +1335,7 @@ struct ContentView: View {
         guard !dealtCards.isEmpty, stockFrame != .zero else { return }
 
         dealingCardIDs = Set(dealtCards.map(\.id))
+        dealAnimationMovesCount = viewModel.movesCount
         let token = UUID()
         dealAnimationToken = token
         DispatchQueue.main.async {
@@ -1336,7 +1351,14 @@ struct ContentView: View {
 
     private func resolveDealAnimation(for dealtCards: [Card], token: UUID, attemptsRemaining: Int) {
         guard dealAnimationToken == token else { return }
-        let framesReady = dealtCards.allSatisfy { cardFrames[$0.id] != nil }
+        // Only cards still on the tableau ever publish a landing frame: a
+        // dealt card that completed a run banked on arrival, and its run pile
+        // publishes the run's top card only. Waiting on a banked card would
+        // burn every retry before the plan — which already skips frame-less
+        // cards — could run.
+        let tableauCardIDs = Set(viewModel.state.tableau.joined().map(\.id))
+        let awaitedCards = dealtCards.filter { tableauCardIDs.contains($0.id) }
+        let framesReady = awaitedCards.allSatisfy { cardFrames[$0.id] != nil }
         if !framesReady, attemptsRemaining > 0 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
                 resolveDealAnimation(for: dealtCards, token: token, attemptsRemaining: attemptsRemaining - 1)
@@ -1837,7 +1859,7 @@ struct ContentView: View {
             return [viewModel.state.discard]
         case .tripeaks, .golf:
             return [viewModel.state.waste]
-        case .klondike, .freecell, .yukon, .spider, .scorpion:
+        case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
             return viewModel.state.foundations
         }
     }
@@ -1848,7 +1870,7 @@ struct ContentView: View {
             return [.discard]
         case .tripeaks, .golf:
             return [.waste]
-        case .klondike, .freecell, .yukon, .spider, .scorpion:
+        case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
             return viewModel.state.foundations.indices.map(DropTarget.foundation)
         }
     }

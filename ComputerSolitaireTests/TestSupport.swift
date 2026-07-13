@@ -378,6 +378,112 @@ enum GameStateFixtures {
         )
     }
 
+    /// A reproducible Forty Thieves deal matching the shape of
+    /// `GameState.newFortyThievesGame`. Mirrored by the hint probe's
+    /// `seededFortyThievesDeal` so seeds are comparable.
+    static func seededFortyThievesDeal(seed: UInt64) -> GameState {
+        var deck = seededShuffle(TestCards.fullDeck() + TestCards.fullDeck(), seed: seed)
+        var tableau: [[Card]] = []
+        for _ in 0..<FortyThievesGameRules.columnCount {
+            var column: [Card] = []
+            for _ in 0..<FortyThievesGameRules.dealColumnDepth {
+                var card = deck.removeLast()
+                card.isFaceUp = true
+                column.append(card)
+            }
+            tableau.append(column)
+        }
+        return GameState(
+            variant: .fortyThieves,
+            stock: deck,
+            waste: [],
+            wasteDrawCount: 0,
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: Array(repeating: [], count: 8),
+            tableau: tableau
+        )
+    }
+
+    /// Hand-constructed Forty Thieves position for rules and planner tests.
+    /// `columns` is padded with empty columns to ten and `foundations` with
+    /// empty piles to eight; column, waste, and foundation cards are forced
+    /// face up and stock cards face down. Cards of the two decks not placed
+    /// anywhere can be buried at the bottom of the stock (drawn last) so
+    /// persistence-facing tests still see 104 cards without changing the next
+    /// draw.
+    static func fortyThievesState(
+        columns: [[Card]],
+        stock: [Card] = [],
+        waste: [Card] = [],
+        foundations: [[Card]] = [],
+        fillStockFromRemainder: Bool = false
+    ) -> GameState {
+        var tableau = columns.map { column in
+            column.map { card in
+                var faceUp = card
+                faceUp.isFaceUp = true
+                return faceUp
+            }
+        }
+        if tableau.count < FortyThievesGameRules.columnCount {
+            tableau.append(
+                contentsOf: [[Card]](
+                    repeating: [],
+                    count: FortyThievesGameRules.columnCount - tableau.count
+                )
+            )
+        }
+        var faceDownStock = stock.map { card in
+            var faceDown = card
+            faceDown.isFaceUp = false
+            return faceDown
+        }
+        let fullWaste = waste.map { card in
+            var faceUp = card
+            faceUp.isFaceUp = true
+            return faceUp
+        }
+        var fullFoundations = foundations.map { pile in
+            pile.map { card in
+                var faceUp = card
+                faceUp.isFaceUp = true
+                return faceUp
+            }
+        }
+        if fullFoundations.count < 8 {
+            fullFoundations.append(
+                contentsOf: [[Card]](repeating: [], count: 8 - fullFoundations.count)
+            )
+        }
+        if fillStockFromRemainder {
+            var usedCounts: [CardIdentity: Int] = [:]
+            let placed = tableau.flatMap { $0 } + faceDownStock + fullWaste
+                + fullFoundations.flatMap { $0 }
+            for card in placed {
+                usedCounts[CardIdentity(suit: card.suit, rank: card.rank), default: 0] += 1
+            }
+            var remainder: [Card] = []
+            for card in TestCards.fullDeck() + TestCards.fullDeck() {
+                let identity = CardIdentity(suit: card.suit, rank: card.rank)
+                if let count = usedCounts[identity], count > 0 {
+                    usedCounts[identity] = count - 1
+                } else {
+                    remainder.append(card)
+                }
+            }
+            faceDownStock = remainder + faceDownStock
+        }
+        return GameState(
+            variant: .fortyThieves,
+            stock: faceDownStock,
+            waste: fullWaste,
+            wasteDrawCount: min(1, fullWaste.count),
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: fullFoundations,
+            tableau: tableau
+        )
+    }
+
     private static func seededDeck(seed: UInt64, faceUp: Bool) -> [Card] {
         seededShuffle(TestCards.fullDeck(faceUp: faceUp), seed: seed)
     }

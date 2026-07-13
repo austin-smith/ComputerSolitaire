@@ -17,6 +17,7 @@ enum GameMode: String, CaseIterable, Codable {
     case tripeaks
     case pyramid
     case golf
+    case fortyThieves = "fortythieves"
     case yukon
     case scorpion
 
@@ -36,6 +37,8 @@ enum GameMode: String, CaseIterable, Codable {
             return .tripeaks
         case .golf:
             return .golf
+        case .fortyThieves:
+            return .fortyThieves
         case .scorpion:
             return .scorpion
         }
@@ -49,7 +52,7 @@ enum GameMode: String, CaseIterable, Codable {
         case .klondikeDrawThree:
             return .three
         case .freecell, .yukon, .spiderOneSuit, .spiderTwoSuits, .spiderFourSuits, .pyramid,
-             .tripeaks, .golf, .scorpion:
+             .tripeaks, .golf, .fortyThieves, .scorpion:
             return nil
         }
     }
@@ -64,7 +67,7 @@ enum GameMode: String, CaseIterable, Codable {
         case .spiderFourSuits:
             return .four
         case .klondikeDrawOne, .klondikeDrawThree, .freecell, .yukon, .pyramid, .tripeaks, .golf,
-             .scorpion:
+             .fortyThieves, .scorpion:
             return nil
         }
     }
@@ -119,6 +122,8 @@ enum GameMode: String, CaseIterable, Codable {
             self = .tripeaks
         case .golf:
             self = .golf
+        case .fortyThieves:
+            self = .fortyThieves
         case .scorpion:
             self = .scorpion
         }

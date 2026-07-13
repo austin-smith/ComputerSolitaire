@@ -517,6 +517,26 @@ struct TopRowView: View {
                     fanProgress: fanProgress,
                     dragGesture: dragGesture
                 )
+            case .fortyThieves:
+                FortyThievesTopRowView(
+                    viewModel: viewModel,
+                    cardSize: cardSize,
+                    columnSpacing: columnSpacing,
+                    wasteFanSpacing: wasteFanSpacing,
+                    activeTarget: activeTarget,
+                    hintedTarget: hintedTarget,
+                    isStockHinted: isStockHinted,
+                    isWasteHinted: isWasteHinted,
+                    hintHighlightOpacity: hintHighlightOpacity,
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
+                    hiddenCardIDs: hiddenCardIDs,
+                    hintedCardIDs: hintedCardIDs,
+                    hintWiggleToken: hintWiggleToken,
+                    drawingCardIDs: drawingCardIDs,
+                    fanProgress: fanProgress,
+                    dragGesture: dragGesture
+                )
             }
         }
     }

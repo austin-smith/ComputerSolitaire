@@ -198,8 +198,8 @@ struct SavedGamePayload: Codable {
             switch state.variant {
             case .klondike:
                 return DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
-            case .pyramid, .tripeaks, .golf:
-                // All three always draw a single card to the waste.
+            case .pyramid, .tripeaks, .golf, .fortyThieves:
+                // All four always draw a single card to the waste.
                 return DrawMode.one.rawValue
             case .freecell, .yukon, .spider, .scorpion:
                 return DrawMode.three.rawValue
@@ -295,7 +295,7 @@ struct SavedGamePayload: Codable {
         switch state.variant {
         case .klondike:
             return min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
-        case .pyramid, .tripeaks, .golf:
+        case .pyramid, .tripeaks, .golf, .fortyThieves:
             return min(max(0, state.wasteDrawCount), min(1, state.waste.count))
         case .freecell, .yukon, .spider, .scorpion:
             return 0
@@ -895,8 +895,9 @@ private extension GameState {
     }
 
     /// Every card identity must appear exactly as often as the variant's deck
-    /// composition prescribes: once each for the single-deck variants, and per
-    /// `SpiderDeck` for Spider's two suit-composed decks.
+    /// composition prescribes: once each for the single-deck variants, twice
+    /// each for Forty Thieves' two full decks, and per `SpiderDeck` for
+    /// Spider's two suit-composed decks.
     private func hasExpectedDeckComposition(_ allCards: [Card]) -> Bool {
         var identityCounts: [CardIdentity: Int] = [:]
         for card in allCards {
@@ -908,17 +909,23 @@ private extension GameState {
     private var expectedIdentityCounts: [CardIdentity: Int] {
         switch variant {
         case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion:
-            var counts: [CardIdentity: Int] = [:]
-            for suit in Suit.allCases {
-                for rank in Rank.allCases {
-                    counts[CardIdentity(suit: suit, rank: rank)] = 1
-                }
-            }
-            return counts
+            return Self.uniformIdentityCounts(copies: 1)
+        case .fortyThieves:
+            return Self.uniformIdentityCounts(copies: 2)
         case .spider:
             guard let suitCount = spiderSuitCount else { return [:] }
             return SpiderDeck.expectedIdentityCounts(suitCount: suitCount)
         }
+    }
+
+    private static func uniformIdentityCounts(copies: Int) -> [CardIdentity: Int] {
+        var counts: [CardIdentity: Int] = [:]
+        for suit in Suit.allCases {
+            for rank in Rank.allCases {
+                counts[CardIdentity(suit: suit, rank: rank)] = copies
+            }
+        }
+        return counts
     }
 
     private var hasValidVariantPersistenceLayout: Bool {
@@ -937,6 +944,8 @@ private extension GameState {
             return TriPeaksPersistenceRules.hasValidLayout(state: self)
         case .golf:
             return GolfPersistenceRules.hasValidLayout(state: self)
+        case .fortyThieves:
+            return FortyThievesPersistenceRules.hasValidLayout(state: self)
         case .scorpion:
             return ScorpionPersistenceRules.hasValidLayout(state: self)
         }

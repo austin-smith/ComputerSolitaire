@@ -31,6 +31,11 @@ enum GameRules {
             // Golf columns are never a destination; its one move flows
             // through GolfGameRules.
             return false
+        case .fortyThieves:
+            return FortyThievesGameRules.canMoveToTableau(
+                card: card,
+                destinationPile: destinationPile
+            )
         }
     }
 

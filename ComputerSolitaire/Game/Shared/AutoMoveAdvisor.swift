@@ -82,7 +82,7 @@ enum AutoMoveAdvisor {
             selections.append(Selection(source: .waste, cards: [topWasteCard]))
         }
 
-        if state.variant.playerBuildsFoundations {
+        if state.variant.allowsFoundationRollback {
             for foundationIndex in state.foundations.indices {
                 guard let topFoundationCard = state.foundations[foundationIndex].last else { continue }
                 selections.append(
@@ -281,6 +281,8 @@ private extension AutoMoveAdvisor {
             return YukonAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .spider:
             return SpiderAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
+        case .fortyThieves:
+            return FortyThievesAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .scorpion:
             return ScorpionAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .pyramid, .tripeaks, .golf:
@@ -320,6 +322,12 @@ private extension AutoMoveAdvisor {
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
             )
+        case .fortyThieves:
+            return FortyThievesAutoMoveAdvisor.allowsTableauTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
         case .scorpion:
             return ScorpionAutoMoveAdvisor.allowsTableauTransfer(
                 selection: selection,
@@ -355,6 +363,12 @@ private extension AutoMoveAdvisor {
             )
         case .spider:
             return SpiderAutoMoveAdvisor.isRedundantEmptyColumnTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
+        case .fortyThieves:
+            return FortyThievesAutoMoveAdvisor.isRedundantEmptyColumnTransfer(
                 selection: selection,
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
@@ -402,6 +416,12 @@ private extension AutoMoveAdvisor {
                 in: state,
                 destinations: &destinations
             )
+        case .fortyThieves:
+            FortyThievesAutoMoveAdvisor.appendAuxiliaryDestinations(
+                for: selection,
+                in: state,
+                destinations: &destinations
+            )
         case .scorpion:
             ScorpionAutoMoveAdvisor.appendAuxiliaryDestinations(
                 for: selection,
@@ -425,6 +445,8 @@ private extension AutoMoveAdvisor {
             YukonAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .spider:
             SpiderAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
+        case .fortyThieves:
+            FortyThievesAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .scorpion:
             ScorpionAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .pyramid, .tripeaks, .golf:
@@ -438,7 +460,7 @@ private extension AutoMoveAdvisor {
     /// bank any run the landing completed; the other variants have none.
     static func applyVariantTableauDestinationEffects(on state: inout GameState, pileIndex: Int) {
         switch state.variant {
-        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .fortyThieves:
             break
         case .spider:
             SpiderAutoMoveAdvisor.applyTableauDestinationEffects(on: &state, pileIndex: pileIndex)

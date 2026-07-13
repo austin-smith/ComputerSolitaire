@@ -86,7 +86,7 @@ struct GameState: Equatable, Codable {
 
     var isWon: Bool {
         switch variant {
-        case .klondike, .freecell, .yukon, .spider, .scorpion:
+        case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
             // Won once every foundation holds a full run (Ace-to-King on the
             // build-up variants, a banked King-to-Ace run per Spider or
             // Scorpion foundation).
@@ -123,6 +123,8 @@ struct GameState: Equatable, Codable {
             return newTriPeaksGame()
         case .golf:
             return newGolfGame()
+        case .fortyThieves:
+            return newFortyThievesGame()
         case .scorpion:
             return newScorpionGame()
         }

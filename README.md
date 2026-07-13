@@ -13,7 +13,7 @@ Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 ## Features
 
 - Fully native apps for iOS, iPadOS, and macOS
-- Multiple game variants: **Klondike** (both 1-card and 3-card draw), **Spider** (1, 2, or 4 suits), **FreeCell**, **TriPeaks**, **Pyramid**, **Golf**, **Yukon**, and **Scorpion**
+- Multiple game variants: **Klondike** (both 1-card and 3-card draw), **Spider** (1, 2, or 4 suits), **FreeCell**, **TriPeaks**, **Pyramid**, **Golf**, **Forty Thieves**, **Yukon**, and **Scorpion**
 - Automatic game persistence and resume
 - Customizable table appearance
 - Other things you enjoy
@@ -28,5 +28,6 @@ Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 | **TriPeaks** | Chain uncovered cards one rank up or down to level three peaks | [Rules](docs/rules/tripeaks.md) |
 | **Pyramid** | Pair exposed cards totaling 13 to dismantle a 28-card pyramid | [Rules](docs/rules/pyramid.md) |
 | **Golf** | Play columns down to nothing, one rank up or down, scored like golf across a nine-hole match | [Rules](docs/rules/golf.md) |
+| **Forty Thieves** | Two decks, ten columns — build down by suit one card at a time, managing a single-pass stock | [Rules](docs/rules/fortythieves.md) |
 | **Yukon** | Klondike's wilder sibling — no stock, and any face-up card moves with everything stacked on it | [Rules](docs/rules/yukon.md) |
 | **Scorpion** | Spider's single-deck cousin — untangle suit runs in place with Yukon-style group moves | [Rules](docs/rules/scorpion.md) |

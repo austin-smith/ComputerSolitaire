@@ -311,6 +311,22 @@ struct RulesAndScoringView: View {
                     definition: "45 strokes for a nine-hole match. Like golf, lower is better."
                 )
             ]
+        case .fortyThieves:
+            return [
+                TermRow(
+                    term: "Tableau",
+                    definition: "Ten columns of four face-up cards; build down by suit, one card at a time."
+                ),
+                TermRow(
+                    term: "Foundations",
+                    definition: "Eight suit piles built up from Ace to King — two per suit; cards placed here never return."
+                ),
+                TermRow(term: "Stock", definition: "The face-down draw pile. One pass only — there are no recycles."),
+                TermRow(
+                    term: "Waste",
+                    definition: "Face-up cards drawn from the stock; only the top card is playable."
+                )
+            ]
         case .scorpion:
             return [
                 TermRow(term: "Tableau", definition: "The seven play piles where you build down by suit."),
@@ -399,6 +415,15 @@ struct RulesAndScoringView: View {
                 "Tap the stock to flip one card onto the waste. The stock allows a single pass — there are no recycles.",
                 "The hole ends when you clear all 35 column cards, or when the stock is spent and nothing plays.",
                 "A match is nine holes; the lowest total wins. Switching games keeps the match — it resumes with your Golf session."
+            ]
+        case .fortyThieves:
+            return [
+                "Two decks (104 cards) are dealt into ten tableau columns of four face-up cards. The remaining 64 cards form the stock.",
+                "Build tableau columns down by suit, one rank at a time. Only the exposed top card of a column may move — sequences never move together.",
+                "Any single available card — an exposed tableau card or the top waste card — may fill an empty column.",
+                "Build the eight foundations up by suit from Ace to King, two per suit. Cards placed on a foundation never return to play.",
+                "Tap the stock to flip one card onto the waste, whenever you like. The stock allows a single pass — there are no recycles.",
+                "You win by moving all 104 cards to foundations. The game is lost when the stock is spent and no legal move remains."
             ]
         case .scorpion:
             return [
@@ -499,6 +524,17 @@ struct RulesAndScoringView: View {
                     move: "Clear the board",
                     points: Scoring.delta(for: .golfBoardClear(remainingStockCount: 1)),
                     note: "Per stock card left — scores below zero are the best results."
+                )
+            ]
+        case .fortyThieves:
+            return [
+                ScoringRow(move: "Waste to Tableau", points: Scoring.delta(for: .wasteToTableau), note: nil),
+                ScoringRow(move: "Waste to Foundation", points: Scoring.delta(for: .wasteToFoundation), note: nil),
+                ScoringRow(move: "Tableau to Foundation", points: Scoring.delta(for: .tableauToFoundation), note: nil),
+                ScoringRow(
+                    move: "Win time bonus",
+                    points: Scoring.timedMaxBonusDrawThree,
+                    note: "Reduced by elapsed time."
                 )
             ]
         case .scorpion:

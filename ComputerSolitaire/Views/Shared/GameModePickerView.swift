@@ -363,7 +363,7 @@ private struct MiniBoardView: View {
                 pyramidRows
             case .tripeaks:
                 triPeaksRows
-            case .klondike, .spider, .freecell, .yukon, .golf, .scorpion:
+            case .klondike, .spider, .freecell, .yukon, .golf, .fortyThieves, .scorpion:
                 tableauRow
             }
         }
@@ -402,6 +402,10 @@ private struct MiniBoardView: View {
             case .spider:
                 miniCard(.faceDown)
                 Spacer(minLength: 0)
+                foundationSlots(count: 8)
+            case .fortyThieves:
+                miniCard(.faceDown)
+                miniCard(.slot)
                 foundationSlots(count: 8)
             case .scorpion:
                 miniCard(.faceDown)
@@ -513,6 +517,8 @@ private struct MiniBoardView: View {
             }
         case .golf:
             return Array(repeating: Array(repeating: .faceUp, count: 5), count: 7)
+        case .fortyThieves:
+            return Array(repeating: Array(repeating: .faceUp, count: 4), count: 10)
         case .scorpion:
             return (0..<7).map { column in
                 column < 4

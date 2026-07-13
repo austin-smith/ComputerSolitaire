@@ -4,7 +4,9 @@ import Foundation
 ///
 /// Klondike qualifies once the stock/waste are empty and every tableau card is face up;
 /// Yukon once every tableau card is face up; FreeCell qualifies whenever repeatedly
-/// playing eligible cards (from cascade tops and free cells) reaches a win in simulation.
+/// playing eligible cards (from cascade tops and free cells) reaches a win in simulation;
+/// Forty Thieves once its single-pass stock is spent, playing tableau tops and the
+/// waste top.
 enum AutoFinishPlanner {
     struct AutoFinishMove {
         let selection: Selection
@@ -16,7 +18,7 @@ enum AutoFinishPlanner {
         var simulatedState = state
         let maxSteps = simulatedState.tableau.reduce(0) { partialResult, pile in
             partialResult + pile.count
-        } + simulatedState.freeCells.count
+        } + simulatedState.freeCells.count + simulatedState.waste.count
 
         for _ in 0..<maxSteps {
             if simulatedState.isWon {
@@ -64,6 +66,11 @@ private extension AutoFinishPlanner {
             // Golf has no deterministic mop-up phase either: play order
             // matters to the last card, so the game never auto-finishes.
             return false
+        case .fortyThieves:
+            // Every board card is face up, so once the single-pass stock is
+            // spent the position is fully determined; the simulation below
+            // still verifies the greedy run actually reaches a win.
+            return state.stock.isEmpty
         }
     }
 
@@ -114,6 +121,23 @@ private extension AutoFinishPlanner {
             }
         }
 
+        if state.variant == .fortyThieves, let card = state.waste.last {
+            for foundationIndex in state.foundations.indices {
+                let foundation = state.foundations[foundationIndex]
+                guard GameRules.canMoveToFoundation(card: card, foundation: foundation) else { continue }
+
+                let selection = Selection(source: .waste, cards: [card])
+                candidates.append(
+                    (
+                        move: AutoFinishMove(selection: selection, destination: .foundation(foundationIndex)),
+                        rankValue: card.rank.rawValue,
+                        sourceOrder: state.tableau.count,
+                        foundationPile: foundationIndex
+                    )
+                )
+            }
+        }
+
         let sorted = candidates.sorted { lhs, rhs in
             if lhs.rankValue != rhs.rankValue {
                 return lhs.rankValue < rhs.rankValue
@@ -160,7 +184,12 @@ private extension AutoFinishPlanner {
             }
             state.freeCells[slot] = nil
 
-        case .waste, .foundation, .pyramid, .triPeaks:
+        case .waste:
+            guard state.waste.last?.id == movingCard.id else { return false }
+            _ = state.waste.popLast()
+            state.wasteDrawCount = min(1, state.waste.count)
+
+        case .foundation, .pyramid, .triPeaks:
             return false
         }
 

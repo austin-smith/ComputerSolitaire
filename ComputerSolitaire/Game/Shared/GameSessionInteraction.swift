@@ -16,8 +16,11 @@ extension SolitaireViewModel {
         if state.variant == .spider, !canSelectTableauCards(cards) {
             return false
         }
-        if state.variant == .golf, cardIndex != pile.count - 1 {
-            // Only the exposed card of a Golf column can move.
+        if state.variant == .golf || state.variant == .fortyThieves,
+           cardIndex != pile.count - 1 {
+            // Only the exposed card of a Golf or Forty Thieves column can
+            // move; without this guard a buried-card drag would build a
+            // multi-card selection whose legality checks only see its first card.
             return false
         }
         selection = Selection(source: .tableau(pile: pileIndex, index: cardIndex), cards: cards)
@@ -86,7 +89,7 @@ extension SolitaireViewModel {
                       state.tableau.indices.contains(pile),
                       index == state.tableau[pile].count - 1 else { return false }
                 return GolfGameRules.canPlay(column: pile, in: state)
-            case .klondike, .freecell, .yukon, .spider, .scorpion:
+            case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
                 return false
             }
 
