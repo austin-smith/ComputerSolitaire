@@ -327,6 +327,22 @@ struct RulesAndScoringView: View {
                     definition: "Face-up cards drawn from the stock; only the top card is playable."
                 )
             ]
+        case .scorpion:
+            return [
+                TermRow(term: "Tableau", definition: "The seven play piles where you build down by suit."),
+                TermRow(
+                    term: "Group move",
+                    definition: "Any face-up card together with every card stacked on top of it, moved as one, even out of order."
+                ),
+                TermRow(
+                    term: "Completed run",
+                    definition: "A full King-to-Ace run of one suit. It leaves the tableau automatically; four complete the game."
+                ),
+                TermRow(
+                    term: "Stock",
+                    definition: "Three face-down cards, dealt face up onto the first three piles at any time — once."
+                )
+            ]
         }
     }
 
@@ -408,6 +424,17 @@ struct RulesAndScoringView: View {
                 "Build the eight foundations up by suit from Ace to King, two per suit. Cards placed on a foundation never return to play.",
                 "Tap the stock to flip one card onto the waste, whenever you like. The stock allows a single pass — there are no recycles.",
                 "You win by moving all 104 cards to foundations. The game is lost when the stock is spent and no legal move remains."
+            ]
+        case .scorpion:
+            return [
+                "Deal 49 cards into seven tableau piles of seven. The first four piles hide their bottom three cards face down; the last three are fully face up. The remaining three cards form the stock.",
+                "A card can move only onto the card one rank higher of its own suit. Nothing can be placed on an Ace.",
+                "Move any face-up card along with all cards on top of it, even if they are not in sequence.",
+                "Only Kings (with any cards stacked on them) can fill an empty pile.",
+                "Tapping the stock deals its three cards face up, one onto each of the first three piles. Deal at any time — but only once.",
+                "A completed King-to-Ace run of one suit is removed from the tableau automatically.",
+                "Face-down cards turn face up when they become the top of a pile.",
+                "You win by completing all four runs."
             ]
         }
     }
@@ -504,6 +531,16 @@ struct RulesAndScoringView: View {
                 ScoringRow(move: "Waste to Tableau", points: Scoring.delta(for: .wasteToTableau), note: nil),
                 ScoringRow(move: "Waste to Foundation", points: Scoring.delta(for: .wasteToFoundation), note: nil),
                 ScoringRow(move: "Tableau to Foundation", points: Scoring.delta(for: .tableauToFoundation), note: nil),
+                ScoringRow(
+                    move: "Win time bonus",
+                    points: Scoring.timedMaxBonusDrawThree,
+                    note: "Reduced by elapsed time."
+                )
+            ]
+        case .scorpion:
+            return [
+                ScoringRow(move: "Turn over Tableau card", points: Scoring.delta(for: .turnOverTableauCard), note: nil),
+                ScoringRow(move: "Complete a run", points: Scoring.delta(for: .scorpionCompletedRun), note: nil),
                 ScoringRow(
                     move: "Win time bonus",
                     points: Scoring.timedMaxBonusDrawThree,

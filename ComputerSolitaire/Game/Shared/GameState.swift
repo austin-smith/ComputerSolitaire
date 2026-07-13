@@ -86,9 +86,10 @@ struct GameState: Equatable, Codable {
 
     var isWon: Bool {
         switch variant {
-        case .klondike, .freecell, .yukon, .spider, .fortyThieves:
+        case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
             // Won once every foundation holds a full run (Ace-to-King on the
-            // build-up variants, a banked King-to-Ace run per Spider foundation).
+            // build-up variants, a banked King-to-Ace run per Spider or
+            // Scorpion foundation).
             return foundations.allSatisfy { $0.count == Rank.allCases.count }
         case .pyramid:
             // Won once every pyramid slot is cleared; stock and waste may keep cards.
@@ -124,6 +125,8 @@ struct GameState: Equatable, Codable {
             return newGolfGame()
         case .fortyThieves:
             return newFortyThievesGame()
+        case .scorpion:
+            return newScorpionGame()
         }
     }
 }

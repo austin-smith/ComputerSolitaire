@@ -1,12 +1,16 @@
 import SwiftUI
 import Observation
 
-struct SpiderStockView: View {
+/// The stock for the variants that deal it directly onto the tableau (Spider,
+/// Scorpion): a tap deals, there is no waste, and an empty stock is inert.
+struct TableauStockView: View {
     @Bindable var viewModel: SolitaireViewModel
     let cardSize: CGSize
     let isHintTargeted: Bool
     let hintHighlightOpacity: Double
     let hintWiggleToken: UUID
+    /// How a deal lands, for accessibility — e.g. "Deals one card to each pile".
+    let dealDescription: String
 
     var body: some View {
         Button {
@@ -48,6 +52,6 @@ struct SpiderStockView: View {
 
     private var stockAccessibilityValue: String {
         guard !viewModel.state.stock.isEmpty else { return "Empty" }
-        return "\(viewModel.state.stock.count) cards. Deals one card to each pile"
+        return "\(viewModel.state.stock.count) cards. \(dealDescription)"
     }
 }

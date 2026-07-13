@@ -103,8 +103,9 @@ private extension TapMovePolicy {
                 // safety gate matters even more; the shared rule assumes one
                 // foundation per suit, so Forty Thieves brings its own.
                 tier = FortyThievesGameRules.isSafeFoundationMove(card: card, in: state) ? 100 : 60
-            case .spider:
-                // Unreachable: Spider foundations are never player destinations.
+            case .spider, .scorpion:
+                // Unreachable: Spider and Scorpion foundations are never
+                // player destinations.
                 tier = 100
             case .pyramid, .tripeaks, .golf:
                 // Unreachable: Pyramid, TriPeaks, and Golf moves never target

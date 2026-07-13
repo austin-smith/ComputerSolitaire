@@ -33,6 +33,22 @@ final class SolitaireViewModel {
     private var hintAutoClearToken = UUID()
     var isDragging: Bool = false
     var pendingAutoMove: PendingAutoMove?
+    /// The most recent stock-onto-tableau deal (Spider's row, Scorpion's
+    /// three cards), published for the board's deal-flight animation. An
+    /// explicit event rather than an inferred state diff, so restores, undos,
+    /// and game switches can never replay a deal that already happened. Card
+    /// IDs are in stock order, matching the deal's undo context.
+    struct TableauDealEvent: Equatable {
+        let id: UUID
+        let dealtCardIDs: [UUID]
+    }
+    private(set) var latestTableauDealEvent: TableauDealEvent?
+
+    /// Publishes a just-executed stock-onto-tableau deal for the board's
+    /// flight animation; called by the variant session extensions.
+    func publishTableauDealEvent(dealtCardIDs: [UUID]) {
+        latestTableauDealEvent = TableauDealEvent(id: UUID(), dealtCardIDs: dealtCardIDs)
+    }
     private(set) var movesCount: Int = 0
     private(set) var score: Int = 0
     private(set) var gameStartedAt: Date = .now
@@ -290,6 +306,7 @@ final class SolitaireViewModel {
         selection = nil
         isDragging = false
         pendingAutoMove = nil
+        latestTableauDealEvent = nil
         movesCount = 0
         score = 0
         gameStartedAt = dateProvider.now
@@ -380,6 +397,7 @@ final class SolitaireViewModel {
         let now = dateProvider.now
         guard let sanitizedPayload = payload.sanitizedForRestore(at: now) else { return false }
         clearHint()
+        latestTableauDealEvent = nil
         let offlineDurationSinceSave = max(0, now.timeIntervalSince(sanitizedPayload.savedAt))
         state = sanitizedPayload.state
         movesCount = sanitizedPayload.movesCount
@@ -544,7 +562,7 @@ final class SolitaireViewModel {
         switch variant {
         case .klondike:
             configureKlondikeNewGame(drawMode: drawMode)
-        case .freecell, .yukon:
+        case .freecell, .yukon, .scorpion:
             configureWastelessNewGame()
         case .spider:
             configureSpiderNewGame()
@@ -563,7 +581,7 @@ final class SolitaireViewModel {
         switch state.variant {
         case .klondike:
             configureKlondikeRedeal()
-        case .freecell, .yukon:
+        case .freecell, .yukon, .scorpion:
             configureWastelessRedeal()
         case .spider:
             configureSpiderRedeal()
@@ -585,7 +603,7 @@ final class SolitaireViewModel {
         switch state.variant {
         case .klondike:
             return sanitizeKlondikeRedealState(state, stockDrawCount: stockDrawCount)
-        case .freecell, .yukon, .spider:
+        case .freecell, .yukon, .spider, .scorpion:
             return sanitizeWastelessRedealState(state)
         case .pyramid:
             return sanitizePyramidRedealState(state)
@@ -625,7 +643,7 @@ final class SolitaireViewModel {
         card: Card
     ) -> Bool {
         switch state.variant {
-        case .klondike, .yukon, .spider:
+        case .klondike, .yukon, .spider, .scorpion:
             return handleFaceDownTableauTap(
                 pile: pile,
                 pileIndex: pileIndex,
@@ -680,7 +698,7 @@ final class SolitaireViewModel {
     /// variant's rules. Also drives which tableau cards are accessibility elements.
     func canSelectTableauCards(_ cards: [Card]) -> Bool {
         switch state.variant {
-        case .klondike, .yukon:
+        case .klondike, .yukon, .scorpion:
             return true
         case .freecell:
             return canSelectFreeCellTableauCards(cards)
@@ -718,6 +736,8 @@ extension SolitaireViewModel {
             handleKlondikeStockTap()
         case .spider:
             handleSpiderStockTap()
+        case .scorpion:
+            handleScorpionStockTap()
         case .pyramid:
             handlePyramidStockTap()
         case .tripeaks:
@@ -742,8 +762,9 @@ extension SolitaireViewModel {
         case .tripeaks, .golf, .fortyThieves:
             // Single pass with no recycles: an empty stock is dead.
             return !state.stock.isEmpty
-        case .spider:
-            // Spider's stock renders through its own view; recorded for honesty.
+        case .spider, .scorpion:
+            // Spider's and Scorpion's stocks render through their own views;
+            // recorded for honesty.
             return !state.stock.isEmpty
         case .freecell, .yukon:
             return false
@@ -757,7 +778,7 @@ extension SolitaireViewModel {
             return Array(state.waste.suffix(count))
         case .pyramid, .tripeaks, .golf, .fortyThieves:
             return Array(state.waste.suffix(min(1, state.wasteDrawCount)))
-        case .freecell, .yukon, .spider:
+        case .freecell, .yukon, .spider, .scorpion:
             return []
         }
     }
@@ -895,6 +916,8 @@ extension SolitaireViewModel {
             applyScore(for: selection.source, destination: .tableau(index))
             if state.variant == .spider {
                 resolveCompletedSpiderRuns()
+            } else if state.variant == .scorpion {
+                resolveCompletedScorpionRuns()
             }
             applyTimeBonusIfWon()
             self.selection = nil
@@ -959,7 +982,7 @@ extension SolitaireViewModel {
 
     func flipTopCardIfNeeded(in pileIndex: Int) {
         switch state.variant {
-        case .klondike, .yukon, .spider:
+        case .klondike, .yukon, .spider, .scorpion:
             flipFaceDownTopCardIfNeeded(in: pileIndex)
         case .freecell, .pyramid, .tripeaks, .golf, .fortyThieves:
             break
@@ -1009,6 +1032,10 @@ extension SolitaireViewModel {
             applyYukonMoveScore(for: source, destination: destination)
         case .spider:
             applySpiderMoveScore(for: source, destination: destination)
+        case .scorpion:
+            // Scorpion scores reveals (via the shared flip path) and banked
+            // runs only; tableau moves themselves are free.
+            break
         case .pyramid:
             applyPyramidMoveScore(for: destination)
         case .tripeaks:

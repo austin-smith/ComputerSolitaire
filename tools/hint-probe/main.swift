@@ -219,6 +219,27 @@ func seededDeal(variant: GameVariant, seed: UInt64, spiderSuitCount: SpiderSuitC
             foundations: Array(repeating: [], count: 8),
             tableau: tableau
         )
+
+    case .scorpion:
+        // Mirrors GameState.newScorpionGame (and GameStateFixtures.seededScorpionDeal).
+        var deck = seededDeck(seed: seed, faceUp: false)
+        var tableau: [[Card]] = Array(repeating: [], count: 7)
+        for pileIndex in 0..<7 {
+            let faceDownCount = pileIndex < 4 ? 3 : 0
+            for cardIndex in 0..<7 {
+                var card = deck.removeLast()
+                card.isFaceUp = cardIndex >= faceDownCount
+                tableau[pileIndex].append(card)
+            }
+        }
+        return GameState(
+            variant: .scorpion,
+            stock: deck,
+            waste: [],
+            wasteDrawCount: 0,
+            foundations: Array(repeating: [], count: 4),
+            tableau: tableau
+        )
     }
 }
 
@@ -284,6 +305,14 @@ func apply(
 func spiderStockDeal(_ state: GameState) -> GameState? {
     var next = state
     guard SpiderGameRules.dealStockRow(in: &next) != nil else { return nil }
+    return next
+}
+
+/// Mirrors dealScorpionStock in the session (via the shared rules function,
+/// including the completed-run sweep).
+func scorpionStockDeal(_ state: GameState) -> GameState? {
+    var next = state
+    guard ScorpionGameRules.dealStock(in: &next) != nil else { return nil }
     return next
 }
 
@@ -366,7 +395,7 @@ func actionCap(for variant: GameVariant) -> Int {
         return 1_200
     case .spider:
         return 1_000
-    case .freecell, .yukon, .pyramid, .tripeaks, .golf:
+    case .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion:
         return 600
     }
 }
@@ -567,6 +596,70 @@ func playSpiderFollowingHints(
                 }
                 if let outcome = record(next) { return (outcome, revisitEvents) }
             }
+        }
+    }
+    return (.actionCap(foundation: foundationCount(state)), revisitEvents)
+}
+
+func playScorpionFollowingHints(seed: UInt64) -> (outcome: Outcome, revisitEvents: Int) {
+    // Replicates HintPlanner's Scorpion path without its wall-clock deadline:
+    // follow each improving line (which may include the stock deal) to its end,
+    // then replan; on no-progress, play the deal the real hint stack falls back
+    // to, and declare a deadlock only when the stock is spent.
+    var state = seededDeal(variant: .scorpion, seed: seed)
+    var visitCounts: [UInt64: Int] = [fingerprint(state): 1]
+    var revisitEvents = 0
+    var actions = 0
+
+    func record(_ nextState: GameState) -> Outcome? {
+        state = nextState
+        actions += 1
+        let key = fingerprint(state)
+        let count = (visitCounts[key] ?? 0) + 1
+        visitCounts[key] = count
+        if count > 1 { revisitEvents += 1 }
+        // A transient cross-line revisit is survivable (the next plan differs);
+        // a third visit to the same exact layout means the hints are looping.
+        if count >= 3 {
+            return .stalemateLoop(foundation: foundationCount(state))
+        }
+        // Cap before win, matching the other players: their win check only
+        // runs on the next loop iteration, so a win landed on the final
+        // permitted action classifies as .actionCap everywhere.
+        if actions >= actionCap(for: .scorpion) {
+            return .actionCap(foundation: foundationCount(state))
+        }
+        if state.isWon { return .win(moves: actions) }
+        return nil
+    }
+
+    func applied(_ action: ScorpionPlanner.PlannedAction) -> GameState? {
+        switch action {
+        case .move(let selection, let destination):
+            return apply(selection, destination, to: state, stockDrawCount: 3)
+        case .stockDeal:
+            return scorpionStockDeal(state)
+        }
+    }
+
+    while actions < actionCap(for: .scorpion) {
+        if state.isWon { return (.win(moves: actions), revisitEvents) }
+        switch ScorpionPlanner.bestLine(in: state) {
+        case .line(let line):
+            for action in line {
+                guard let next = applied(action) else {
+                    fatalError("Seed \(seed): illegal Scorpion hint")
+                }
+                if let outcome = record(next) { return (outcome, revisitEvents) }
+            }
+
+        case .noProgress:
+            // Mirrors HintPlanner's fallback: the deal is legal at any time,
+            // so no preparation line exists — deal or die.
+            guard let next = scorpionStockDeal(state) else {
+                return (.deadlock(foundation: foundationCount(state)), revisitEvents)
+            }
+            if let outcome = record(next) { return (outcome, revisitEvents) }
         }
     }
     return (.actionCap(foundation: foundationCount(state)), revisitEvents)
@@ -813,7 +906,7 @@ func playRandom(
         lossProgress = triPeaksCleared
     case .golf:
         lossProgress = golfCleared
-    case .klondike, .freecell, .yukon, .spider, .fortyThieves:
+    case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
         lossProgress = foundationCount
     }
     var actions = 0
@@ -833,6 +926,8 @@ func playRandom(
             canTapStock = !state.stock.isEmpty || !state.waste.isEmpty
         case .spider:
             canTapStock = SpiderGameRules.canDealFromStock(state: state)
+        case .scorpion:
+            canTapStock = ScorpionGameRules.canDealFromStock(state: state)
         case .pyramid:
             canTapStock = !state.stock.isEmpty || PyramidGameRules.canRecycleWaste(in: state)
         case .tripeaks, .golf, .fortyThieves:
@@ -849,6 +944,8 @@ func playRandom(
             switch variant {
             case .spider:
                 tapped = spiderStockDeal(state)
+            case .scorpion:
+                tapped = scorpionStockDeal(state)
             case .pyramid:
                 tapped = pyramidStockTap(state)
             case .tripeaks:
@@ -988,6 +1085,8 @@ func run(
         label = "golf"
     case .fortyThieves:
         label = "fortythieves"
+    case .scorpion:
+        label = "scorpion"
     }
     // Pyramid, TriPeaks, and Golf bank no foundations; their loss columns
     // record board cards cleared.
@@ -999,7 +1098,7 @@ func run(
         lossProgressLabel = "tripeaks-cleared-at-loss"
     case .golf:
         lossProgressLabel = "golf-cleared-at-loss"
-    case .klondike, .freecell, .yukon, .spider, .fortyThieves:
+    case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
         lossProgressLabel = "foundation-at-loss"
     }
     let tracksOverBanking = variant != .pyramid && variant != .tripeaks && variant != .golf
@@ -1026,6 +1125,8 @@ func run(
             return (playGolfFollowingHints(seed: seed), 0)
         case .fortyThieves:
             return playFortyThievesFollowingHints(seed: seed)
+        case .scorpion:
+            return playScorpionFollowingHints(seed: seed)
         }
     }
     let seconds = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1e9
@@ -1044,7 +1145,7 @@ func run(
         tracksOverBanking: tracksOverBanking
     )
     print(String(format: "elapsed: %.1fs", seconds))
-    if variant == .yukon || variant == .spider || variant == .fortyThieves {
+    if variant == .yukon || variant == .spider || variant == .fortyThieves || variant == .scorpion {
         print("hint revisit events: \(revisitEvents)")
     }
     if followerLoops > 0 {
@@ -1054,10 +1155,10 @@ func run(
     // Spider revisit events are reported but not gated: the deal-preparation
     // fallback deliberately plays score-losing fills, so a later line can
     // transiently re-cross an earlier position (a handful per 500 deals).
-    // Yukon's and Forty Thieves' planners measure zero (Forty Thieves' bare
-    // stock-tap fallback is strictly monotone), so for them any revisit is a
-    // regression.
-    if variant == .yukon || variant == .fortyThieves, revisitEvents > 0 {
+    // Yukon's, Forty Thieves', and Scorpion's planners measure zero (Forty
+    // Thieves' bare stock-tap fallback and Scorpion's stock-deal fallback are
+    // strictly monotone), so for them any revisit is a regression.
+    if variant == .yukon || variant == .fortyThieves || variant == .scorpion, revisitEvents > 0 {
         print("GATE VIOLATION: \(label) hint follower revisited positions \(revisitEvents) time(s)")
         gateViolations += revisitEvents
     }
@@ -1091,7 +1192,7 @@ setvbuf(stdout, nil, _IOLBF, 0)
 
 func exitWithUsage() -> Never {
     print(
-        "usage: run.sh <yukon|klondike|freecell|spider|pyramid|tripeaks|golf|fortythieves|all> "
+        "usage: run.sh <yukon|klondike|freecell|spider|pyramid|tripeaks|golf|fortythieves|scorpion|all> "
             + "[deals >= 1] [klondike draw count: 1 or 3 | spider suit count: 1, 2, or 4]"
     )
     exit(1)
@@ -1133,6 +1234,8 @@ case "golf":
     run(variant: .golf, seeds: seeds, drawCount: 1)
 case "fortythieves":
     run(variant: .fortyThieves, seeds: seeds, drawCount: 1)
+case "scorpion":
+    run(variant: .scorpion, seeds: seeds, drawCount: 3)
 case "all":
     run(variant: .yukon, seeds: seeds, drawCount: 3)
     run(variant: .klondike, seeds: seeds, drawCount: 1)
@@ -1145,6 +1248,7 @@ case "all":
     run(variant: .tripeaks, seeds: seeds, drawCount: 1)
     run(variant: .golf, seeds: seeds, drawCount: 1)
     run(variant: .fortyThieves, seeds: seeds, drawCount: 1)
+    run(variant: .scorpion, seeds: seeds, drawCount: 3)
 default:
     exitWithUsage()
 }

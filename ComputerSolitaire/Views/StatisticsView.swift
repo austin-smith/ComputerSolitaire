@@ -403,7 +403,7 @@ private struct GameStatisticsDetailView: View {
             return stats.highScoreTwoSuits
         case .spiderFourSuits:
             return stats.highScoreFourSuits
-        case .freecell, .pyramid, .tripeaks, .yukon, .fortyThieves:
+        case .freecell, .pyramid, .tripeaks, .yukon, .fortyThieves, .scorpion:
             return stats.highScore
         case .golf:
             return nil
