@@ -16,6 +16,10 @@ extension SolitaireViewModel {
         if state.variant == .spider, !canSelectTableauCards(cards) {
             return false
         }
+        if state.variant == .golf, cardIndex != pile.count - 1 {
+            // Only the exposed card of a Golf column can move.
+            return false
+        }
         selection = Selection(source: .tableau(pile: pileIndex, index: cardIndex), cards: cards)
         isDragging = true
         return true
@@ -77,6 +81,11 @@ extension SolitaireViewModel {
             case .tripeaks:
                 guard case .triPeaks(let sourceIndex) = selection.source else { return false }
                 return TriPeaksGameRules.canPlay(index: sourceIndex, in: state)
+            case .golf:
+                guard case .tableau(let pile, let index) = selection.source,
+                      state.tableau.indices.contains(pile),
+                      index == state.tableau[pile].count - 1 else { return false }
+                return GolfGameRules.canPlay(column: pile, in: state)
             case .klondike, .freecell, .yukon, .spider:
                 return false
             }

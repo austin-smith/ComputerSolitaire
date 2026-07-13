@@ -274,7 +274,15 @@ private struct GameStatisticsDetailView: View {
                     statsKeyValueRow("Total Time", statsDurationLabel(displayTotalTimeSeconds(at: context.date)))
                     statsKeyValueRow("Avg Time", statsDurationLabel(stats.averageTimeSeconds))
                     statsKeyValueRow("Best Time", bestTimeLabel)
-                    statsKeyValueRow("High Score", statsScoreLabel(highScore(for: effectiveMode)))
+                    if variant.lowerScoreIsBetter {
+                        // Golf scores like its namesake: bests are lowest, and
+                        // holes roll up into nine-hole matches.
+                        statsKeyValueRow("Best Hole (lowest)", statsScoreLabel(stats.lowestScore))
+                        statsKeyValueRow("Best Match (lowest)", statsScoreLabel(stats.bestMatchTotal))
+                        statsKeyValueRow("Matches Completed", "\(stats.golfMatchesCompleted)")
+                    } else {
+                        statsKeyValueRow("High Score", statsScoreLabel(highScore(for: effectiveMode)))
+                    }
                 } header: {
                     Text("Performance")
                 }
@@ -381,6 +389,8 @@ private struct GameStatisticsDetailView: View {
 
     /// Each mode bucket carries a single high score, routed to the field its
     /// wins record into (Klondike per draw count, Spider per suit count).
+    /// Golf never records one — its stroke scores are lower-is-better and
+    /// render through their own rows instead.
     private func highScore(for mode: GameMode) -> Int? {
         switch mode {
         case .klondikeDrawOne:
@@ -395,6 +405,8 @@ private struct GameStatisticsDetailView: View {
             return stats.highScoreFourSuits
         case .freecell, .pyramid, .tripeaks, .yukon:
             return stats.highScore
+        case .golf:
+            return nil
         }
     }
 

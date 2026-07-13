@@ -18,6 +18,13 @@ enum ScoringAction {
     /// replaces (not joins) the third `triPeaksPeakClear`.
     case triPeaksBoardClear
     case triPeaksStockFlip
+    /// Golf strokes count down: each card played off the board is one fewer
+    /// stroke against you.
+    case golfBoardPlay
+    /// Clearing the Golf board banks one bonus stroke per card left in the
+    /// stock, making the final score negative — traditional golf's best
+    /// outcome.
+    case golfBoardClear(remainingStockCount: Int)
 }
 
 enum Scoring {
@@ -58,15 +65,22 @@ enum Scoring {
             return 30
         case .triPeaksStockFlip:
             return -5
+        case .golfBoardPlay:
+            return -1
+        case .golfBoardClear(let remainingStockCount):
+            return -max(0, remainingStockCount)
         }
     }
 
-    static func applying(_ action: ScoringAction, to score: Int) -> Int {
-        clamped(score + delta(for: action))
+    static func applying(_ action: ScoringAction, to score: Int, variant: GameVariant) -> Int {
+        clamped(score + delta(for: action), for: variant)
     }
 
-    static func clamped(_ score: Int) -> Int {
-        max(minimumScore, score)
+    /// Golf's stroke score is exempt from the floor: clearing the board
+    /// subtracts a point per leftover stock card, so negative finals are the
+    /// best results. Every other variant floors at `minimumScore`.
+    static func clamped(_ score: Int, for variant: GameVariant) -> Int {
+        variant.lowerScoreIsBetter ? score : max(minimumScore, score)
     }
 
     static func timeBonus(

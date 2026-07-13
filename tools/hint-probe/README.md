@@ -26,6 +26,7 @@ tools/hint-probe/run.sh spider 500       # all three suit counts
 tools/hint-probe/run.sh spider 500 4     # third arg narrows to one suit count
 tools/hint-probe/run.sh pyramid 500
 tools/hint-probe/run.sh tripeaks 500
+tools/hint-probe/run.sh golf 500
 ```
 
 The number is how many seeded deals the run plays (seeds 1 through N; default
@@ -67,6 +68,7 @@ consecutive runs, serial and parallel.
 | `spider` 4-suit | **2.8%** | 0.0% |
 | `pyramid` | **80.2%** | 15.2% |
 | `tripeaks` | **95.4%** | 0.0% |
+| `golf` | **22.6%** | 0.0% |
 
 Reading the table honestly:
 
@@ -120,6 +122,21 @@ Reading the table honestly:
   median 27 of 28 cleared on lost deals — best-effort lines leave almost
   nothing behind), and the over-banking detector does not apply. The game is
   structurally bounded at 51 actions, so the hint value is the win-rate gap.
+- **Golf (22.6% vs 0.0%)**: the low absolute rate is the variant, not the
+  planner. Strict Golf (no wraparound, nothing plays on a King, single pass)
+  leaves most deals unwinnable: the solver's own verdict sweep proves 26.1%
+  of deals winnable at its default budget (66.3% proved unwinnable, 7.6%
+  undecided over 10,000 deals), so the follower converts most of what the
+  search can prove while still following max-clear lines on the lost majority
+  (median 33 of 35 cleared on lost deals — best-effort lines leave almost
+  nothing behind). The random control winning zero and clearing a median of
+  11 says Golf wins are never stumbled into; the entire hint column is solver
+  skill, and the cleared-at-loss gap (33 vs 11) is the per-deal quality
+  signal on the lost majority. Losses record column cards cleared (Golf banks
+  no foundations), and the over-banking detector does not apply. The game is
+  structurally bounded at 51 actions. Budget history: the TriPeaks-sized 200k
+  node cap measured 13.6% (61% of deals undecided); the shipped 1M cap with
+  12-byte packed search nodes decides 92% of deals and is the baseline above.
 - These figures use the planners' full node budgets. The app additionally
   clips each interactive search at a fraction of a second so the UI never
   hitches; that clip rarely binds, so in-app quality is at most a hair below

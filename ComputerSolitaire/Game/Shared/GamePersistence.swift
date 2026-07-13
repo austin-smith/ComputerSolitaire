@@ -46,6 +46,10 @@ struct SavedGamePayload: Codable {
     let hintRequestsInCurrentGame: Int
     let undosUsedInCurrentGame: Int
     let usedRedealInCurrentGame: Bool
+    /// The nine-hole Golf match in progress; nil for every other variant.
+    /// Lives in the payload — not a side store — so the match restores
+    /// atomically with the board it belongs to.
+    let golfMatch: GolfMatchState?
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -66,6 +70,7 @@ struct SavedGamePayload: Codable {
         case hintRequestsInCurrentGame
         case undosUsedInCurrentGame
         case usedRedealInCurrentGame
+        case golfMatch
     }
 
     init(
@@ -86,7 +91,8 @@ struct SavedGamePayload: Codable {
         isCurrentGameFinalized: Bool = false,
         hintRequestsInCurrentGame: Int = 0,
         undosUsedInCurrentGame: Int = 0,
-        usedRedealInCurrentGame: Bool = false
+        usedRedealInCurrentGame: Bool = false,
+        golfMatch: GolfMatchState? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.savedAt = savedAt
@@ -106,6 +112,7 @@ struct SavedGamePayload: Codable {
         self.hintRequestsInCurrentGame = max(0, hintRequestsInCurrentGame)
         self.undosUsedInCurrentGame = max(0, undosUsedInCurrentGame)
         self.usedRedealInCurrentGame = usedRedealInCurrentGame
+        self.golfMatch = golfMatch
     }
 
     init(from decoder: Decoder) throws {
@@ -134,6 +141,7 @@ struct SavedGamePayload: Codable {
             try container.decodeIfPresent(Int.self, forKey: .undosUsedInCurrentGame) ?? 0
         )
         usedRedealInCurrentGame = try container.decodeIfPresent(Bool.self, forKey: .usedRedealInCurrentGame) ?? false
+        golfMatch = try container.decodeIfPresent(GolfMatchState.self, forKey: .golfMatch)
     }
 
     /// The game this payload belongs to. Spider's suit count is derived from
@@ -170,7 +178,11 @@ struct SavedGamePayload: Codable {
             isCurrentGameFinalized: false,
             hintRequestsInCurrentGame: 0,
             undosUsedInCurrentGame: 0,
-            usedRedealInCurrentGame: false
+            usedRedealInCurrentGame: false,
+            // The scorecard is gameplay progress and survives the reset; only
+            // its statistics eligibility is revoked, so completing the match
+            // later cannot finalize pre-reset holes into the fresh bucket.
+            golfMatch: golfMatch?.withStatisticsTrackingReset()
         )
     }
 
@@ -186,15 +198,15 @@ struct SavedGamePayload: Codable {
             switch state.variant {
             case .klondike:
                 return DrawMode(rawValue: stockDrawCount)?.rawValue ?? DrawMode.three.rawValue
-            case .pyramid, .tripeaks:
-                // Both always draw a single card to the waste.
+            case .pyramid, .tripeaks, .golf:
+                // All three always draw a single card to the waste.
                 return DrawMode.one.rawValue
             case .freecell, .yukon, .spider:
                 return DrawMode.three.rawValue
             }
         }()
         let sanitizedMovesCount = max(0, movesCount)
-        let sanitizedScore = Scoring.clamped(score)
+        let sanitizedScore = Scoring.clamped(score, for: state.variant)
         let sanitizedSavedAt = min(savedAt, now)
         let sanitizedStartedAt = min(gameStartedAt, now)
         let sanitizedScoringDrawCount: Int = {
@@ -222,7 +234,7 @@ struct SavedGamePayload: Codable {
                 GameSnapshot(
                     state: snapshot.state,
                     movesCount: snapshot.movesCount,
-                    score: Scoring.clamped(snapshot.score),
+                    score: Scoring.clamped(snapshot.score, for: snapshot.state.variant),
                     hasAppliedTimeBonus: snapshot.hasAppliedTimeBonus,
                     undoContext: snapshot.undoContext
                 )
@@ -234,6 +246,15 @@ struct SavedGamePayload: Codable {
             for: sanitizedState,
             stockDrawCount: sanitizedStockDrawCount
         )
+
+        // The match belongs to Golf alone; a structurally impossible scorecard
+        // drops to a fresh match rather than poisoning the restore. Scores are
+        // deliberately not clamped to zero — negative hole scores are Golf's
+        // best results.
+        let sanitizedGolfMatch: GolfMatchState? = {
+            guard state.variant == .golf, let golfMatch else { return nil }
+            return golfMatch.isValidForPersistence ? golfMatch : nil
+        }()
 
         let sanitizedRedealState: GameState? = {
             guard var baseState = redealState, baseState.isValidForPersistence else { return nil }
@@ -262,17 +283,19 @@ struct SavedGamePayload: Codable {
             isCurrentGameFinalized: sanitizedIsCurrentGameFinalized,
             hintRequestsInCurrentGame: sanitizedHintRequestsInCurrentGame,
             undosUsedInCurrentGame: sanitizedUndosUsedInCurrentGame,
-            usedRedealInCurrentGame: sanitizedUsedRedealInCurrentGame
+            usedRedealInCurrentGame: sanitizedUsedRedealInCurrentGame,
+            golfMatch: sanitizedGolfMatch
         )
     }
 
-    /// Klondike fans up to a draw's worth of waste cards; Pyramid and TriPeaks
-    /// show a single waste card; the stockless variants keep no waste at all.
+    /// Klondike fans up to a draw's worth of waste cards; Pyramid, TriPeaks,
+    /// and Golf show a single waste card; the stockless variants keep no
+    /// waste at all.
     private static func sanitizedWasteDrawCount(for state: GameState, stockDrawCount: Int) -> Int {
         switch state.variant {
         case .klondike:
             return min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
-        case .pyramid, .tripeaks:
+        case .pyramid, .tripeaks, .golf:
             return min(max(0, state.wasteDrawCount), min(1, state.waste.count))
         case .freecell, .yukon, .spider:
             return 0
@@ -419,6 +442,13 @@ struct GameStatistics: Codable, Equatable {
     var highScoreOneSuit: Int?
     var highScoreTwoSuits: Int?
     var highScoreFourSuits: Int?
+    /// Best (lowest) Golf hole score. Unclamped: Golf strokes run lower-is-
+    /// better and clearing the board can leave a negative score, so negatives
+    /// are legal results here, never corruption.
+    var lowestScore: Int?
+    var golfMatchesCompleted: Int
+    /// Best (lowest) nine-hole Golf match total; unclamped like `lowestScore`.
+    var bestMatchTotal: Int?
     var cleanWins: Int
 
     enum CodingKeys: String, CodingKey {
@@ -434,6 +464,9 @@ struct GameStatistics: Codable, Equatable {
         case highScoreOneSuit
         case highScoreTwoSuits
         case highScoreFourSuits
+        case lowestScore
+        case golfMatchesCompleted
+        case bestMatchTotal
         case cleanWins
     }
 
@@ -450,6 +483,9 @@ struct GameStatistics: Codable, Equatable {
         highScoreOneSuit: Int? = nil,
         highScoreTwoSuits: Int? = nil,
         highScoreFourSuits: Int? = nil,
+        lowestScore: Int? = nil,
+        golfMatchesCompleted: Int = 0,
+        bestMatchTotal: Int? = nil,
         cleanWins: Int = 0
     ) {
         self.schemaVersion = schemaVersion
@@ -464,6 +500,9 @@ struct GameStatistics: Codable, Equatable {
         self.highScoreOneSuit = highScoreOneSuit.map { max(0, $0) }
         self.highScoreTwoSuits = highScoreTwoSuits.map { max(0, $0) }
         self.highScoreFourSuits = highScoreFourSuits.map { max(0, $0) }
+        self.lowestScore = lowestScore
+        self.golfMatchesCompleted = max(0, golfMatchesCompleted)
+        self.bestMatchTotal = bestMatchTotal
         self.cleanWins = max(0, min(cleanWins, self.gamesWon))
     }
 
@@ -495,6 +534,12 @@ struct GameStatistics: Codable, Equatable {
         highScoreOneSuit = try container.decodeIfPresent(Int.self, forKey: .highScoreOneSuit).map { max(0, $0) }
         highScoreTwoSuits = try container.decodeIfPresent(Int.self, forKey: .highScoreTwoSuits).map { max(0, $0) }
         highScoreFourSuits = try container.decodeIfPresent(Int.self, forKey: .highScoreFourSuits).map { max(0, $0) }
+        lowestScore = try container.decodeIfPresent(Int.self, forKey: .lowestScore)
+        golfMatchesCompleted = max(
+            0,
+            try container.decodeIfPresent(Int.self, forKey: .golfMatchesCompleted) ?? 0
+        )
+        bestMatchTotal = try container.decodeIfPresent(Int.self, forKey: .bestMatchTotal)
         cleanWins = max(
             0,
             min(
@@ -532,6 +577,9 @@ struct GameStatistics: Codable, Equatable {
         var highScoreOneSuit: Int?
         var highScoreTwoSuits: Int?
         var highScoreFourSuits: Int?
+        var lowestScore: Int?
+        var golfMatchesCompleted = 0
+        var bestMatchTotal: Int?
 
         for stats in statsByVariant {
             gamesPlayed = addingSafely(gamesPlayed, stats.gamesPlayed)
@@ -573,6 +621,13 @@ struct GameStatistics: Codable, Equatable {
             if let candidate = stats.highScoreFourSuits {
                 highScoreFourSuits = max(highScoreFourSuits ?? 0, candidate)
             }
+            if let candidate = stats.lowestScore {
+                lowestScore = min(lowestScore ?? candidate, candidate)
+            }
+            golfMatchesCompleted = addingSafely(golfMatchesCompleted, stats.golfMatchesCompleted)
+            if let candidate = stats.bestMatchTotal {
+                bestMatchTotal = min(bestMatchTotal ?? candidate, candidate)
+            }
         }
 
         gamesWon = min(gamesWon, gamesPlayed)
@@ -590,6 +645,9 @@ struct GameStatistics: Codable, Equatable {
             highScoreOneSuit: highScoreOneSuit,
             highScoreTwoSuits: highScoreTwoSuits,
             highScoreFourSuits: highScoreFourSuits,
+            lowestScore: lowestScore,
+            golfMatchesCompleted: golfMatchesCompleted,
+            bestMatchTotal: bestMatchTotal,
             cleanWins: cleanWins
         )
     }
@@ -600,6 +658,7 @@ struct GameStatistics: Codable, Equatable {
         finalScore: Int,
         drawCount: Int,
         spiderSuitCount: SpiderSuitCount? = nil,
+        lowerScoreIsBetter: Bool = false,
         hintsUsedInGame: Int,
         undosUsedInGame: Int,
         usedRedealInGame: Bool
@@ -621,25 +680,30 @@ struct GameStatistics: Codable, Equatable {
             bestTimeSeconds = sanitizedElapsed
         }
 
-        if let spiderSuitCount {
-            // Spider difficulties aren't score-comparable, so each suit count
-            // keeps its own high score (mirroring Klondike's draw-mode split).
-            switch spiderSuitCount {
-            case .one:
-                highScoreOneSuit = max(highScoreOneSuit ?? 0, sanitizedScore)
-            case .two:
-                highScoreTwoSuits = max(highScoreTwoSuits ?? 0, sanitizedScore)
-            case .four:
-                highScoreFourSuits = max(highScoreFourSuits ?? 0, sanitizedScore)
+        // Golf's stroke scores are lower-is-better and record per completed
+        // hole through `recordCompletedGolfHole` (a win's negative final would
+        // sanitize to zero here); the high-score fields never apply to it.
+        if !lowerScoreIsBetter {
+            if let spiderSuitCount {
+                // Spider difficulties aren't score-comparable, so each suit count
+                // keeps its own high score (mirroring Klondike's draw-mode split).
+                switch spiderSuitCount {
+                case .one:
+                    highScoreOneSuit = max(highScoreOneSuit ?? 0, sanitizedScore)
+                case .two:
+                    highScoreTwoSuits = max(highScoreTwoSuits ?? 0, sanitizedScore)
+                case .four:
+                    highScoreFourSuits = max(highScoreFourSuits ?? 0, sanitizedScore)
+                }
+            } else if drawCount == DrawMode.one.rawValue {
+                highScoreDrawOne = max(highScoreDrawOne ?? 0, sanitizedScore)
+            } else if drawCount == DrawMode.three.rawValue {
+                highScoreDrawThree = max(highScoreDrawThree ?? 0, sanitizedScore)
+            } else {
+                // Variants without a draw mode (FreeCell, Yukon, Pyramid) keep a
+                // single high score.
+                highScore = max(highScore ?? 0, sanitizedScore)
             }
-        } else if drawCount == DrawMode.one.rawValue {
-            highScoreDrawOne = max(highScoreDrawOne ?? 0, sanitizedScore)
-        } else if drawCount == DrawMode.three.rawValue {
-            highScoreDrawThree = max(highScoreDrawThree ?? 0, sanitizedScore)
-        } else {
-            // Variants without a draw mode (FreeCell, Yukon, Pyramid) keep a single
-            // high score.
-            highScore = max(highScore ?? 0, sanitizedScore)
         }
 
         let isCleanWin = sanitizedHintsUsedInGame == 0
@@ -648,6 +712,22 @@ struct GameStatistics: Codable, Equatable {
         if isCleanWin {
             cleanWins = min(gamesWon, addingSafely(cleanWins, 1))
         }
+    }
+
+    /// Records a finished Golf hole's stroke score, won or dead — every hole
+    /// played to its end has one, and best means lowest. Unsanitized on
+    /// purpose: negative scores (a cleared board banking leftover stock) are
+    /// Golf's best results, never corruption. Abandoned holes must not reach
+    /// this — their live score is a snapshot of an unfinished hole.
+    mutating func recordCompletedGolfHole(score: Int) {
+        lowestScore = min(lowestScore ?? score, score)
+    }
+
+    /// Records a finished nine-hole Golf match; best means lowest, and
+    /// negative totals are legal results, never corruption.
+    mutating func recordCompletedGolfMatch(total: Int) {
+        golfMatchesCompleted = addingSafely(golfMatchesCompleted, 1)
+        bestMatchTotal = min(bestMatchTotal ?? total, total)
     }
 
     mutating func markTrackingStarted(at date: Date = .now) {
@@ -827,7 +907,7 @@ private extension GameState {
 
     private var expectedIdentityCounts: [CardIdentity: Int] {
         switch variant {
-        case .klondike, .freecell, .yukon, .pyramid, .tripeaks:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf:
             var counts: [CardIdentity: Int] = [:]
             for suit in Suit.allCases {
                 for rank in Rank.allCases {
@@ -855,6 +935,8 @@ private extension GameState {
             return PyramidPersistenceRules.hasValidLayout(state: self)
         case .tripeaks:
             return TriPeaksPersistenceRules.hasValidLayout(state: self)
+        case .golf:
+            return GolfPersistenceRules.hasValidLayout(state: self)
         }
     }
 }

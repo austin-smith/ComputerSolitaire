@@ -165,6 +165,30 @@ func seededDeal(variant: GameVariant, seed: UInt64, spiderSuitCount: SpiderSuitC
             tableau: [],
             triPeaks: triPeaks
         )
+
+    case .golf:
+        // Mirrors GameState.newGolfGame (and GameStateFixtures.seededGolfDeal).
+        var deck = seededDeck(seed: seed, faceUp: false)
+        var tableau: [[Card]] = []
+        for _ in 0..<GolfGameRules.columnCount {
+            var column: [Card] = []
+            for _ in 0..<GolfGameRules.columnDepth {
+                var card = deck.removeLast()
+                card.isFaceUp = true
+                column.append(card)
+            }
+            tableau.append(column)
+        }
+        var starter = deck.removeLast()
+        starter.isFaceUp = true
+        return GameState(
+            variant: .golf,
+            stock: deck,
+            waste: [starter],
+            wasteDrawCount: 1,
+            foundations: Array(repeating: [], count: 4),
+            tableau: tableau
+        )
     }
 }
 
@@ -253,6 +277,16 @@ func triPeaksCleared(_ state: GameState) -> Int {
     state.triPeaks.count(where: { $0 == nil })
 }
 
+/// Mirrors handleGolfStockTap in the session: draw one, no recycles ever.
+/// The planner's apply is the same pure logic.
+func golfStockTap(_ state: GameState) -> GameState? {
+    GolfPlanner.apply(.draw, to: state)
+}
+
+func golfCleared(_ state: GameState) -> Int {
+    GolfGameRules.dealTableauCardCount - state.tableau.reduce(0) { $0 + $1.count }
+}
+
 /// Mirrors drawFromStock / recycleWaste in the session.
 func stockTap(_ state: GameState, drawCount: Int) -> GameState? {
     var next = state
@@ -287,15 +321,15 @@ enum Outcome {
 /// Yukon/FreeCell games finish or die well under this; Klondike needs headroom
 /// for stock cycling, and Spider for grooming 104 cards across five deals.
 /// (Pyramid is structurally bounded near 100 actions: three 24-card passes,
-/// two resets, and at most 26 removal moves. TriPeaks is bounded at 51: every
-/// action consumes a peak card or a stock card.)
+/// two resets, and at most 26 removal moves. TriPeaks is bounded at 51 and
+/// Golf at 51: every action consumes a board card or a stock card.)
 func actionCap(for variant: GameVariant) -> Int {
     switch variant {
     case .klondike:
         return 1_200
     case .spider:
         return 1_000
-    case .freecell, .yukon, .pyramid, .tripeaks:
+    case .freecell, .yukon, .pyramid, .tripeaks, .golf:
         return 600
     }
 }
@@ -601,6 +635,56 @@ func playTriPeaksFollowingHints(seed: UInt64) -> Outcome {
     return .actionCap(foundation: triPeaksCleared(state))
 }
 
+func playGolfFollowingHints(seed: UInt64) -> Outcome {
+    // Replicates HintPlanner's Golf path without its wall-clock deadline:
+    // follow each planned line — winning or max-clear — to its end, then replan;
+    // noProgress means not one more column card is clearable. Every Golf move
+    // consumes a card, so for this deterministic follower any revisit is a proven
+    // infinite loop. The loss column records column cards cleared (Golf banks
+    // no foundations).
+    var state = seededDeal(variant: .golf, seed: seed)
+    var plan: [String: GolfPlanner.Move] = [:]
+    var seen: Set<UInt64> = [fingerprint(state)]
+    var actions = 0
+    while actions < actionCap(for: .golf) {
+        if state.isWon { return .win(moves: actions) }
+
+        let key = GolfPlanner.stateKey(for: state)
+        var hint = plan[key].flatMap { GolfPlanner.materialize($0, in: state) }
+        if hint == nil {
+            plan.removeAll()
+            switch GolfPlanner.bestLine(in: state) {
+            case .winningLine(let line), .bestEffortLine(let line, _):
+                plan = GolfPlanner.keyedMoves(along: line, from: state)
+            case .noProgress:
+                return .deadlock(foundation: golfCleared(state))
+            }
+            hint = plan[key].flatMap { GolfPlanner.materialize($0, in: state) }
+        }
+        guard let hint else {
+            return .deadlock(foundation: golfCleared(state))
+        }
+
+        switch hint {
+        case .move(let move):
+            guard let next = apply(move.selection, move.destination, to: state, stockDrawCount: 1) else {
+                fatalError("Seed \(seed): illegal Golf hint")
+            }
+            state = next
+        case .stockTap:
+            guard let next = golfStockTap(state) else {
+                fatalError("Seed \(seed): Golf stock tap with nothing to tap")
+            }
+            state = next
+        }
+        actions += 1
+        if !seen.insert(fingerprint(state)).inserted {
+            return .stalemateLoop(foundation: golfCleared(state))
+        }
+    }
+    return .actionCap(foundation: golfCleared(state))
+}
+
 // MARK: - Control player
 
 // The random-moves floor calibrates each variant's deal universe. Deliberately
@@ -627,6 +711,8 @@ func playRandom(
         lossProgress = pyramidCleared
     case .tripeaks:
         lossProgress = triPeaksCleared
+    case .golf:
+        lossProgress = golfCleared
     case .klondike, .freecell, .yukon, .spider:
         lossProgress = foundationCount
     }
@@ -649,7 +735,7 @@ func playRandom(
             canTapStock = SpiderGameRules.canDealFromStock(state: state)
         case .pyramid:
             canTapStock = !state.stock.isEmpty || PyramidGameRules.canRecycleWaste(in: state)
-        case .tripeaks:
+        case .tripeaks, .golf:
             canTapStock = !state.stock.isEmpty
         case .freecell, .yukon:
             canTapStock = false
@@ -667,6 +753,8 @@ func playRandom(
                 tapped = pyramidStockTap(state)
             case .tripeaks:
                 tapped = triPeaksStockTap(state)
+            case .golf:
+                tapped = golfStockTap(state)
             case .klondike, .freecell, .yukon:
                 tapped = stockTap(state, drawCount: drawCount)
             }
@@ -794,19 +882,23 @@ func run(
         label = "pyramid"
     case .tripeaks:
         label = "tripeaks"
+    case .golf:
+        label = "golf"
     }
-    // Pyramid and TriPeaks bank no foundations; their loss columns record
-    // board cards cleared.
+    // Pyramid, TriPeaks, and Golf bank no foundations; their loss columns
+    // record board cards cleared.
     let lossProgressLabel: String
     switch variant {
     case .pyramid:
         lossProgressLabel = "pyramid-cleared-at-loss"
     case .tripeaks:
         lossProgressLabel = "tripeaks-cleared-at-loss"
+    case .golf:
+        lossProgressLabel = "golf-cleared-at-loss"
     case .klondike, .freecell, .yukon, .spider:
         lossProgressLabel = "foundation-at-loss"
     }
-    let tracksOverBanking = variant != .pyramid && variant != .tripeaks
+    let tracksOverBanking = variant != .pyramid && variant != .tripeaks && variant != .golf
 
     let start = DispatchTime.now()
     let followerResults = mapInParallel(
@@ -826,6 +918,8 @@ func run(
             return (playPyramidFollowingHints(seed: seed), 0)
         case .tripeaks:
             return (playTriPeaksFollowingHints(seed: seed), 0)
+        case .golf:
+            return (playGolfFollowingHints(seed: seed), 0)
         }
     }
     let seconds = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1e9
@@ -889,7 +983,7 @@ setvbuf(stdout, nil, _IOLBF, 0)
 
 func exitWithUsage() -> Never {
     print(
-        "usage: run.sh <yukon|klondike|freecell|spider|pyramid|tripeaks|all> [deals >= 1] "
+        "usage: run.sh <yukon|klondike|freecell|spider|pyramid|tripeaks|golf|all> [deals >= 1] "
             + "[klondike draw count: 1 or 3 | spider suit count: 1, 2, or 4]"
     )
     exit(1)
@@ -927,6 +1021,8 @@ case "pyramid":
     run(variant: .pyramid, seeds: seeds, drawCount: 1)
 case "tripeaks":
     run(variant: .tripeaks, seeds: seeds, drawCount: 1)
+case "golf":
+    run(variant: .golf, seeds: seeds, drawCount: 1)
 case "all":
     run(variant: .yukon, seeds: seeds, drawCount: 3)
     run(variant: .klondike, seeds: seeds, drawCount: 1)
@@ -937,6 +1033,7 @@ case "all":
     }
     run(variant: .pyramid, seeds: seeds, drawCount: 1)
     run(variant: .tripeaks, seeds: seeds, drawCount: 1)
+    run(variant: .golf, seeds: seeds, drawCount: 1)
 default:
     exitWithUsage()
 }

@@ -229,6 +229,87 @@ enum GameStateFixtures {
         )
     }
 
+    /// A reproducible Golf deal matching the shape of `GameState.newGolfGame`.
+    /// Mirrored by the hint probe's `seededGolfDeal` so seeds are comparable.
+    static func seededGolfDeal(seed: UInt64) -> GameState {
+        var deck = seededDeck(seed: seed, faceUp: false)
+        var tableau: [[Card]] = []
+        for _ in 0..<GolfGameRules.columnCount {
+            var column: [Card] = []
+            for _ in 0..<GolfGameRules.columnDepth {
+                var card = deck.removeLast()
+                card.isFaceUp = true
+                column.append(card)
+            }
+            tableau.append(column)
+        }
+        var starter = deck.removeLast()
+        starter.isFaceUp = true
+        return GameState(
+            variant: .golf,
+            stock: deck,
+            waste: [starter],
+            wasteDrawCount: 1,
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: Array(repeating: [], count: 4),
+            tableau: tableau
+        )
+    }
+
+    /// Hand-constructed Golf position for rules and planner tests. `columns`
+    /// is padded with empty columns to seven; every column card is forced face
+    /// up so the layout always passes validation. Cards not on the board, in
+    /// the stock, or in the waste can be buried at the bottom of the waste so
+    /// persistence-facing tests still see 52 cards without changing the match
+    /// target.
+    static func golfState(
+        columns: [[Card]],
+        stock: [Card] = [],
+        waste: [Card],
+        fillWasteFromRemainder: Bool = false
+    ) -> GameState {
+        var tableau = columns.map { column in
+            column.map { card in
+                var faceUp = card
+                faceUp.isFaceUp = true
+                return faceUp
+            }
+        }
+        if tableau.count < GolfGameRules.columnCount {
+            tableau.append(
+                contentsOf: [[Card]](repeating: [], count: GolfGameRules.columnCount - tableau.count)
+            )
+        }
+        let faceDownStock = stock.map { card in
+            var faceDown = card
+            faceDown.isFaceUp = false
+            return faceDown
+        }
+        var fullWaste = waste.map { card in
+            var faceUp = card
+            faceUp.isFaceUp = true
+            return faceUp
+        }
+        if fillWasteFromRemainder {
+            func identity(_ card: Card) -> Int {
+                (Suit.allCases.firstIndex(of: card.suit) ?? 0) * 16 + card.rank.rawValue
+            }
+            let usedIdentities = Set((tableau.flatMap { $0 } + faceDownStock + fullWaste).map(identity))
+            fullWaste = TestCards.fullDeck(faceUp: true).filter { card in
+                !usedIdentities.contains(identity(card))
+            } + fullWaste
+        }
+        return GameState(
+            variant: .golf,
+            stock: faceDownStock,
+            waste: fullWaste,
+            wasteDrawCount: min(1, fullWaste.count),
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: Array(repeating: [], count: 4),
+            tableau: tableau
+        )
+    }
+
     static func pyramidState(
         slots: [Card?],
         stock: [Card] = [],

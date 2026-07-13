@@ -204,6 +204,10 @@ struct HeaderView: View {
     let movesCount: Int
     let elapsedSeconds: Int
     let score: Int
+    /// Golf titles its score tile with the hole in play ("Hole 3/9") and adds
+    /// a running match-total tile; nil for every other game.
+    var golfHoleLabel: String?
+    var golfMatchTotal: Int?
     let onGameTitleTapped: () -> Void
     let onScoreTapped: () -> Void
 
@@ -248,12 +252,19 @@ struct HeaderView: View {
 
         Button(action: onScoreTapped) {
             StatTileView(
-                title: "Score",
+                title: golfHoleLabel ?? "Score",
                 value: "\(score)"
             )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Score \(score). Open scoring details")
+
+        if let golfMatchTotal {
+            StatTileView(
+                title: "Match",
+                value: "\(golfMatchTotal)"
+            )
+        }
     }
 
     private func formattedDuration(_ totalSeconds: Int) -> String {
@@ -458,6 +469,25 @@ struct TopRowView: View {
                 )
             case .tripeaks:
                 TriPeaksTopRowView(
+                    viewModel: viewModel,
+                    cardSize: cardSize,
+                    columnSpacing: columnSpacing,
+                    activeTarget: activeTarget,
+                    hintedTarget: hintedTarget,
+                    isStockHinted: isStockHinted,
+                    isWasteHinted: isWasteHinted,
+                    hintHighlightOpacity: hintHighlightOpacity,
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
+                    hiddenCardIDs: hiddenCardIDs,
+                    hintedCardIDs: hintedCardIDs,
+                    hintWiggleToken: hintWiggleToken,
+                    drawingCardIDs: drawingCardIDs,
+                    fanProgress: fanProgress,
+                    dragGesture: dragGesture
+                )
+            case .golf:
+                GolfTopRowView(
                     viewModel: viewModel,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
@@ -910,6 +940,10 @@ struct WinOverlay: View {
                     )
             )
         }
+        // Modal to VoiceOver: the board underneath is won and inert; the only
+        // action is dealing again.
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
     }
 }
 

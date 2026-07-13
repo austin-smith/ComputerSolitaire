@@ -101,8 +101,9 @@ private extension TapMovePolicy {
             case .spider:
                 // Unreachable: Spider foundations are never player destinations.
                 tier = 100
-            case .pyramid, .tripeaks:
-                // Unreachable: Pyramid and TriPeaks moves never target a foundation.
+            case .pyramid, .tripeaks, .golf:
+                // Unreachable: Pyramid, TriPeaks, and Golf moves never target
+                // a foundation.
                 tier = 0
             }
             return Priority(tier: tier, buildLength: 0, pileOrder: -index)

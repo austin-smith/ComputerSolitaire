@@ -9,6 +9,7 @@ enum GameVariant: String, CaseIterable, Codable {
     case freecell
     case tripeaks
     case pyramid
+    case golf
     case yukon
 
     var title: String {
@@ -25,6 +26,8 @@ enum GameVariant: String, CaseIterable, Codable {
             return "Pyramid"
         case .tripeaks:
             return "TriPeaks"
+        case .golf:
+            return "Golf"
         }
     }
 
@@ -42,12 +45,14 @@ enum GameVariant: String, CaseIterable, Codable {
             return "Pair cards that total 13"
         case .tripeaks:
             return "Chain up or down the ranks"
+        case .golf:
+            return "Play one rank up or down"
         }
     }
 
     var boardColumnCount: Int {
         switch self {
-        case .klondike, .yukon, .pyramid:
+        case .klondike, .yukon, .pyramid, .golf:
             return 7
         case .freecell:
             return 8
@@ -63,7 +68,7 @@ enum GameVariant: String, CaseIterable, Codable {
         switch self {
         case .klondike, .yukon, .spider:
             return true
-        case .freecell, .pyramid, .tripeaks:
+        case .freecell, .pyramid, .tripeaks, .golf:
             return false
         }
     }
@@ -72,7 +77,7 @@ enum GameVariant: String, CaseIterable, Codable {
     /// stock but deals it onto the tableau, never into a waste.
     var dealsFromStock: Bool {
         switch self {
-        case .klondike, .pyramid, .tripeaks:
+        case .klondike, .pyramid, .tripeaks, .golf:
             return true
         case .freecell, .yukon, .spider:
             return false
@@ -84,7 +89,7 @@ enum GameVariant: String, CaseIterable, Codable {
     /// build one foundation per suit.
     var foundationPileCount: Int {
         switch self {
-        case .klondike, .freecell, .yukon, .pyramid, .tripeaks:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf:
             return 4
         case .spider:
             return 8
@@ -94,7 +99,7 @@ enum GameVariant: String, CaseIterable, Codable {
     /// How many cards a deal uses. Spider plays with two decks.
     var deckCardCount: Int {
         switch self {
-        case .klondike, .freecell, .yukon, .pyramid, .tripeaks:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf:
             return 52
         case .spider:
             return 104
@@ -103,16 +108,25 @@ enum GameVariant: String, CaseIterable, Codable {
 
     /// Whether the player builds foundations by moving cards onto them.
     /// Spider's completed runs move to a foundation automatically, and
-    /// Pyramid's and TriPeaks' foundations stay empty (their removed cards go
-    /// to the discard and waste respectively), so none of the three treats
+    /// Pyramid's, TriPeaks', and Golf's foundations stay empty (their removed
+    /// cards go to the discard and waste respectively), so none of them treats
     /// foundations as a drag, drop, or tap target.
     var playerBuildsFoundations: Bool {
         switch self {
         case .klondike, .freecell, .yukon:
             return true
-        case .spider, .pyramid, .tripeaks:
+        case .spider, .pyramid, .tripeaks, .golf:
             return false
         }
+    }
+
+    /// Golf keeps a stroke-style score: lower is better, the win adds no time
+    /// bonus, the floor-0 clamp does not apply (clearing the board subtracts
+    /// one point per leftover stock card, so negative finals are the best
+    /// results), and statistics track the lowest final score instead of the
+    /// highest.
+    var lowerScoreIsBetter: Bool {
+        self == .golf
     }
 }
 

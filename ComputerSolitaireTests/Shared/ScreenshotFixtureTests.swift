@@ -355,6 +355,58 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         print("TriPeaks fixture — seed \(seed), photogenic \(bestScore)")
     }
 
+    /// The staged Golf board is a fresh deal — seven face-up columns, one
+    /// waste starter. All 35 cards are visible, but the eye lands on the
+    /// exposed column ends, so seeds are scanned for the most photogenic
+    /// spread there with a first play available off the waste top.
+    func testGenerateGolfFixture() throws {
+        try skipUnlessGenerating()
+
+        var bestSeed: UInt64?
+        var bestScore = Int.min
+        for seed in Self.candidateSeeds {
+            let deal = GameStateFixtures.seededGolfDeal(seed: seed)
+            let score = golfDealScore(of: deal)
+            if score > bestScore {
+                bestScore = score
+                bestSeed = seed
+            }
+        }
+        let seed = try XCTUnwrap(bestSeed)
+
+        let viewModel = SolitaireViewModel()
+        viewModel.state = GameStateFixtures.seededGolfDeal(seed: seed)
+        viewModel.configureGolfNewGame()
+
+        let savedAt = DateFixtures.reference
+        let payload = SavedGamePayload(
+            savedAt: savedAt,
+            state: viewModel.state,
+            movesCount: viewModel.movesCount,
+            score: viewModel.score,
+            gameStartedAt: savedAt.addingTimeInterval(-Self.stagedElapsedSeconds),
+            stockDrawCount: DrawMode.one.rawValue,
+            history: [],
+            hasStartedTrackedGame: false,
+            golfMatch: GolfMatchState()
+        )
+
+        XCTAssertNotNil(payload.sanitizedForRestore(), "Generated fixture failed the validity gate")
+        let restoredViewModel = SolitaireViewModel()
+        XCTAssertTrue(restoredViewModel.restore(from: payload), "Generated fixture failed to restore")
+        XCTAssertEqual(restoredViewModel.gameVariant, .golf, "Fixture did not restore as Golf")
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("golf.json")
+        try data.write(to: outputURL)
+
+        print("SCREENSHOT-FIXTURE-OUTPUT: \(outputURL.path)")
+        print("Golf fixture — seed \(seed), photogenic \(bestScore)")
+    }
+
     // MARK: - Photogenic scoring
 
     private struct Candidate {
@@ -432,6 +484,28 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         if let wasteTop = deal.waste.last {
             let playableCount = visible.count { card in
                 TriPeaksGameRules.ranksAdjacentWithWrap(card.rank, wasteTop.rank)
+            }
+            score += min(playableCount, 3) * 4
+        }
+        return score
+    }
+
+    /// Scores a fresh Golf deal by the eight cards the eye lands on (the seven
+    /// exposed column ends plus the waste starter): rank variety, red/black
+    /// balance, all four suits, a few face cards, and several playable exposed
+    /// cards to suggest an opening run.
+    private func golfDealScore(of deal: GameState) -> Int {
+        let exposed = deal.tableau.compactMap { $0.last }
+        let visible = exposed + Array(deal.waste.suffix(1))
+        var score = 0
+        score += Set(visible.map(\.rank)).count * 6
+        let redCount = visible.count(where: { $0.suit.isRed })
+        score -= abs(redCount * 2 - visible.count) * 4
+        score += Set(visible.map(\.suit)).count == Suit.allCases.count ? 8 : 0
+        score += visible.count(where: { $0.rank >= .jack }) >= 3 ? 6 : 0
+        if let wasteTop = deal.waste.last {
+            let playableCount = exposed.count { card in
+                GolfGameRules.canPlayRank(card.rank.rawValue, ontoWasteTop: wasteTop.rank.rawValue)
             }
             score += min(playableCount, 3) * 4
         }
