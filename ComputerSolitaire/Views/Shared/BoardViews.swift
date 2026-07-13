@@ -14,10 +14,6 @@ enum Layout {
         let tableauMaxHeight: CGFloat
     }
 
-    /// Estimated height of HeaderView (stat tiles + padding); only feeds the
-    /// tableau-height budget, so an approximation is fine.
-    private static let headerHeightEstimate: CGFloat = 66
-
     /// Worst-case Klondike pile: 6 face-down cards under a full K–A run.
     private static let maxFaceDownGaps: CGFloat = 6
     private static let maxFaceUpGaps: CGFloat = 12
@@ -41,10 +37,11 @@ enum Layout {
         boardHeight: CGFloat,
         verticalPadding: CGFloat,
         rowSpacing: CGFloat,
+        headerHeight: CGFloat,
         faceDownFraction: CGFloat,
         faceUpFraction: CGFloat
     ) -> CGFloat {
-        let chrome = (verticalPadding * 2) + headerHeightEstimate + (rowSpacing * 2)
+        let chrome = (verticalPadding * 2) + headerHeight + (rowSpacing * 2)
         // Top-row card + pile base card + gaps, in units of card height.
         let heightUnits = 2 + (readableFaceDownGaps * faceDownFraction) + (readableFaceUpGaps * faceUpFraction)
         let cardHeight = (boardHeight - chrome) / heightUnits
@@ -54,7 +51,8 @@ enum Layout {
     static func metrics(
         for boardSize: CGSize,
         isRegularWidth: Bool = false,
-        tableauColumnCount: Int = 7
+        tableauColumnCount: Int = 7,
+        headerHeight: CGFloat = HeaderView.estimatedHeight
     ) -> Metrics {
         let columnCount = max(1, tableauColumnCount)
         let boardWidth = boardSize.width
@@ -82,6 +80,7 @@ enum Layout {
             boardHeight: boardSize.height,
             verticalPadding: verticalPadding,
             rowSpacing: rowSpacing,
+            headerHeight: headerHeight,
             faceDownFraction: faceDownFraction * landscapeOffsetScale,
             faceUpFraction: faceUpFraction * landscapeOffsetScale
         )
@@ -92,6 +91,7 @@ enum Layout {
             boardHeight: boardSize.height,
             verticalPadding: verticalPadding,
             rowSpacing: rowSpacing,
+            headerHeight: headerHeight,
             cardHeight: cardSize.height
         )
 
@@ -145,6 +145,7 @@ enum Layout {
             boardHeight: boardSize.height,
             verticalPadding: verticalPadding,
             rowSpacing: rowSpacing,
+            headerHeight: headerHeight,
             faceDownFraction: faceDownFraction,
             faceUpFraction: faceUpFraction
         )
@@ -157,6 +158,7 @@ enum Layout {
             boardHeight: boardSize.height,
             verticalPadding: verticalPadding,
             rowSpacing: rowSpacing,
+            headerHeight: headerHeight,
             cardHeight: cardSize.height
         )
 
@@ -182,14 +184,19 @@ enum Layout {
         boardHeight: CGFloat,
         verticalPadding: CGFloat,
         rowSpacing: CGFloat,
+        headerHeight: CGFloat,
         cardHeight: CGFloat
     ) -> CGFloat {
-        let chrome = (verticalPadding * 2) + headerHeightEstimate + (rowSpacing * 2) + cardHeight
+        let chrome = (verticalPadding * 2) + headerHeight + (rowSpacing * 2) + cardHeight
         return max(cardHeight * 2, boardHeight - chrome)
     }
 }
 
 struct HeaderView: View {
+    /// Used only for the first layout pass; ContentView replaces it with the
+    /// rendered height so future header changes cannot stale the board budget.
+    static let estimatedHeight: CGFloat = 82
+
     let gameTitle: String
     /// The mode qualifier shown dimmed after the title ("3-card"); nil for
     /// single-mode games.

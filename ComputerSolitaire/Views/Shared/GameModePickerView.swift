@@ -256,6 +256,7 @@ struct GameModePickerOverlay: View {
     /// a custom overlay sits outside the window's cancel-action routing that
     /// sheets get for free.
     @FocusState private var isPickerFocused: Bool
+    @AccessibilityFocusState private var isPickerAccessibilityFocused: Bool
 
     var body: some View {
         ZStack {
@@ -291,7 +292,13 @@ struct GameModePickerOverlay: View {
             )
             .environment(\.colorScheme, .dark)
             .padding(24)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Game picker")
+            .accessibilityFocused($isPickerAccessibilityFocused)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityDefaultFocus($isPickerAccessibilityFocused, true)
         .focusable()
         .focusEffectDisabled()
         .focused($isPickerFocused)

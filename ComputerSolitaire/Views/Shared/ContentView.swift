@@ -113,6 +113,7 @@ struct ContentView: View {
     @State private var hiddenCardIDs: Set<UUID> = []
     @State private var wasteFanProgress: [UUID: Double] = [:]
     @State private var boardViewportSize: CGSize = .zero
+    @State private var headerHeight = HeaderView.estimatedHeight
     @State private var previousWasteCount: Int = 0
     @State private var previousStockCount: Int = 0
     @State private var hasLoadedGame = false
@@ -184,6 +185,7 @@ struct ContentView: View {
                 .environment(\.cardStyle, currentCardStyle)
             )
         )
+        .accessibilityHidden(isShowingGamePicker)
         .overlay {
             if isShowingGamePicker {
                 GameModePickerOverlay(
@@ -480,10 +482,15 @@ struct ContentView: View {
         let metrics = Layout.metrics(
             for: geometry.size,
             isRegularWidth: horizontalSizeClass == .regular,
-            tableauColumnCount: boardColumnCount
+            tableauColumnCount: boardColumnCount,
+            headerHeight: headerHeight
         )
 #else
-        let metrics = Layout.metrics(for: geometry.size, tableauColumnCount: boardColumnCount)
+        let metrics = Layout.metrics(
+            for: geometry.size,
+            tableauColumnCount: boardColumnCount,
+            headerHeight: headerHeight
+        )
 #endif
         let cardSize = metrics.cardSize
         let boardContentWidth = (cardSize.width * CGFloat(boardColumnCount))
@@ -518,6 +525,12 @@ struct ContentView: View {
                             boardContentWidth: boardContentWidth,
                             onScoreTapped: openScoringDetails
                         )
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.size.height
+                        } action: { newHeight in
+                            guard abs(newHeight - headerHeight) >= 0.5 else { return }
+                            headerHeight = newHeight
+                        }
                     }
                     TopRowView(
                         viewModel: viewModel,
