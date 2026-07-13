@@ -7,6 +7,9 @@ struct StatisticsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var selectedScope: Scope
+    /// The bucket within a multi-mode scope (Klondike draw counts, Spider
+    /// suit counts); ignored for single-mode scopes.
+    @State private var scopeMode: GameMode
     @State private var stats = GameStatistics()
     @State private var barHoverState: (label: String, x: CGFloat)?
     @State private var isShowingCleanWinsInfo = false
@@ -20,12 +23,13 @@ struct StatisticsView: View {
     }()
 
     private enum Scope: String, CaseIterable, Identifiable {
+        // Mirrors GameVariant's presentation order, with the aggregate last.
         case klondike
-        case freecell
-        case yukon
         case spider
-        case pyramid
+        case freecell
         case tripeaks
+        case pyramid
+        case yukon
         case all
 
         var id: String { rawValue }
@@ -84,9 +88,27 @@ struct StatisticsView: View {
         var id: String { label }
     }
 
-    init(viewModel: SolitaireViewModel?, initialVariant: GameVariant = .klondike) {
+    init(viewModel: SolitaireViewModel?, initialMode: GameMode = .klondikeDrawThree) {
         self.viewModel = viewModel
-        _selectedScope = State(initialValue: Scope(variant: initialVariant))
+        _selectedScope = State(initialValue: Scope(variant: initialMode.variant))
+        _scopeMode = State(initialValue: initialMode)
+    }
+
+    /// The statistics bucket the current scope selection reads; nil for the
+    /// aggregate scope.
+    private var effectiveMode: GameMode? {
+        guard let variant = selectedScope.variant else { return nil }
+        let modes = GameMode.modes(for: variant)
+        guard modes.count > 1 else { return modes.first }
+        return modes.contains(scopeMode) ? scopeMode : GameMode(variant: variant)
+    }
+
+    private var effectiveScopeTitle: String {
+        guard let variant = selectedScope.variant else { return "All" }
+        guard GameMode.modes(for: variant).count > 1, let mode = effectiveMode else {
+            return variant.title
+        }
+        return "\(variant.title) (\(mode.optionTitle))"
     }
 
     var body: some View {
@@ -100,6 +122,16 @@ struct StatisticsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
+
+                    if let variant = selectedScope.variant, GameMode.modes(for: variant).count > 1 {
+                        Picker("Game Mode", selection: $scopeMode) {
+                            ForEach(GameMode.modes(for: variant), id: \.self) { mode in
+                                Text(mode.optionTitle).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
                 }
 
                 Section {
@@ -197,6 +229,14 @@ struct StatisticsView: View {
             loadStats()
         }
         .onChange(of: selectedScope) { _, _ in
+            if let variant = selectedScope.variant,
+               !GameMode.modes(for: variant).contains(scopeMode) {
+                scopeMode = GameMode(variant: variant)
+            }
+            loadStats()
+            barHoverState = nil
+        }
+        .onChange(of: scopeMode) { _, _ in
             loadStats()
             barHoverState = nil
         }
@@ -268,26 +308,27 @@ struct StatisticsView: View {
         return durationLabel(bestTimeSeconds)
     }
 
-    /// Klondike splits its high score by draw mode and Spider by suit count
-    /// (scores across game modes aren't comparable); the other variants keep a
-    /// single high score.
+    /// Each mode bucket carries a single high score, routed to the field its
+    /// wins record into (Klondike per draw count, Spider per suit count).
     private var highScoreRowsForSelectedScope: [HighScoreRow] {
-        switch selectedScope {
-        case .klondike:
-            return [
-                HighScoreRow(label: "High Score (3-card)", score: stats.highScoreDrawThree),
-                HighScoreRow(label: "High Score (1-card)", score: stats.highScoreDrawOne)
-            ]
-        case .freecell, .yukon, .pyramid, .tripeaks:
-            return [HighScoreRow(label: "High Score", score: stats.highScore)]
-        case .spider:
-            return [
-                HighScoreRow(label: "High Score (1 Suit)", score: stats.highScoreOneSuit),
-                HighScoreRow(label: "High Score (2 Suits)", score: stats.highScoreTwoSuits),
-                HighScoreRow(label: "High Score (4 Suits)", score: stats.highScoreFourSuits)
-            ]
-        case .all:
-            return []
+        guard let mode = effectiveMode else { return [] }
+        return [HighScoreRow(label: "High Score", score: highScore(for: mode))]
+    }
+
+    private func highScore(for mode: GameMode) -> Int? {
+        switch mode {
+        case .klondikeDrawOne:
+            return stats.highScoreDrawOne
+        case .klondikeDrawThree:
+            return stats.highScoreDrawThree
+        case .spiderOneSuit:
+            return stats.highScoreOneSuit
+        case .spiderTwoSuits:
+            return stats.highScoreTwoSuits
+        case .spiderFourSuits:
+            return stats.highScoreFourSuits
+        case .freecell, .pyramid, .tripeaks, .yukon:
+            return stats.highScore
         }
     }
 
@@ -327,7 +368,7 @@ struct StatisticsView: View {
 
     private func displayTotalTimeSeconds(at date: Date) -> Int {
         let liveElapsed: Int
-        if activeVariantMatchesSelectedScope {
+        if activeModeMatchesSelectedScope {
             liveElapsed = viewModel?.unfinalizedElapsedSecondsForStats(at: date) ?? 0
         } else {
             liveElapsed = 0
@@ -402,15 +443,17 @@ struct StatisticsView: View {
     }
 
     private func resetStatistics() {
-        if let variant = selectedScope.variant {
-            GameStatisticsStore.reset(for: variant)
-        } else {
-            for variant in GameVariant.allCases {
-                GameStatisticsStore.reset(for: variant)
-            }
+        let affectedModes = effectiveMode.map { [$0] } ?? GameMode.allCases
+        for mode in affectedModes {
+            GameStatisticsStore.reset(for: mode)
         }
 
-        if selectedScope == .all || activeVariantMatchesSelectedScope {
+        // Stashed sessions of the affected modes must not finalize pre-reset
+        // play into the fresh buckets; the active session is handled below so
+        // its newer in-memory state wins the save slot.
+        GamePersistence.invalidateStatisticsTracking(for: affectedModes, in: modelContext)
+
+        if selectedScope == .all || activeModeMatchesSelectedScope {
             viewModel?.resetStatisticsTracking()
             persistTrackingResetIfNeeded()
         }
@@ -418,74 +461,35 @@ struct StatisticsView: View {
         barHoverState = nil
     }
 
-    private var activeVariantMatchesSelectedScope: Bool {
-        guard let variant = selectedScope.variant else { return true }
-        return viewModel?.gameVariant == variant
+    private var activeModeMatchesSelectedScope: Bool {
+        guard let mode = effectiveMode else { return true }
+        return viewModel?.gameMode == mode
     }
 
     private var resetDialogTitle: String {
-        switch selectedScope {
-        case .klondike:
-            return "Reset Klondike statistics?"
-        case .freecell:
-            return "Reset FreeCell statistics?"
-        case .yukon:
-            return "Reset Yukon statistics?"
-        case .spider:
-            return "Reset Spider statistics?"
-        case .pyramid:
-            return "Reset Pyramid statistics?"
-        case .tripeaks:
-            return "Reset TriPeaks statistics?"
-        case .all:
-            return "Reset all statistics?"
-        }
+        selectedScope == .all
+            ? "Reset all statistics?"
+            : "Reset \(effectiveScopeTitle) statistics?"
     }
 
     private var resetActionTitle: String {
-        switch selectedScope {
-        case .klondike:
-            return "Reset Klondike Statistics"
-        case .freecell:
-            return "Reset FreeCell Statistics"
-        case .yukon:
-            return "Reset Yukon Statistics"
-        case .spider:
-            return "Reset Spider Statistics"
-        case .pyramid:
-            return "Reset Pyramid Statistics"
-        case .tripeaks:
-            return "Reset TriPeaks Statistics"
-        case .all:
-            return "Reset All Statistics"
-        }
+        selectedScope == .all
+            ? "Reset All Statistics"
+            : "Reset \(effectiveScopeTitle) Statistics"
     }
 
     private var resetMessage: String {
-        switch selectedScope {
-        case .klondike:
-            return "This will reset only Klondike games, times, win rates, and high scores."
-        case .freecell:
-            return "This will reset only FreeCell games, times, win rates, and high scores."
-        case .yukon:
-            return "This will reset only Yukon games, times, win rates, and high scores."
-        case .spider:
-            return "This will reset only Spider games, times, win rates, and high scores."
-        case .pyramid:
-            return "This will reset only Pyramid games, times, win rates, and high scores."
-        case .tripeaks:
-            return "This will reset only TriPeaks games, times, win rates, and high scores."
-        case .all:
-            return "This will reset Klondike, FreeCell, Yukon, Spider, Pyramid, and TriPeaks statistics."
-        }
+        selectedScope == .all
+            ? "This will reset statistics for every game."
+            : "This will reset only \(effectiveScopeTitle) games, times, win rates, and high scores."
     }
 
     private func loadStats() {
-        if let variant = selectedScope.variant {
-            stats = GameStatisticsStore.load(for: variant)
+        if let mode = effectiveMode {
+            stats = GameStatisticsStore.load(for: mode)
         } else {
             stats = GameStatistics.aggregated(
-                GameVariant.allCases.map { GameStatisticsStore.load(for: $0) }
+                GameMode.allCases.map { GameStatisticsStore.load(for: $0) }
             )
         }
     }

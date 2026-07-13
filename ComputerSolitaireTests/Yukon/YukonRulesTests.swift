@@ -59,7 +59,7 @@ final class YukonRulesTests: XCTestCase {
         let eightSpades = TestCards.make(.spades, .eight)
 
         let viewModel = SolitaireViewModel()
-        viewModel.newGame(variant: .yukon)
+        viewModel.newGame(mode: .yukon)
         viewModel.state = GameState(
             variant: .yukon,
             stock: [],
@@ -92,7 +92,7 @@ final class YukonRulesTests: XCTestCase {
         let nineSpades = TestCards.make(.spades, .nine)
 
         let viewModel = SolitaireViewModel()
-        viewModel.newGame(variant: .yukon)
+        viewModel.newGame(mode: .yukon)
         viewModel.state = GameState(
             variant: .yukon,
             stock: [],
@@ -172,7 +172,7 @@ final class YukonRulesTests: XCTestCase {
         let threeHearts = TestCards.make(.hearts, .three)
 
         let viewModel = SolitaireViewModel()
-        viewModel.newGame(variant: .yukon)
+        viewModel.newGame(mode: .yukon)
         viewModel.state = GameState(
             variant: .yukon,
             stock: [],
@@ -193,7 +193,7 @@ final class YukonRulesTests: XCTestCase {
         let hiddenSix = TestCards.make(.hearts, .six, isFaceUp: false)
 
         let viewModel = SolitaireViewModel()
-        viewModel.newGame(variant: .yukon)
+        viewModel.newGame(mode: .yukon)
         viewModel.state = GameState(
             variant: .yukon,
             stock: [],

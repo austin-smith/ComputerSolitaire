@@ -125,27 +125,27 @@ final class GameStatisticsStoreTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
 
         GameStatisticsStore.markTrackingStarted(
-            for: .klondike,
+            for: .klondikeDrawThree,
             userDefaults: defaults,
             at: DateFixtures.reference
         )
-        let marked = GameStatisticsStore.load(for: .klondike, userDefaults: defaults)
+        let marked = GameStatisticsStore.load(for: .klondikeDrawThree, userDefaults: defaults)
         XCTAssertEqual(marked.trackedSince, DateFixtures.reference)
 
         GameStatisticsStore.markTrackingStarted(
-            for: .klondike,
+            for: .klondikeDrawThree,
             userDefaults: defaults,
             at: DateFixtures.plus(60)
         )
-        let notOverwritten = GameStatisticsStore.load(for: .klondike, userDefaults: defaults)
+        let notOverwritten = GameStatisticsStore.load(for: .klondikeDrawThree, userDefaults: defaults)
         XCTAssertEqual(notOverwritten.trackedSince, DateFixtures.reference)
 
         GameStatisticsStore.reset(
-            for: .klondike,
+            for: .klondikeDrawThree,
             userDefaults: defaults,
             at: DateFixtures.plus(120)
         )
-        let reset = GameStatisticsStore.load(for: .klondike, userDefaults: defaults)
+        let reset = GameStatisticsStore.load(for: .klondikeDrawThree, userDefaults: defaults)
         XCTAssertEqual(reset.trackedSince, DateFixtures.plus(120))
         XCTAssertEqual(reset.gamesPlayed, 0)
         XCTAssertEqual(reset.gamesWon, 0)
@@ -155,7 +155,7 @@ final class GameStatisticsStoreTests: XCTestCase {
         let defaults = try makeIsolatedDefaults()
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
 
-        GameStatisticsStore.update(for: .klondike, userDefaults: defaults) { stats in
+        GameStatisticsStore.update(for: .klondikeDrawThree, userDefaults: defaults) { stats in
             stats.recordCompletedGame(
                 didWin: true,
                 elapsedSeconds: 123,
@@ -167,17 +167,126 @@ final class GameStatisticsStoreTests: XCTestCase {
             )
         }
 
-        let loaded = GameStatisticsStore.load(for: .klondike, userDefaults: defaults)
+        let loaded = GameStatisticsStore.load(for: .klondikeDrawThree, userDefaults: defaults)
         XCTAssertEqual(loaded.gamesPlayed, 1)
         XCTAssertEqual(loaded.gamesWon, 1)
         XCTAssertEqual(loaded.bestTimeSeconds, 123)
+    }
+
+    func testLegacyKlondikeStatisticsMigrationSplitsBuckets() throws {
+        let defaults = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
+
+        let legacy = GameStatistics(
+            trackedSince: DateFixtures.reference,
+            gamesPlayed: 10,
+            gamesWon: 4,
+            totalTimeSeconds: 600,
+            bestTimeSeconds: 60,
+            highScoreDrawThree: 500,
+            highScoreDrawOne: 300,
+            cleanWins: 2
+        )
+        defaults.set(
+            try JSONEncoder().encode(legacy),
+            forKey: GameStatisticsStore.legacyKlondikeDefaultsKey
+        )
+
+        GameStatisticsStore.migrateLegacyKlondikeStatisticsIfNeeded(
+            activeDrawMode: .three,
+            userDefaults: defaults
+        )
+
+        // Pooled history lands in the active mode's bucket; the other mode keeps
+        // only the high score that was already recorded per draw count.
+        let drawThree = GameStatisticsStore.load(for: .klondikeDrawThree, userDefaults: defaults)
+        XCTAssertEqual(drawThree.gamesPlayed, 10)
+        XCTAssertEqual(drawThree.gamesWon, 4)
+        XCTAssertEqual(drawThree.cleanWins, 2)
+        XCTAssertEqual(drawThree.highScoreDrawThree, 500)
+        XCTAssertNil(drawThree.highScoreDrawOne)
+
+        let drawOne = GameStatisticsStore.load(for: .klondikeDrawOne, userDefaults: defaults)
+        XCTAssertEqual(drawOne.gamesPlayed, 0)
+        XCTAssertEqual(drawOne.highScoreDrawOne, 300)
+        XCTAssertEqual(drawOne.trackedSince, DateFixtures.reference)
+
+        XCTAssertNil(defaults.data(forKey: GameStatisticsStore.legacyKlondikeDefaultsKey))
+
+        // Idempotent: a second run with no legacy bucket changes nothing.
+        GameStatisticsStore.migrateLegacyKlondikeStatisticsIfNeeded(
+            activeDrawMode: .one,
+            userDefaults: defaults
+        )
+        XCTAssertEqual(
+            GameStatisticsStore.load(for: .klondikeDrawThree, userDefaults: defaults).gamesPlayed,
+            10
+        )
+    }
+
+    func testLegacySpiderStatisticsMigrationSplitsBuckets() throws {
+        let defaults = try makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
+
+        let legacy = GameStatistics(
+            trackedSince: DateFixtures.reference,
+            gamesPlayed: 12,
+            gamesWon: 5,
+            totalTimeSeconds: 900,
+            bestTimeSeconds: 90,
+            highScoreOneSuit: 700,
+            highScoreTwoSuits: 500,
+            highScoreFourSuits: 300,
+            cleanWins: 3
+        )
+        defaults.set(
+            try JSONEncoder().encode(legacy),
+            forKey: GameStatisticsStore.legacySpiderDefaultsKey
+        )
+
+        GameStatisticsStore.migrateLegacySpiderStatisticsIfNeeded(
+            activeSuitCount: .two,
+            userDefaults: defaults
+        )
+
+        // Pooled history lands in the active mode's bucket; every mode keeps
+        // only the high score that was already recorded per suit count.
+        let twoSuits = GameStatisticsStore.load(for: .spiderTwoSuits, userDefaults: defaults)
+        XCTAssertEqual(twoSuits.gamesPlayed, 12)
+        XCTAssertEqual(twoSuits.gamesWon, 5)
+        XCTAssertEqual(twoSuits.cleanWins, 3)
+        XCTAssertEqual(twoSuits.highScoreTwoSuits, 500)
+        XCTAssertNil(twoSuits.highScoreOneSuit)
+        XCTAssertNil(twoSuits.highScoreFourSuits)
+
+        let oneSuit = GameStatisticsStore.load(for: .spiderOneSuit, userDefaults: defaults)
+        XCTAssertEqual(oneSuit.gamesPlayed, 0)
+        XCTAssertEqual(oneSuit.highScoreOneSuit, 700)
+        XCTAssertNil(oneSuit.highScoreTwoSuits)
+        XCTAssertEqual(oneSuit.trackedSince, DateFixtures.reference)
+
+        let fourSuits = GameStatisticsStore.load(for: .spiderFourSuits, userDefaults: defaults)
+        XCTAssertEqual(fourSuits.gamesPlayed, 0)
+        XCTAssertEqual(fourSuits.highScoreFourSuits, 300)
+
+        XCTAssertNil(defaults.data(forKey: GameStatisticsStore.legacySpiderDefaultsKey))
+
+        // Idempotent: a second run with no legacy bucket changes nothing.
+        GameStatisticsStore.migrateLegacySpiderStatisticsIfNeeded(
+            activeSuitCount: .four,
+            userDefaults: defaults
+        )
+        XCTAssertEqual(
+            GameStatisticsStore.load(for: .spiderTwoSuits, userDefaults: defaults).gamesPlayed,
+            12
+        )
     }
 
     func testVariantStoresRemainIsolated() throws {
         let defaults = try makeIsolatedDefaults()
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName) }
 
-        GameStatisticsStore.update(for: .klondike, userDefaults: defaults) { stats in
+        GameStatisticsStore.update(for: .klondikeDrawThree, userDefaults: defaults) { stats in
             stats.recordCompletedGame(
                 didWin: true,
                 elapsedSeconds: 100,
@@ -189,7 +298,7 @@ final class GameStatisticsStoreTests: XCTestCase {
             )
         }
 
-        let klondikeStats = GameStatisticsStore.load(for: .klondike, userDefaults: defaults)
+        let klondikeStats = GameStatisticsStore.load(for: .klondikeDrawThree, userDefaults: defaults)
         let freeCellStats = GameStatisticsStore.load(for: .freecell, userDefaults: defaults)
 
         XCTAssertEqual(klondikeStats.gamesPlayed, 1)

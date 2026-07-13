@@ -1,11 +1,13 @@
 import SwiftUI
-import Observation
 
 /// One of Spider's eight banked-run piles. Runs arrive here automatically, so
 /// unlike `FoundationView` this pile is never a tap, drag, or drop target; it
 /// still publishes its frames so the win cascade can launch cards from it.
+/// The pile arrives by value — this view must stay renderable against any
+/// game's state, because during a game switch it can re-evaluate after the
+/// board's state has already changed variant.
 struct SpiderCompletedRunPileView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    let pile: [Card]
     let index: Int
     let cardSize: CGSize
     let isCardTiltEnabled: Bool
@@ -13,7 +15,6 @@ struct SpiderCompletedRunPileView: View {
     let hiddenCardIDs: Set<UUID>
 
     var body: some View {
-        let pile = viewModel.state.foundations[index]
         let visibleDepth = min(pile.count, 4)
         let startIndex = pile.count - visibleDepth
         ZStack {
@@ -61,7 +62,7 @@ struct SpiderCompletedRunPileView: View {
     }
 
     private var accessibilityValue: String {
-        guard let topCard = viewModel.state.foundations[index].last else { return "Empty" }
+        guard let topCard = pile.last else { return "Empty" }
         return "Full \(topCard.suit.accessibilityName) run"
     }
 }

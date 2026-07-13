@@ -5,7 +5,7 @@ import XCTest
 final class TriPeaksSessionTests: XCTestCase {
     private func makeTriPeaksSession() -> SolitaireViewModel {
         let viewModel = SolitaireViewModel(variant: .tripeaks)
-        viewModel.newGame(variant: .tripeaks)
+        viewModel.newGame(mode: .tripeaks)
         return viewModel
     }
 

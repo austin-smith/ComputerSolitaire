@@ -168,7 +168,7 @@ final class PyramidPersistenceTests: XCTestCase {
         XCTAssertNil(pyramidStats.highScoreDrawOne)
         XCTAssertNil(pyramidStats.highScoreDrawThree)
 
-        let klondikeStats = GameStatisticsStore.load(for: .klondike, userDefaults: defaults)
+        let klondikeStats = GameStatisticsStore.load(for: .klondikeDrawThree, userDefaults: defaults)
         XCTAssertEqual(klondikeStats.gamesPlayed, 0)
     }
 }

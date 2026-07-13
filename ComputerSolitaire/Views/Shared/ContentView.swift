@@ -123,6 +123,7 @@ struct ContentView: View {
     @State private var autosaveTask: Task<Void, Never>?
     @State private var isAutoFinishing = false
     @State private var isShowingRulesAndScoring = false
+    @State private var isShowingGamePicker = false
     @State private var rulesAndScoringInitialSection: RulesAndScoringView.Section = .rules
     @State private var isShowingStats = false
     @State private var timeScoringPauseReasons: Set<TimeScoringPauseReason> = []
@@ -135,6 +136,8 @@ struct ContentView: View {
     @AppStorage(SettingsKey.spiderSuitCount) private var spiderSuitCountRawValue = SpiderSuitCount.two.rawValue
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
     @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
+    @AppStorage(SettingsKey.tableBackgroundColor)
+    private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
 
     private var gameVariant: GameVariant {
         GameVariant(rawValue: gameVariantRawValue) ?? .klondike
@@ -154,7 +157,7 @@ struct ContentView: View {
     }
 
     private var isAnyMenuPresented: Bool {
-        isShowingSettings || isShowingRulesAndScoring || isShowingStats
+        isShowingSettings || isShowingRulesAndScoring || isShowingStats || isShowingGamePicker
     }
 
     private var shouldPauseForLifecycle: Bool {
@@ -181,6 +184,28 @@ struct ContentView: View {
                 .environment(\.cardStyle, currentCardStyle)
             )
         )
+        .overlay {
+            if isShowingGamePicker {
+                GameModePickerOverlay(
+                    entries: gameModePickerEntries(),
+                    currentMode: viewModel.gameMode,
+                    feltColor: (TableBackgroundColor(rawValue: tableBackgroundColorRawValue)
+                        ?? .defaultValue).color,
+                    onSelect: { mode in
+                        withAnimation(.smooth(duration: 0.25)) {
+                            isShowingGamePicker = false
+                        }
+                        requestGameSwitch(to: mode)
+                    },
+                    onDismiss: {
+                        withAnimation(.smooth(duration: 0.25)) {
+                            isShowingGamePicker = false
+                        }
+                    }
+                )
+                .transition(.opacity)
+            }
+        }
     }
 
     private func sceneDecorations(for baseView: AnyView) -> some View {
@@ -302,6 +327,36 @@ struct ContentView: View {
         )
     }
 
+    private func gameModePickerEntries() -> [GameModePickerView.Entry] {
+        GameMode.allCases.map { mode in
+            GameModePickerView.Entry(mode: mode, isWon: gameModeIsWon(mode))
+        }
+    }
+
+    /// The sub-game a variant's picker card opens: the live game's mode when
+    /// the variant is active, else the last-played mode.
+    private func defaultMode(for variant: GameVariant) -> GameMode {
+        if viewModel.gameVariant == variant {
+            return viewModel.gameMode
+        }
+        return GameMode(variant: variant, drawMode: drawMode, spiderSuitCount: spiderSuitCount)
+    }
+
+    private func gameModeIsWon(_ mode: GameMode) -> Bool {
+        if mode == viewModel.gameMode {
+            return viewModel.isWin
+        }
+        return GamePersistence.load(mode: mode, from: modelContext)?.state.isWon ?? false
+    }
+
+    /// UI entry point for switching games. Performs the switch and keeps the
+    /// AppStorage selection in sync.
+    private func requestGameSwitch(to mode: GameMode) {
+        guard mode != viewModel.gameMode else { return }
+        hapticFeedback.play(.settingsSelection)
+        switchGame(to: mode)
+    }
+
     private func applySheets(to view: AnyView) -> AnyView {
         AnyView(
             view.sheet(isPresented: $isShowingSettings) {
@@ -321,10 +376,10 @@ struct ContentView: View {
             .sheet(isPresented: $isShowingStats) {
 #if os(iOS)
                 NavigationStack {
-                    StatisticsView(viewModel: viewModel, initialVariant: viewModel.gameVariant)
+                    StatisticsView(viewModel: viewModel, initialMode: viewModel.gameMode)
                 }
 #else
-                StatisticsView(viewModel: viewModel, initialVariant: viewModel.gameVariant)
+                StatisticsView(viewModel: viewModel, initialMode: viewModel.gameMode)
 #endif
             }
         )
@@ -346,38 +401,15 @@ struct ContentView: View {
             .onChange(of: gameVariantRawValue) { _, newValue in
                 guard hasLoadedGame, !isHydratingGame else { return }
                 let variant = GameVariant(rawValue: newValue) ?? .klondike
-                // Restoring a game whose variant differs from the stored setting
-                // syncs the setting to the game; that write lands here after
-                // hydration ends and must not re-deal over the restored board.
                 guard variant != viewModel.gameVariant else { return }
-                stopAutoFinish()
-                winCelebration.reset(to: .idle)
-                isScreenshotSession = false
-                viewModel.newGame(variant: variant, drawMode: drawMode, spiderSuitCount: spiderSuitCount)
-                persistGameNow()
-            }
-            .onChange(of: drawModeRawValue) { (_, newValue: Int) in
-                guard viewModel.supportsDrawMode else { return }
-                let mode = DrawMode(rawValue: newValue) ?? .three
-                viewModel.updateDrawMode(mode)
-                scheduleAutosave()
+                switchGame(to: defaultMode(for: variant))
             }
             .onChange(of: spiderSuitCountRawValue) { _, newValue in
                 guard hasLoadedGame, !isHydratingGame else { return }
-                // Unlike a draw-mode change, a suit-count change recomposes the
-                // deck, so it always starts a new game (as variant changes do).
                 guard viewModel.gameVariant == .spider else { return }
                 let suitCount = SpiderSuitCount(rawValue: newValue) ?? .two
-                // Restoring a game whose suit count differs from the stored
-                // setting syncs the setting to the game; that write lands here
-                // after hydration ends and must not re-deal over the restored
-                // board.
                 guard suitCount != viewModel.state.spiderSuitCount else { return }
-                stopAutoFinish()
-                winCelebration.reset(to: .idle)
-                isScreenshotSession = false
-                viewModel.newGame(variant: .spider, drawMode: drawMode, spiderSuitCount: suitCount)
-                persistGameNow()
+                switchGame(to: GameMode(variant: .spider, spiderSuitCount: suitCount))
             }
             .onChange(of: isAnyMenuPresented) { _, _ in
                 updateMenuPresentationPauseState()
@@ -727,10 +759,17 @@ struct ContentView: View {
         boardContentWidth: CGFloat,
         onScoreTapped: @escaping () -> Void
     ) -> some View {
-        HeaderView(
+        return HeaderView(
+            gameTitle: viewModel.gameVariant.title,
+            gameQualifier: viewModel.gameMode.qualifier,
             movesCount: viewModel.movesCount,
             elapsedSeconds: elapsedSeconds,
             score: score,
+            onGameTitleTapped: {
+                withAnimation(.smooth(duration: 0.25)) {
+                    isShowingGamePicker = true
+                }
+            },
             onScoreTapped: onScoreTapped
         )
         .frame(width: boardContentWidth, alignment: .leading)
@@ -777,6 +816,7 @@ struct ContentView: View {
 #if os(macOS)
     private var gameMenuActions: GameMenuActions {
         GameMenuActions(
+            switchVariant: { requestGameSwitch(to: defaultMode(for: $0)) },
             newGame: { startNewGameFromUI() },
             redeal: redealFromUI,
             undo: {
@@ -797,6 +837,7 @@ struct ContentView: View {
 
     private var gameMenuState: GameMenuState {
         GameMenuState(
+            currentVariant: gameVariant,
             canUndo: !isUndoDisabled,
             canAutoFinish: isAutoFinishing || !isAutoFinishDisabled,
             canHint: !isHintDisabled,
@@ -812,13 +853,27 @@ struct ContentView: View {
         viewModel.requestHint()
     }
 
-    private func startNewGameFromUI(variant: GameVariant? = nil) {
+    private func startNewGameFromUI() {
         stopAutoFinish()
         winCelebration.reset(to: .idle)
         isScreenshotSession = false
-        let selectedVariant = variant ?? gameVariant
-        viewModel.newGame(variant: selectedVariant, drawMode: drawMode, spiderSuitCount: spiderSuitCount)
+        viewModel.newGame()
         persistGameNow()
+    }
+
+    /// Syncs the stored game selection (variant plus per-variant configuration)
+    /// to the game now in play, so relaunches and picker defaults follow it.
+    private func rememberSelectedGame() {
+        if gameVariantRawValue != viewModel.gameVariant.rawValue {
+            gameVariantRawValue = viewModel.gameVariant.rawValue
+        }
+        if viewModel.supportsDrawMode, drawModeRawValue != viewModel.stockDrawCount {
+            drawModeRawValue = viewModel.stockDrawCount
+        }
+        if let suitCount = viewModel.state.spiderSuitCount,
+           spiderSuitCountRawValue != suitCount.rawValue {
+            spiderSuitCountRawValue = suitCount.rawValue
+        }
     }
 
     private func redealFromUI() {
@@ -826,6 +881,61 @@ struct ContentView: View {
         winCelebration.reset(to: .idle)
         viewModel.redeal()
         persistGameNow()
+    }
+
+    /// Stashes the current game into its own save slot, then resumes the target
+    /// game's stashed session (or deals fresh). Never records statistics —
+    /// switching games is not abandoning a game.
+    private func switchGame(to mode: GameMode) {
+        // Stash before any teardown: if persistence fails, the switch is
+        // abandoned and the live session keeps playing with nothing lost.
+        guard persistGameNow() else { return }
+        stopAutoFinish()
+        winCelebration.reset(to: .idle)
+        resetTransientBoardState()
+        isHydratingGame = true
+        isScreenshotSession = false
+        let payload = GamePersistence.load(mode: mode, from: modelContext)
+        viewModel.activateGame(mode, restoringFrom: payload)
+        rememberSelectedGame()
+        reconcileTimeScoringPause()
+        winCelebration.syncForLoadedGame(
+            launchPiles: winCascadeLaunchPiles,
+            launchTargets: winCascadeLaunchTargets,
+            isWin: viewModel.isWin,
+            dropFrames: dropFrames,
+            boardViewportSize: boardViewportSize
+        )
+        previousWasteCount = viewModel.state.waste.count
+        previousStockCount = viewModel.state.stock.count
+        isHydratingGame = false
+        persistGameNow()
+    }
+
+    /// Clears in-flight drag/drop/undo/draw animation state so stale animation
+    /// completions cannot mutate the game that replaces the current one.
+    private func resetTransientBoardState() {
+        activeTarget = nil
+        dragTranslation = .zero
+        dragReturnOffset = .zero
+        isReturningDrag = false
+        returningCards = []
+        isDroppingCards = false
+        droppingSelection = nil
+        dropAnimationOffset = .zero
+        pendingDropDestination = nil
+        wasteReturnAnchorCardID = nil
+        wasteReturnAnchorFrame = nil
+        drawAnimationCards = []
+        drawingCardIDs = []
+        drawAnimationToken = UUID()
+        undoAnimationItems = []
+        undoAnimationTargets = [:]
+        undoAnimationProgress = 0
+        isUndoAnimating = false
+        hiddenCardIDs = []
+        wasteFanProgress = [:]
+        hintHighlightOpacity = 0
     }
 
     private func startAutoFinish() {
@@ -1450,22 +1560,24 @@ struct ContentView: View {
             previousStockCount = viewModel.state.stock.count
         }
 
+        GamePersistence.migrateLegacyRecordsIfNeeded(in: modelContext)
+        GameStatisticsStore.migrateLegacyKlondikeStatisticsIfNeeded(activeDrawMode: drawMode)
+        GameStatisticsStore.migrateLegacySpiderStatisticsIfNeeded(activeSuitCount: spiderSuitCount)
+
+        // The stored selection decides which game's slot the app opens into.
+        let storedMode = GameMode(
+            variant: gameVariant,
+            drawMode: drawMode,
+            spiderSuitCount: spiderSuitCount
+        )
         if restoreScreenshotFixtureIfRequested() {
             // Staged board loaded; shared post-load setup below still applies.
-        } else if let payload = GamePersistence.load(from: modelContext), viewModel.restore(from: payload) {
-            if gameVariantRawValue != viewModel.gameVariant.rawValue {
-                gameVariantRawValue = viewModel.gameVariant.rawValue
-            }
-            if viewModel.supportsDrawMode, drawModeRawValue != viewModel.stockDrawCount {
-                drawModeRawValue = viewModel.stockDrawCount
-            }
-            if let restoredSuitCount = viewModel.state.spiderSuitCount,
-               spiderSuitCountRawValue != restoredSuitCount.rawValue {
-                spiderSuitCountRawValue = restoredSuitCount.rawValue
-            }
+        } else if let payload = GamePersistence.load(mode: storedMode, from: modelContext),
+                  viewModel.restore(from: payload) {
+            rememberSelectedGame()
         } else {
             winCelebration.reset(to: .idle)
-            viewModel.newGame(variant: gameVariant, drawMode: drawMode, spiderSuitCount: spiderSuitCount)
+            viewModel.newGame(mode: storedMode)
             persistGameNow()
         }
         winCelebration.syncForLoadedGame(
@@ -1476,6 +1588,14 @@ struct ContentView: View {
             boardViewportSize: boardViewportSize
         )
 
+        reconcileTimeScoringPause()
+    }
+
+    /// Rebuilds the pause-reason set from the current scene and menu state
+    /// and applies it to the session, resuming as well as pausing: a restored
+    /// payload can carry a pause from stash time that no present reason
+    /// justifies, and it must not stay frozen.
+    private func reconcileTimeScoringPause() {
         timeScoringPauseReasons = []
         if shouldPauseForLifecycle {
             timeScoringPauseReasons.insert(.lifecycle)
@@ -1580,34 +1700,31 @@ struct ContentView: View {
             return false
         }
         isScreenshotSession = true
-        if gameVariantRawValue != viewModel.gameVariant.rawValue {
-            gameVariantRawValue = viewModel.gameVariant.rawValue
-        }
-        if viewModel.supportsDrawMode, drawModeRawValue != viewModel.stockDrawCount {
-            drawModeRawValue = viewModel.stockDrawCount
-        }
-        if let restoredSuitCount = viewModel.state.spiderSuitCount,
-           spiderSuitCountRawValue != restoredSuitCount.rawValue {
-            spiderSuitCountRawValue = restoredSuitCount.rawValue
-        }
+        rememberSelectedGame()
         return true
 #else
         return false
 #endif
     }
 
-    private func persistGameNow() {
-        guard hasLoadedGame else { return }
+    /// Returns whether the session is safely on disk — true also when no
+    /// save was required (nothing loaded yet, or a screenshot board that
+    /// must never overwrite the real one).
+    @discardableResult
+    private func persistGameNow() -> Bool {
+        guard hasLoadedGame else { return true }
         // A screenshot session must never overwrite the real saved game.
-        guard !isScreenshotSession else { return }
+        guard !isScreenshotSession else { return true }
         autosaveTask?.cancel()
         autosaveTask = nil
         do {
             try GamePersistence.save(viewModel.persistencePayload(), in: modelContext)
+            return true
         } catch {
 #if DEBUG
             print("Failed to persist game state: \(error)")
 #endif
+            return false
         }
     }
 }

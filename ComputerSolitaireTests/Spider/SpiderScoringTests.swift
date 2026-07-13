@@ -5,7 +5,7 @@ import XCTest
 final class SpiderScoringTests: XCTestCase {
     func testNewGameStartsAtTheClassicInitialScore() {
         let viewModel = SolitaireViewModel()
-        viewModel.newGame(variant: .spider)
+        viewModel.newGame(mode: .spiderTwoSuits)
         XCTAssertEqual(viewModel.score, Scoring.spiderInitialScore)
 
         viewModel.redeal()

@@ -190,46 +190,63 @@ enum Layout {
 }
 
 struct HeaderView: View {
+    let gameTitle: String
+    /// The mode qualifier shown dimmed after the title ("3-card"); nil for
+    /// single-mode games.
+    let gameQualifier: String?
     let movesCount: Int
     let elapsedSeconds: Int
     let score: Int
+    let onGameTitleTapped: () -> Void
     let onScoreTapped: () -> Void
 
+    // The title gets its own row so the stat strip keeps the full board
+    // width and stays balanced over the board; sharing a row would push the
+    // strip off the board's centerline.
     var body: some View {
-        HStack(spacing: 10) {
-            StatTileView(
-                title: "Moves",
-                value: "\(movesCount)",
-                systemImage: "arrow.left.arrow.right"
-            )
-
-            StatTileView(
-                title: "Time",
-                value: formattedDuration(elapsedSeconds),
-                systemImage: "timer"
-            )
-
-            Button(action: onScoreTapped) {
-                StatTileView(
-                    title: "Score",
-                    value: "\(score)",
-                    systemImage: "star.fill"
-                )
+        VStack(alignment: .leading, spacing: 6) {
+            gameTitleButton
+                .padding(.leading, 4)
+            HStack(spacing: 10) {
+                statTiles
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Score \(score). Open scoring details")
+            .headerContainer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.black.opacity(0.16))
+    }
+
+    private var gameTitleButton: some View {
+        Button(action: onGameTitleTapped) {
+            GameTitleView(title: gameTitle, qualifier: gameQualifier)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Game: \(accessibilityGameName). Switch game mode")
+    }
+
+    private var accessibilityGameName: String {
+        guard let gameQualifier else { return gameTitle }
+        return "\(gameTitle), \(gameQualifier)"
+    }
+
+    @ViewBuilder
+    private var statTiles: some View {
+        StatTileView(
+            title: "Moves",
+            value: "\(movesCount)"
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(.white.opacity(0.1), lineWidth: 1)
+
+        StatTileView(
+            title: "Time",
+            value: formattedDuration(elapsedSeconds)
         )
-        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+
+        Button(action: onScoreTapped) {
+            StatTileView(
+                title: "Score",
+                value: "\(score)"
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Score \(score). Open scoring details")
     }
 
     private func formattedDuration(_ totalSeconds: Int) -> String {
@@ -249,19 +266,73 @@ struct HeaderView: View {
     }
 }
 
+private extension View {
+    /// The header strip's outer chrome: translucent dark rounded container.
+    func headerContainer() -> some View {
+        self
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.black.opacity(0.16))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(.white.opacity(0.1), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+    }
+}
+
+/// The current game's name set directly on the felt, like a card table's
+/// engraved branding. The mode qualifier renders dimmed — it modifies the
+/// name, it isn't part of it. Chevron signals the tap-to-switch affordance.
+struct GameTitleView: View {
+    let title: String
+    let qualifier: String?
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(styledTitle)
+                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                .tracking(1.5)
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white.opacity(0.6))
+        }
+        .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+    }
+
+    private var styledTitle: AttributedString {
+        var styled = AttributedString(title.uppercased())
+        if let qualifier {
+            var suffix = AttributedString(" · \(qualifier.uppercased())")
+            suffix.foregroundColor = .white.opacity(0.5)
+            styled += suffix
+        }
+        return styled
+    }
+}
+
+/// One stat in the header strip: a quiet uppercase label over its value,
+/// echoing the game title's felt-set typography. The strip's container is
+/// the only chrome — tiles are bare type.
 struct StatTileView: View {
     let title: String
     let value: String
-    let systemImage: String
-    var isEmphasized: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Label(title, systemImage: systemImage)
+            Text(title.uppercased())
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.75))
+                .tracking(0.8)
+                .foregroundStyle(.white.opacity(0.65))
                 .lineLimit(1)
-                .minimumScaleFactor(0.85)
 
             Text(value)
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
@@ -270,17 +341,7 @@ struct StatTileView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isEmphasized ? .white.opacity(0.16) : .white.opacity(0.07))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(.white.opacity(isEmphasized ? 0.16 : 0.09), lineWidth: 1)
-        )
     }
 }
 

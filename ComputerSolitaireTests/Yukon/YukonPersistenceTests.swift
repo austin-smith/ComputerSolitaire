@@ -32,7 +32,7 @@ final class YukonPersistenceTests: XCTestCase {
 
     func testViewModelRoundTripPreservesYukonGame() {
         let viewModel = SolitaireViewModel()
-        viewModel.newGame(variant: .yukon)
+        viewModel.newGame(mode: .yukon)
         let payload = viewModel.persistencePayload()
 
         let restored = SolitaireViewModel()
