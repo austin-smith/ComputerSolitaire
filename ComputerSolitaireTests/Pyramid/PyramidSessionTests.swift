@@ -5,7 +5,7 @@ import XCTest
 final class PyramidSessionTests: XCTestCase {
     private func makePyramidSession() -> SolitaireViewModel {
         let viewModel = SolitaireViewModel(variant: .pyramid)
-        viewModel.newGame(variant: .pyramid)
+        viewModel.newGame(mode: .pyramid)
         return viewModel
     }
 

@@ -29,9 +29,13 @@ struct SpiderTopRowView: View {
                 .frame(width: cardSize.width, height: cardSize.height)
                 .accessibilityHidden(true)
 
-            ForEach(0..<8, id: \.self) { index in
+            // Iterate the piles the state actually holds, not a fixed 0..<8:
+            // during a game switch this row can re-evaluate against the
+            // incoming variant's four-foundation state before the board
+            // replaces it.
+            ForEach(Array(viewModel.state.foundations.enumerated()), id: \.offset) { index, pile in
                 SpiderCompletedRunPileView(
-                    viewModel: viewModel,
+                    pile: pile,
                     index: index,
                     cardSize: cardSize,
                     isCardTiltEnabled: isCardTiltEnabled,

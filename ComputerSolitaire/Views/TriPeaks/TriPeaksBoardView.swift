@@ -24,8 +24,12 @@ struct TriPeaksBoardView: View {
         let boardHeight = cardSize.height + rowOverlap * CGFloat(TriPeaksGeometry.rowCount - 1)
 
         ZStack(alignment: .topLeading) {
-            ForEach(0..<TriPeaksGeometry.cardCount, id: \.self) { index in
-                if let card = viewModel.state.triPeaks[index] {
+            // Iterate the slots the state actually holds, not a fixed
+            // 0..<28: during a game switch this view can re-evaluate against
+            // the incoming variant's empty triPeaks array before the board
+            // replaces it.
+            ForEach(Array(viewModel.state.triPeaks.enumerated()), id: \.offset) { index, slot in
+                if let card = slot {
                     peakCard(card, at: index, rowOverlap: rowOverlap)
                 }
             }

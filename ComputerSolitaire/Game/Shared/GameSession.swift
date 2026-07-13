@@ -70,11 +70,22 @@ final class SolitaireViewModel {
         redealState = initialState
         gameStartedAt = startedAt
         hasStartedTrackedGame = false
-        GameStatisticsStore.markTrackingStarted(for: variant, at: startedAt)
+        GameStatisticsStore.markTrackingStarted(for: gameMode, at: startedAt)
     }
 
     var gameVariant: GameVariant {
         state.variant
+    }
+
+    /// The game this session currently hosts; keys its save slot and its
+    /// statistics bucket. Spider's suit count is derived from the deal; the
+    /// draw count is session state.
+    var gameMode: GameMode {
+        GameMode(
+            variant: state.variant,
+            drawMode: DrawMode(rawValue: stockDrawCount) ?? .three,
+            spiderSuitCount: state.spiderSuitCount ?? .two
+        )
     }
 
     var isWin: Bool {
@@ -213,15 +224,31 @@ final class SolitaireViewModel {
         return true
     }
 
-    func newGame(
-        variant: GameVariant? = nil,
-        drawMode: DrawMode = .three,
-        spiderSuitCount: SpiderSuitCount = .two
-    ) {
+    /// Finalizes the current game into its statistics and deals a fresh one;
+    /// `nil` replays the current mode.
+    func newGame(mode: GameMode? = nil) {
         finalizeCurrentGameIfNeeded(didWin: isWin, endedAt: dateProvider.now)
+        startGame(mode: mode ?? gameMode)
+    }
+
+    /// Activates `mode` without finalizing the current game's statistics, restoring the
+    /// mode's stashed session when one is available. Deals a fresh game when `payload`
+    /// is missing, belongs to another game, or fails restore sanitization.
+    @discardableResult
+    func activateGame(_ mode: GameMode, restoringFrom payload: SavedGamePayload?) -> Bool {
+        if let payload, payload.gameMode == mode, restore(from: payload) {
+            return true
+        }
+        startGame(mode: mode)
+        return false
+    }
+
+    private func startGame(mode: GameMode) {
         clearHint()
-        let nextVariant = variant ?? state.variant
-        let initialState = GameState.newGame(variant: nextVariant, spiderSuitCount: spiderSuitCount)
+        let initialState = GameState.newGame(
+            variant: mode.variant,
+            spiderSuitCount: mode.spiderSuitCount ?? .two
+        )
         state = initialState
         redealState = initialState
         selection = nil
@@ -233,8 +260,8 @@ final class SolitaireViewModel {
         hasAppliedTimeBonus = false
         finalElapsedSeconds = nil
         pauseStartedAt = nil
-        applyNewGameVariantConfiguration(variant: nextVariant, drawMode: drawMode)
-        GameStatisticsStore.markTrackingStarted(for: nextVariant, at: gameStartedAt)
+        applyNewGameVariantConfiguration(variant: mode.variant, drawMode: mode.drawMode ?? .three)
+        GameStatisticsStore.markTrackingStarted(for: gameMode, at: gameStartedAt)
         hasStartedTrackedGame = true
         isCurrentGameFinalized = false
         hintRequestsInCurrentGame = 0
@@ -258,7 +285,7 @@ final class SolitaireViewModel {
         finalElapsedSeconds = nil
         pauseStartedAt = nil
         applyRedealVariantConfiguration()
-        GameStatisticsStore.markTrackingStarted(for: state.variant, at: gameStartedAt)
+        GameStatisticsStore.markTrackingStarted(for: gameMode, at: gameStartedAt)
         hasStartedTrackedGame = true
         isCurrentGameFinalized = false
         hintRequestsInCurrentGame = 0
@@ -328,7 +355,7 @@ final class SolitaireViewModel {
         }
         stockDrawCount = sanitizedPayload.stockDrawCount
         scoringDrawCount = sanitizedPayload.scoringDrawCount
-        GameStatisticsStore.markTrackingStarted(for: state.variant, at: gameStartedAt)
+        GameStatisticsStore.markTrackingStarted(for: gameMode, at: gameStartedAt)
         hasStartedTrackedGame = sanitizedPayload.hasStartedTrackedGame
         isCurrentGameFinalized = sanitizedPayload.isCurrentGameFinalized
         hintRequestsInCurrentGame = sanitizedPayload.hintRequestsInCurrentGame
@@ -607,13 +634,12 @@ final class SolitaireViewModel {
         }
     }
 
+    /// The draw-mode basis statistics record under: always the game's own
+    /// mode, so the bucket and the high-score field it routes to can never
+    /// diverge — legacy saves may carry a `scoringDrawCount` that differs
+    /// from the mode they live and display as.
     private func statisticsDrawCountForCurrentVariant() -> Int {
-        switch state.variant {
-        case .klondike:
-            return scoringDrawCount
-        case .freecell, .yukon, .spider, .pyramid, .tripeaks:
-            return 0
-        }
+        gameMode.drawMode?.rawValue ?? 0
     }
 
     func refreshAutoFinishAvailability() {
@@ -948,7 +974,7 @@ extension SolitaireViewModel {
     func finalizeCurrentGameIfNeeded(didWin: Bool, endedAt: Date) {
         guard hasStartedTrackedGame, !isCurrentGameFinalized else { return }
         let elapsedSeconds = elapsedActiveSeconds(at: endedAt)
-        GameStatisticsStore.update(for: state.variant) { stats in
+        GameStatisticsStore.update(for: gameMode) { stats in
             stats.recordCompletedGame(
                 didWin: didWin,
                 elapsedSeconds: elapsedSeconds,

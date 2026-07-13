@@ -7,7 +7,7 @@ final class SolitaireViewModelCoreTests: XCTestCase {
 
     func testNewGameResetsCoreStateAndAppliesDrawMode() {
         let viewModel = makeViewModel()
-        viewModel.newGame(drawMode: .one)
+        viewModel.newGame(mode: .klondikeDrawOne)
 
         XCTAssertEqual(viewModel.movesCount, 0)
         XCTAssertEqual(viewModel.score, 0)
@@ -65,26 +65,9 @@ final class SolitaireViewModelCoreTests: XCTestCase {
         XCTAssertTrue(viewModel.state.stock.allSatisfy { !$0.isFaceUp })
     }
 
-    func testRecyclePenaltyAppliesWhenDealtDrawOneEvenAfterSwitchingToDrawThree() {
-        var state = GameStateFixtures.validPersistenceState()
-        state.waste = state.stock.map { card in
-            var faceUp = card
-            faceUp.isFaceUp = true
-            return faceUp
-        }
-        state.stock = []
-        state.wasteDrawCount = min(1, state.waste.count)
-        let viewModel = makeViewModel(
-            restoring: payload(state: state, stockDrawCount: DrawMode.one.rawValue, score: 150)
-        )
-
-        viewModel.updateDrawMode(.three)
-        viewModel.handleStockTap()
-
-        XCTAssertEqual(viewModel.score, 150 + Scoring.delta(for: .recycleWasteInDrawOne))
-    }
-
-    func testRecycleHasNoPenaltyWhenDealtDrawThreeEvenAfterSwitchingToDrawOne() {
+    // Legacy payloads could diverge stock and scoring draw counts (mid-game mode
+    // switching once existed); the recycle penalty follows the DEALT mode.
+    func testRecyclePenaltyAppliesWhenDealtDrawOneRestoredAtDrawThree() {
         var state = GameStateFixtures.validPersistenceState()
         state.waste = state.stock.map { card in
             var faceUp = card
@@ -94,10 +77,37 @@ final class SolitaireViewModelCoreTests: XCTestCase {
         state.stock = []
         state.wasteDrawCount = min(3, state.waste.count)
         let viewModel = makeViewModel(
-            restoring: payload(state: state, stockDrawCount: DrawMode.three.rawValue, score: 150)
+            restoring: payload(
+                state: state,
+                stockDrawCount: DrawMode.three.rawValue,
+                scoringDrawCount: DrawMode.one.rawValue,
+                score: 150
+            )
         )
 
-        viewModel.updateDrawMode(.one)
+        viewModel.handleStockTap()
+
+        XCTAssertEqual(viewModel.score, 150 + Scoring.delta(for: .recycleWasteInDrawOne))
+    }
+
+    func testRecycleHasNoPenaltyWhenDealtDrawThreeRestoredAtDrawOne() {
+        var state = GameStateFixtures.validPersistenceState()
+        state.waste = state.stock.map { card in
+            var faceUp = card
+            faceUp.isFaceUp = true
+            return faceUp
+        }
+        state.stock = []
+        state.wasteDrawCount = min(1, state.waste.count)
+        let viewModel = makeViewModel(
+            restoring: payload(
+                state: state,
+                stockDrawCount: DrawMode.one.rawValue,
+                scoringDrawCount: DrawMode.three.rawValue,
+                score: 150
+            )
+        )
+
         viewModel.handleStockTap()
 
         XCTAssertEqual(viewModel.score, 150)
@@ -152,7 +162,7 @@ final class SolitaireViewModelCoreTests: XCTestCase {
     func testPauseResumeAndElapsedTimeAccounting() {
         let clock = TestDateProvider(now: DateFixtures.reference)
         let viewModel = makeViewModel(dateProvider: clock)
-        viewModel.newGame(drawMode: .three)
+        viewModel.newGame()
 
         let start = DateFixtures.plus(-600)
         clock.now = DateFixtures.plus(120)
@@ -206,6 +216,7 @@ final class SolitaireViewModelCoreTests: XCTestCase {
         state: GameState,
         savedAt: Date = DateFixtures.reference,
         stockDrawCount: Int,
+        scoringDrawCount: Int? = nil,
         score: Int = 0,
         gameStartedAt: Date = DateFixtures.reference,
         pauseStartedAt: Date? = nil
@@ -220,7 +231,7 @@ final class SolitaireViewModelCoreTests: XCTestCase {
             hasAppliedTimeBonus: false,
             finalElapsedSeconds: nil,
             stockDrawCount: stockDrawCount,
-            scoringDrawCount: stockDrawCount,
+            scoringDrawCount: scoringDrawCount ?? stockDrawCount,
             history: [],
             redealState: state,
             hasStartedTrackedGame: true,

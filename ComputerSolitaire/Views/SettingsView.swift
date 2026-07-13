@@ -61,9 +61,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingRulesAndScoring = false
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
-    @AppStorage(SettingsKey.gameVariant) private var gameVariantRawValue = GameVariant.klondike.rawValue
-    @AppStorage(SettingsKey.drawMode) private var drawModeRawValue = DrawMode.three.rawValue
-    @AppStorage(SettingsKey.spiderSuitCount) private var spiderSuitCountRawValue = SpiderSuitCount.two.rawValue
     @AppStorage(SettingsKey.tableBackgroundColor)
     private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
@@ -82,7 +79,6 @@ struct SettingsView: View {
             cardsSection
             audioSection
             gameplaySection
-            gameTypeSection
 
 #if os(iOS)
             if UIApplication.shared.supportsAlternateIcons {
@@ -125,18 +121,6 @@ struct SettingsView: View {
             .presentationDetents([.medium, .large])
         }
 #endif
-        .onChange(of: drawModeRawValue) { oldValue, newValue in
-            guard oldValue != newValue else { return }
-            HapticManager.shared.play(.settingsSelection)
-        }
-        .onChange(of: spiderSuitCountRawValue) { oldValue, newValue in
-            guard oldValue != newValue else { return }
-            HapticManager.shared.play(.settingsSelection)
-        }
-        .onChange(of: gameVariantRawValue) { oldValue, newValue in
-            guard oldValue != newValue else { return }
-            HapticManager.shared.play(.settingsSelection)
-        }
         .onChange(of: cardStyleRawValue) { oldValue, newValue in
             guard oldValue != newValue else { return }
             HapticManager.shared.play(.settingsSelection)
@@ -230,39 +214,6 @@ struct SettingsView: View {
         }
     }
 
-    private var gameTypeSection: some View {
-        Section {
-            HStack(spacing: 12) {
-                ForEach(GameVariant.allCases, id: \.rawValue) { variant in
-                    variantCard(variant)
-                }
-            }
-            .padding(.vertical, 4)
-
-            if gameVariantRawValue == GameVariant.klondike.rawValue {
-                Picker("Stock draw", selection: $drawModeRawValue) {
-                    ForEach(DrawMode.allCases, id: \.rawValue) { mode in
-                        Text(mode.title).tag(mode.rawValue)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-            }
-
-            if gameVariantRawValue == GameVariant.spider.rawValue {
-                Picker("Suits", selection: $spiderSuitCountRawValue) {
-                    ForEach(SpiderSuitCount.allCases, id: \.rawValue) { suitCount in
-                        Text(suitCount.title).tag(suitCount.rawValue)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-            }
-        } header: {
-            Text("Game Type")
-        }
-    }
-
 #if os(iOS)
     private var appIconSection: some View {
         Section {
@@ -332,30 +283,6 @@ struct SettingsView: View {
 
     // MARK: - Custom controls
 
-    private func variantCard(_ variant: GameVariant) -> some View {
-        Button {
-            guard gameVariantRawValue != variant.rawValue else { return }
-            HapticManager.shared.play(.settingsSelection)
-            withAnimation(.smooth(duration: 0.3)) {
-                gameVariantRawValue = variant.rawValue
-            }
-        } label: {
-            VStack(spacing: 3) {
-                Text(variant.title)
-                    .font(.subheadline.weight(.bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-
-                Text(variant.subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .settingsChip(isSelected: gameVariantRawValue == variant.rawValue)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(gameVariantRawValue == variant.rawValue ? .isSelected : [])
-    }
-
     private func cardStyleCard(_ style: CardStyle) -> some View {
         let isSelected = cardStyleRawValue == style.rawValue
 
@@ -378,7 +305,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .settingsChip(isSelected: isSelected)
+            .selectionChip(isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -471,32 +398,6 @@ struct SettingsView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(option.label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-private extension View {
-    func settingsChip(isSelected: Bool) -> some View {
-        self
-            .padding(.vertical, 10)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? AnyShapeStyle(Color.accentColor.opacity(0.12))
-                            : AnyShapeStyle(.quaternary.opacity(0.5))
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        isSelected ? Color.accentColor : Color.primary.opacity(0.1),
-                        lineWidth: isSelected ? 2 : 1
-                    )
-            }
-            .opacity(isSelected ? 1 : 0.75)
-            .contentShape(Rectangle())
     }
 }
 

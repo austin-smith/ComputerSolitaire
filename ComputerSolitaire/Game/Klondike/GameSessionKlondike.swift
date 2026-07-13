@@ -26,21 +26,6 @@ extension SolitaireViewModel {
         state.variant == .klondike
     }
 
-    func updateDrawMode(_ drawMode: DrawMode) {
-        guard state.variant == .klondike else { return }
-        clearHint()
-        setStockDrawCount(drawMode.rawValue)
-        if drawMode == .one {
-            setWasteDrawCount(min(1, state.waste.count))
-        } else {
-            setWasteDrawCount(min(state.wasteDrawCount, drawMode.rawValue))
-        }
-        selection = nil
-        isDragging = false
-        pendingAutoMove = nil
-        refreshAutoFinishAvailability()
-    }
-
     func handleKlondikeStockTap() {
         guard state.variant == .klondike else { return }
         clearHint()

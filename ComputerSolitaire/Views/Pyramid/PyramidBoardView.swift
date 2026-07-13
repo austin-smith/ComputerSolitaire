@@ -25,8 +25,12 @@ struct PyramidBoardView: View {
         let boardHeight = cardSize.height + rowOverlap * CGFloat(PyramidGeometry.rowCount - 1)
 
         ZStack(alignment: .topLeading) {
-            ForEach(0..<PyramidGeometry.cardCount, id: \.self) { index in
-                if let card = viewModel.state.pyramid[index] {
+            // Iterate the slots the state actually holds, not a fixed
+            // 0..<28: during a game switch this view can re-evaluate against
+            // the incoming variant's empty pyramid before the board replaces
+            // it.
+            ForEach(Array(viewModel.state.pyramid.enumerated()), id: \.offset) { index, slot in
+                if let card = slot {
                     pyramidCard(card, at: index, rowOverlap: rowOverlap)
                 }
             }

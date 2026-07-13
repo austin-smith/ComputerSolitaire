@@ -24,4 +24,14 @@ final class CardStyleTests: XCTestCase {
         XCTAssertEqual(CardStyle.pixel.title, "Pixel")
         XCTAssertEqual(CardStyle.pixel.subtitle, "8-bit Retro")
     }
+
+    func testCardBackColorsResolveFromPersistedIdentifiers() {
+        for color in CardBackColor.all {
+            XCTAssertEqual(CardBackColor.from(rawValue: color.id), color)
+        }
+    }
+
+    func testUnknownCardBackColorFallsBackToDefault() {
+        XCTAssertEqual(CardBackColor.from(rawValue: "unknown"), .defaultValue)
+    }
 }

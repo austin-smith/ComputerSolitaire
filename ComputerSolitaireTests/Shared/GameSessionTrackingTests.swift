@@ -10,7 +10,7 @@ final class GameSessionTrackingTests: XCTestCase {
         withIsolatedStatsStore {
             let viewModel = makeViewModel()
 
-            let stats = GameStatisticsStore.load(for: .klondike)
+            let stats = GameStatisticsStore.load(for: .klondikeDrawThree)
             XCTAssertNotNil(stats.trackedSince)
             XCTAssertEqual(stats.gamesPlayed, 0)
 
@@ -24,9 +24,9 @@ final class GameSessionTrackingTests: XCTestCase {
         withIsolatedStatsStore {
             let viewModel = makeViewModel()
 
-            viewModel.newGame(drawMode: .three)
+            viewModel.newGame()
 
-            let stats = GameStatisticsStore.load(for: .klondike)
+            let stats = GameStatisticsStore.load(for: .klondikeDrawThree)
             XCTAssertEqual(stats.gamesPlayed, 0)
 
             let trackedProbeDate = viewModel.gameStartedAt.addingTimeInterval(120)
@@ -39,10 +39,10 @@ final class GameSessionTrackingTests: XCTestCase {
         withIsolatedStatsStore {
             let viewModel = makeViewModel()
 
-            viewModel.newGame(drawMode: .three)
-            viewModel.newGame(drawMode: .three)
+            viewModel.newGame()
+            viewModel.newGame()
 
-            let stats = GameStatisticsStore.load(for: .klondike)
+            let stats = GameStatisticsStore.load(for: .klondikeDrawThree)
             XCTAssertEqual(stats.gamesPlayed, 1)
         }
     }
@@ -52,10 +52,10 @@ final class GameSessionTrackingTests: XCTestCase {
         withIsolatedStatsStore {
             let viewModel = makeViewModel()
 
-            viewModel.newGame(drawMode: .three)
+            viewModel.newGame()
             viewModel.redeal()
 
-            let stats = GameStatisticsStore.load(for: .klondike)
+            let stats = GameStatisticsStore.load(for: .klondikeDrawThree)
             XCTAssertEqual(stats.gamesPlayed, 1)
 
             let trackedProbeDate = viewModel.gameStartedAt.addingTimeInterval(120)
@@ -89,9 +89,9 @@ final class GameSessionTrackingTests: XCTestCase {
             XCTAssertTrue(viewModel.restore(from: payload))
             XCTAssertEqual(viewModel.unfinalizedElapsedSecondsForStats(at: .now), 0)
 
-            viewModel.newGame(drawMode: .three)
+            viewModel.newGame()
 
-            let stats = GameStatisticsStore.load(for: .klondike)
+            let stats = GameStatisticsStore.load(for: .klondikeDrawThree)
             XCTAssertEqual(stats.gamesPlayed, 0)
         }
     }
@@ -108,9 +108,9 @@ final class GameSessionTrackingTests: XCTestCase {
             XCTAssertTrue(viewModel.restore(from: payload))
             XCTAssertEqual(viewModel.unfinalizedElapsedSecondsForStats(at: .now), 0)
 
-            viewModel.newGame(drawMode: .three)
+            viewModel.newGame()
 
-            let stats = GameStatisticsStore.load(for: .klondike)
+            let stats = GameStatisticsStore.load(for: .klondikeDrawThree)
             XCTAssertEqual(stats.gamesPlayed, 0)
 
             let trackedProbeDate = viewModel.gameStartedAt.addingTimeInterval(120)
@@ -123,52 +123,54 @@ final class GameSessionTrackingTests: XCTestCase {
         withIsolatedStatsStore {
             let viewModel = makeViewModel()
 
-            viewModel.newGame(drawMode: .three)
+            viewModel.newGame()
             let activeProbeDate = viewModel.gameStartedAt.addingTimeInterval(120)
             XCTAssertGreaterThan(viewModel.unfinalizedElapsedSecondsForStats(at: activeProbeDate), 0)
 
-            GameStatisticsStore.reset(for: .klondike)
+            GameStatisticsStore.reset(for: .klondikeDrawThree)
             viewModel.resetStatisticsTracking()
             XCTAssertEqual(viewModel.unfinalizedElapsedSecondsForStats(at: activeProbeDate), 0)
             let resetPayload = viewModel.persistencePayload()
             XCTAssertFalse(resetPayload.hasStartedTrackedGame)
             XCTAssertTrue(resetPayload.isCurrentGameFinalized)
 
-            viewModel.newGame(drawMode: .three)
-            var stats = GameStatisticsStore.load(for: .klondike)
+            viewModel.newGame()
+            var stats = GameStatisticsStore.load(for: .klondikeDrawThree)
             XCTAssertEqual(stats.gamesPlayed, 0)
 
-            viewModel.newGame(drawMode: .three)
-            stats = GameStatisticsStore.load(for: .klondike)
+            viewModel.newGame()
+            stats = GameStatisticsStore.load(for: .klondikeDrawThree)
             XCTAssertEqual(stats.gamesPlayed, 1)
         }
     }
 
-    // Verifies switching variants finalizes the prior variant into its own stats bucket.
-    func testVariantSwitchFinalizesIntoPriorVariantBucket() {
+    // Verifies an explicit New Game in another mode finalizes the prior game into its
+    // own stats bucket. (The game picker goes through `activateGame` instead, which
+    // never finalizes — see GameSessionActivationTests.)
+    func testNewGameAcrossModesFinalizesIntoPriorBucket() {
         withIsolatedStatsStore {
             let viewModel = makeViewModel()
 
-            viewModel.newGame(variant: .klondike, drawMode: .three)
-            viewModel.newGame(variant: .freecell, drawMode: .three)
+            viewModel.newGame(mode: .klondikeDrawThree)
+            viewModel.newGame(mode: .freecell)
 
-            var klondikeStats = GameStatisticsStore.load(for: .klondike)
+            var klondikeStats = GameStatisticsStore.load(for: .klondikeDrawThree)
             var freeCellStats = GameStatisticsStore.load(for: .freecell)
             XCTAssertEqual(klondikeStats.gamesPlayed, 1)
             XCTAssertEqual(freeCellStats.gamesPlayed, 0)
 
-            viewModel.newGame(variant: .yukon, drawMode: .three)
+            viewModel.newGame(mode: .yukon)
 
-            klondikeStats = GameStatisticsStore.load(for: .klondike)
+            klondikeStats = GameStatisticsStore.load(for: .klondikeDrawThree)
             freeCellStats = GameStatisticsStore.load(for: .freecell)
             var yukonStats = GameStatisticsStore.load(for: .yukon)
             XCTAssertEqual(klondikeStats.gamesPlayed, 1)
             XCTAssertEqual(freeCellStats.gamesPlayed, 1)
             XCTAssertEqual(yukonStats.gamesPlayed, 0)
 
-            viewModel.newGame(variant: .klondike, drawMode: .three)
+            viewModel.newGame(mode: .klondikeDrawThree)
 
-            klondikeStats = GameStatisticsStore.load(for: .klondike)
+            klondikeStats = GameStatisticsStore.load(for: .klondikeDrawThree)
             yukonStats = GameStatisticsStore.load(for: .yukon)
             XCTAssertEqual(klondikeStats.gamesPlayed, 1)
             XCTAssertEqual(yukonStats.gamesPlayed, 1)
@@ -177,7 +179,7 @@ final class GameSessionTrackingTests: XCTestCase {
 
     private func withIsolatedStatsStore(_ body: () -> Void) {
         let defaults = UserDefaults.standard
-        let statsKeys = GameVariant.allCases.map { GameStatisticsStore.defaultsKey(for: $0) }
+        let statsKeys = GameMode.allCases.map { GameStatisticsStore.defaultsKey(for: $0) }
         let previousStatsData = statsKeys.reduce(into: [String: Data]()) { result, key in
             if let data = defaults.data(forKey: key) {
                 result[key] = data

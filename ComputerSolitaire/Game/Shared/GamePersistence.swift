@@ -3,14 +3,19 @@ import SwiftData
 
 @Model
 final class SavedGameRecord {
-    static let currentRecordKey = "current"
+    /// Single-slot key used before saved games became per-mode.
+    static let legacyRecordKey = "current"
+
+    static func key(for mode: GameMode) -> String {
+        mode.rawValue
+    }
 
     @Attribute(.unique) var key: String
     @Attribute(.externalStorage) var snapshotData: Data
     var updatedAt: Date
 
     init(
-        key: String = SavedGameRecord.currentRecordKey,
+        key: String,
         snapshotData: Data,
         updatedAt: Date = .now
     ) {
@@ -131,6 +136,44 @@ struct SavedGamePayload: Codable {
         usedRedealInCurrentGame = try container.decodeIfPresent(Bool.self, forKey: .usedRedealInCurrentGame) ?? false
     }
 
+    /// The game this payload belongs to. Spider's suit count is derived from
+    /// its deal; the draw count is carried alongside the state.
+    var gameMode: GameMode {
+        GameMode(
+            variant: state.variant,
+            drawMode: DrawMode(rawValue: stockDrawCount) ?? .three,
+            spiderSuitCount: state.spiderSuitCount ?? .two
+        )
+    }
+
+    /// A copy whose statistics tracking is invalidated: the game stays
+    /// playable but can no longer finalize into a statistics bucket.
+    /// `hasStartedTrackedGame: false` alone blocks finalization; the other
+    /// tracking fields take their canonical untracked values (the same
+    /// normal form `sanitizedForRestore` produces).
+    func withStatisticsTrackingReset() -> SavedGamePayload {
+        SavedGamePayload(
+            schemaVersion: schemaVersion,
+            savedAt: savedAt,
+            state: state,
+            movesCount: movesCount,
+            score: score,
+            gameStartedAt: gameStartedAt,
+            pauseStartedAt: pauseStartedAt,
+            hasAppliedTimeBonus: hasAppliedTimeBonus,
+            finalElapsedSeconds: finalElapsedSeconds,
+            stockDrawCount: stockDrawCount,
+            scoringDrawCount: scoringDrawCount,
+            history: history,
+            redealState: redealState,
+            hasStartedTrackedGame: false,
+            isCurrentGameFinalized: false,
+            hintRequestsInCurrentGame: 0,
+            undosUsedInCurrentGame: 0,
+            usedRedealInCurrentGame: false
+        )
+    }
+
     func sanitizedForRestore() -> SavedGamePayload? {
         sanitizedForRestore(at: .now)
     }
@@ -242,13 +285,36 @@ enum GamePersistenceError: Error {
 }
 
 enum GamePersistence {
-    static func load(from modelContext: ModelContext, now: Date = .now) -> SavedGamePayload? {
+    static func load(
+        mode: GameMode,
+        from modelContext: ModelContext,
+        now: Date = .now
+    ) -> SavedGamePayload? {
         do {
-            guard let record = try fetchCurrentRecord(in: modelContext) else { return nil }
+            let key = SavedGameRecord.key(for: mode)
+            guard let record = try fetchRecord(forKey: key, in: modelContext) else { return nil }
             let payload = try JSONDecoder().decode(SavedGamePayload.self, from: record.snapshotData)
+            guard payload.gameMode == mode else {
+                return nil
+            }
             return payload.sanitizedForRestore(at: now)
         } catch {
             return nil
+        }
+    }
+
+    /// Invalidates statistics tracking in the saved sessions of `modes`, so
+    /// games that were in progress when their statistics were reset can't
+    /// finalize pre-reset play into the fresh buckets. Best effort per slot —
+    /// a missing or unreadable slot never blocks the others.
+    static func invalidateStatisticsTracking(
+        for modes: [GameMode],
+        in modelContext: ModelContext,
+        now: Date = .now
+    ) {
+        for mode in modes {
+            guard let payload = load(mode: mode, from: modelContext, now: now) else { continue }
+            try? save(payload.withStatisticsTrackingReset(), in: modelContext, now: now)
         }
     }
 
@@ -258,17 +324,72 @@ enum GamePersistence {
         }
 
         let data = try JSONEncoder().encode(sanitizedPayload)
-        if let record = try fetchCurrentRecord(in: modelContext) {
+        let key = SavedGameRecord.key(for: sanitizedPayload.gameMode)
+        if let record = try fetchRecord(forKey: key, in: modelContext) {
             record.snapshotData = data
             record.updatedAt = now
         } else {
-            modelContext.insert(SavedGameRecord(snapshotData: data, updatedAt: now))
+            modelContext.insert(SavedGameRecord(key: key, snapshotData: data, updatedAt: now))
         }
         try modelContext.save()
     }
 
-    private static func fetchCurrentRecord(in modelContext: ModelContext) throws -> SavedGameRecord? {
-        let key = SavedGameRecord.currentRecordKey
+    /// Re-keys records from earlier keying schemes (the single "current" slot,
+    /// per-variant slots) to their payload's mode slot. Returns the mode of
+    /// the game migrated out of the single legacy slot, if any: that game was
+    /// on screen when the old build last ran, so first hydration should open
+    /// it even when stored settings lag its payload (settings write
+    /// immediately; payloads save on a debounced autosave).
+    // TODO: Remove (with `SavedGameRecord.legacyRecordKey`) once upgrades
+    // from pre-per-mode releases no longer need supporting.
+    @discardableResult
+    static func migrateLegacyRecordsIfNeeded(in modelContext: ModelContext) -> GameMode? {
+        do {
+            let modeKeys = Set(GameMode.allCases.map(\.rawValue))
+            let records = try modelContext.fetch(FetchDescriptor<SavedGameRecord>())
+            var didChange = false
+            var migratedCurrentMode: GameMode?
+
+            for record in records where !modeKeys.contains(record.key) {
+                didChange = true
+                let isLegacyCurrentSlot = record.key == SavedGameRecord.legacyRecordKey
+                guard let payload = try? JSONDecoder().decode(
+                    SavedGamePayload.self,
+                    from: record.snapshotData
+                ) else {
+                    modelContext.delete(record)
+                    continue
+                }
+                if isLegacyCurrentSlot {
+                    migratedCurrentMode = payload.gameMode
+                }
+
+                let targetKey = SavedGameRecord.key(
+                    for: payload.gameMode
+                )
+                if let occupyingRecord = try fetchRecord(forKey: targetKey, in: modelContext) {
+                    if occupyingRecord.updatedAt >= record.updatedAt {
+                        modelContext.delete(record)
+                    } else {
+                        modelContext.delete(occupyingRecord)
+                        record.key = targetKey
+                    }
+                } else {
+                    record.key = targetKey
+                }
+            }
+
+            if didChange {
+                try modelContext.save()
+            }
+            return migratedCurrentMode
+        } catch {
+            // Leave the store untouched; hydration falls back to a fresh deal.
+            return nil
+        }
+    }
+
+    private static func fetchRecord(forKey key: String, in modelContext: ModelContext) throws -> SavedGameRecord? {
         var descriptor = FetchDescriptor<SavedGameRecord>(
             predicate: #Predicate<SavedGameRecord> { record in
                 record.key == key
@@ -551,15 +672,21 @@ struct GameStatistics: Codable, Equatable {
 }
 
 enum GameStatisticsStore {
-    static func defaultsKey(for variant: GameVariant) -> String {
-        "stats.gameStatistics.\(variant.rawValue)"
+    /// Key of the pooled Klondike bucket used before statistics became per-mode.
+    static let legacyKlondikeDefaultsKey = "stats.gameStatistics.klondike"
+
+    /// Key of the pooled Spider bucket used before statistics became per-mode.
+    static let legacySpiderDefaultsKey = "stats.gameStatistics.spider"
+
+    static func defaultsKey(for mode: GameMode) -> String {
+        "stats.gameStatistics.\(mode.rawValue)"
     }
 
     static func load(
-        for variant: GameVariant,
+        for mode: GameMode,
         userDefaults: UserDefaults = .standard
     ) -> GameStatistics {
-        guard let data = userDefaults.data(forKey: defaultsKey(for: variant)),
+        guard let data = userDefaults.data(forKey: defaultsKey(for: mode)),
               let stats = try? JSONDecoder().decode(GameStatistics.self, from: data),
               stats.schemaVersion == GameStatistics.currentSchemaVersion else {
             return GameStatistics()
@@ -569,39 +696,102 @@ enum GameStatisticsStore {
 
     static func save(
         _ stats: GameStatistics,
-        for variant: GameVariant,
+        for mode: GameMode,
         userDefaults: UserDefaults = .standard
     ) {
         guard let data = try? JSONEncoder().encode(stats) else { return }
-        userDefaults.set(data, forKey: defaultsKey(for: variant))
+        userDefaults.set(data, forKey: defaultsKey(for: mode))
     }
 
     static func update(
-        for variant: GameVariant,
+        for mode: GameMode,
         userDefaults: UserDefaults = .standard,
         _ mutate: (inout GameStatistics) -> Void
     ) {
-        var stats = load(for: variant, userDefaults: userDefaults)
+        var stats = load(for: mode, userDefaults: userDefaults)
         mutate(&stats)
-        save(stats, for: variant, userDefaults: userDefaults)
+        save(stats, for: mode, userDefaults: userDefaults)
     }
 
     static func markTrackingStarted(
-        for variant: GameVariant,
+        for mode: GameMode,
         userDefaults: UserDefaults = .standard,
         at date: Date = .now
     ) {
-        update(for: variant, userDefaults: userDefaults) { stats in
+        update(for: mode, userDefaults: userDefaults) { stats in
             stats.markTrackingStarted(at: date)
         }
     }
 
     static func reset(
-        for variant: GameVariant,
+        for mode: GameMode,
         userDefaults: UserDefaults = .standard,
         at date: Date = .now
     ) {
-        save(GameStatistics(trackedSince: date), for: variant, userDefaults: userDefaults)
+        save(GameStatistics(trackedSince: date), for: mode, userDefaults: userDefaults)
+    }
+
+    /// Splits the pooled pre-per-mode Klondike bucket. Games, wins, and time
+    /// were pooled across draw modes and are assigned to the mode in active
+    /// use; high scores were always recorded per mode and go to their own
+    /// buckets.
+    // TODO: Remove (with `legacyKlondikeDefaultsKey`) once upgrades from
+    // pre-per-mode releases no longer need supporting.
+    static func migrateLegacyKlondikeStatisticsIfNeeded(
+        activeDrawMode: DrawMode,
+        userDefaults: UserDefaults = .standard
+    ) {
+        guard let data = userDefaults.data(forKey: legacyKlondikeDefaultsKey) else { return }
+        userDefaults.removeObject(forKey: legacyKlondikeDefaultsKey)
+        guard let legacy = try? JSONDecoder().decode(GameStatistics.self, from: data),
+              legacy.schemaVersion == GameStatistics.currentSchemaVersion else {
+            return
+        }
+
+        let activeMode = GameMode(variant: .klondike, drawMode: activeDrawMode)
+        let otherMode: GameMode = activeMode == .klondikeDrawOne ? .klondikeDrawThree : .klondikeDrawOne
+
+        var activeStats = legacy
+        var otherStats = GameStatistics(trackedSince: legacy.trackedSince)
+        if activeMode == .klondikeDrawOne {
+            activeStats.highScoreDrawThree = nil
+            otherStats.highScoreDrawThree = legacy.highScoreDrawThree
+        } else {
+            activeStats.highScoreDrawOne = nil
+            otherStats.highScoreDrawOne = legacy.highScoreDrawOne
+        }
+
+        save(activeStats, for: activeMode, userDefaults: userDefaults)
+        save(otherStats, for: otherMode, userDefaults: userDefaults)
+    }
+
+    /// Splits the pooled pre-per-mode Spider bucket, mirroring the Klondike
+    /// migration. Games, wins, and time were pooled across suit counts and
+    /// are assigned to the mode in active use; high scores were always
+    /// recorded per suit count and go to their own buckets.
+    // TODO: Remove (with `legacySpiderDefaultsKey`) once upgrades from
+    // pre-per-mode releases no longer need supporting.
+    static func migrateLegacySpiderStatisticsIfNeeded(
+        activeSuitCount: SpiderSuitCount,
+        userDefaults: UserDefaults = .standard
+    ) {
+        guard let data = userDefaults.data(forKey: legacySpiderDefaultsKey) else { return }
+        userDefaults.removeObject(forKey: legacySpiderDefaultsKey)
+        guard let legacy = try? JSONDecoder().decode(GameStatistics.self, from: data),
+              legacy.schemaVersion == GameStatistics.currentSchemaVersion else {
+            return
+        }
+
+        let activeMode = GameMode(variant: .spider, spiderSuitCount: activeSuitCount)
+        for mode in GameMode.modes(for: .spider) {
+            var stats = mode == activeMode
+                ? legacy
+                : GameStatistics(trackedSince: legacy.trackedSince)
+            stats.highScoreOneSuit = mode == .spiderOneSuit ? legacy.highScoreOneSuit : nil
+            stats.highScoreTwoSuits = mode == .spiderTwoSuits ? legacy.highScoreTwoSuits : nil
+            stats.highScoreFourSuits = mode == .spiderFourSuits ? legacy.highScoreFourSuits : nil
+            save(stats, for: mode, userDefaults: userDefaults)
+        }
     }
 }
 

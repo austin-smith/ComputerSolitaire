@@ -1,12 +1,15 @@
 import Foundation
 
+/// Cases are declared in presentation order — most-played game types first —
+/// and every list in the app (picker, menus, statistics) follows it. Slot new
+/// variants by how widely played they are, not at the end.
 enum GameVariant: String, CaseIterable, Codable {
     case klondike
-    case freecell
-    case yukon
     case spider
-    case pyramid
+    case freecell
     case tripeaks
+    case pyramid
+    case yukon
 
     var title: String {
         switch self {

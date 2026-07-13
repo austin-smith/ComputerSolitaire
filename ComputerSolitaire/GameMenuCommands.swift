@@ -2,6 +2,7 @@ import SwiftUI
 
 #if os(macOS)
 struct GameMenuActions {
+    var switchVariant: (GameVariant) -> Void
     var newGame: () -> Void
     var redeal: () -> Void
     var undo: () -> Void
@@ -11,6 +12,7 @@ struct GameMenuActions {
 }
 
 struct GameMenuState {
+    var currentVariant: GameVariant
     var canUndo: Bool
     var canAutoFinish: Bool
     var canHint: Bool
@@ -44,6 +46,21 @@ struct GameMenuCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Game") {
+            Picker("Game Mode", selection: Binding(
+                get: { state?.currentVariant ?? .klondike },
+                set: { actions?.switchVariant($0) }
+            )) {
+                ForEach(Array(GameVariant.allCases.enumerated()), id: \.element) { index, variant in
+                    Text(variant.title)
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                        .tag(variant)
+                }
+            }
+            .pickerStyle(.inline)
+            .disabled(actions == nil)
+
+            Divider()
+
             Button {
                 actions?.newGame()
             } label: {
