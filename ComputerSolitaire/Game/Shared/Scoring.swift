@@ -9,6 +9,7 @@ enum ScoringAction {
     case recycleWasteInDrawOne
     case spiderMove
     case spiderCompletedRun
+    case scorpionCompletedRun
     case removePyramidPair
     case removePyramidKing
     /// The n-th consecutive TriPeaks discard in a chain scores n points.
@@ -52,6 +53,8 @@ enum Scoring {
         case .spiderMove:
             return -1
         case .spiderCompletedRun:
+            return 100
+        case .scorpionCompletedRun:
             return 100
         case .removePyramidPair:
             return 10

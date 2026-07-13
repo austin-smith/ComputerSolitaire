@@ -25,6 +25,9 @@ enum HintAdvisor {
         if state.variant == .spider, SpiderGameRules.canDealFromStock(state: state) {
             return true
         }
+        if state.variant == .scorpion, ScorpionGameRules.canDealFromStock(state: state) {
+            return true
+        }
         if state.variant == .tripeaks, !state.stock.isEmpty {
             return true
         }
@@ -95,6 +98,12 @@ enum HintAdvisor {
 /// not one more column card is clearable. Its ratchet matches TriPeaks' —
 /// every Golf move consumes a card — so a followed line can never revisit a
 /// position.
+/// Scorpion hints work like Spider's: `ScorpionPlanner` lines (which may cross
+/// the single stock deal) are cached and followed. When the tableau holds no
+/// improving line but the stock remains, the hint is the deal itself — it is
+/// legal at any time with no preparation needed, and holding it until the
+/// tableau is provably stuck is exactly the strong player's timing. Silence is
+/// reserved for positions with no line and no stock.
 final class HintPlanner {
     /// How long a single interactive hint request may spend searching.
     private static let freeCellSearchBudget: TimeInterval = 0.3
@@ -108,6 +117,7 @@ final class HintPlanner {
     /// the rare hard deal beats truncating a provably winnable position into
     /// a best-effort line.
     private static let golfSearchBudget: TimeInterval = 0.5
+    private static let scorpionSearchBudget: TimeInterval = 0.25
 
     private var freeCellPlan: [String: FreeCellSolver.Move] = [:]
     private var yukonPlan: [String: YukonPlanner.PlannedMove] = [:]
@@ -115,6 +125,7 @@ final class HintPlanner {
     private var pyramidPlan: [String: PyramidPlanner.Move] = [:]
     private var triPeaksPlan: [String: TriPeaksPlanner.Move] = [:]
     private var golfPlan: [String: GolfPlanner.Move] = [:]
+    private var scorpionPlan: [String: ScorpionPlanner.PlannedAction] = [:]
 
     func bestHint(in state: GameState, stockDrawCount: Int) -> HintAdvisor.Hint? {
         switch state.variant {
@@ -138,6 +149,8 @@ final class HintPlanner {
             return triPeaksHint(in: state)
         case .golf:
             return golfHint(in: state)
+        case .scorpion:
+            return scorpionHint(in: state)
         }
     }
 }
@@ -351,6 +364,53 @@ private extension HintPlanner {
             return .move(HintAdvisor.HintMove(selection: selection, destination: destination))
         case .stockDeal:
             guard SpiderGameRules.canDealFromStock(state: state) else { return nil }
+            return .stockTap
+        case .none:
+            return nil
+        }
+    }
+
+    func scorpionHint(in state: GameState) -> HintAdvisor.Hint? {
+        let key = ScorpionPlanner.stateKey(for: state)
+        if let hint = plannedScorpionHint(for: key, in: state) {
+            return hint
+        }
+
+        scorpionPlan.removeAll()
+        let limits = ScorpionPlanner.Limits(
+            deadline: Date().addingTimeInterval(Self.scorpionSearchBudget)
+        )
+        switch ScorpionPlanner.bestLine(in: state, limits: limits) {
+        case .line(let line):
+            scorpionPlan = ScorpionPlanner.keyedActions(along: line, from: state)
+            return plannedScorpionHint(for: key, in: state)
+
+        case .noProgress:
+            // The searched region holds no tableau progress. Like Spider,
+            // Scorpion has a rescue the planner can vouch for: the deal is what
+            // a strong player does with a stuck tableau, and unlike Spider's it
+            // is legal at any time, so no preparation line is needed. Falls
+            // back for truncated no-progress too, mirroring Spider's measured
+            // rationale — most stuck verdicts are truncated, and a withheld
+            // deal is a stalled game. With the stock spent, silence is the
+            // honest answer.
+            guard ScorpionGameRules.canDealFromStock(state: state) else { return nil }
+            scorpionPlan = ScorpionPlanner.keyedActions(along: [.stockDeal], from: state)
+            return plannedScorpionHint(for: key, in: state)
+        }
+    }
+
+    func plannedScorpionHint(for key: String, in state: GameState) -> HintAdvisor.Hint? {
+        switch scorpionPlan[key] {
+        case .move(let selection, let destination):
+            guard AutoMoveAdvisor.selectionMatchesState(selection, in: state),
+                  AutoMoveAdvisor.legalDestinations(for: selection, in: state)
+                      .contains(destination) else {
+                return nil
+            }
+            return .move(HintAdvisor.HintMove(selection: selection, destination: destination))
+        case .stockDeal:
+            guard ScorpionGameRules.canDealFromStock(state: state) else { return nil }
             return .stockTap
         case .none:
             return nil

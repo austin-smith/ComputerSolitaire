@@ -98,8 +98,9 @@ private extension TapMovePolicy {
                 // No stock to refill the board: an eager unsafe foundation move can
                 // strand a card another pile still needs as a landing spot.
                 tier = isSafeFoundationMove(card: card, in: state) ? 100 : 60
-            case .spider:
-                // Unreachable: Spider foundations are never player destinations.
+            case .spider, .scorpion:
+                // Unreachable: Spider and Scorpion foundations are never
+                // player destinations.
                 tier = 100
             case .pyramid, .tripeaks, .golf:
                 // Unreachable: Pyramid, TriPeaks, and Golf moves never target

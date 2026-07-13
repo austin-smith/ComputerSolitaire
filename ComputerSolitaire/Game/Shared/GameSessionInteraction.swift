@@ -86,7 +86,7 @@ extension SolitaireViewModel {
                       state.tableau.indices.contains(pile),
                       index == state.tableau[pile].count - 1 else { return false }
                 return GolfGameRules.canPlay(column: pile, in: state)
-            case .klondike, .freecell, .yukon, .spider:
+            case .klondike, .freecell, .yukon, .spider, .scorpion:
                 return false
             }
 

@@ -27,6 +27,7 @@ tools/hint-probe/run.sh spider 500 4     # third arg narrows to one suit count
 tools/hint-probe/run.sh pyramid 500
 tools/hint-probe/run.sh tripeaks 500
 tools/hint-probe/run.sh golf 500
+tools/hint-probe/run.sh scorpion 500
 ```
 
 The number is how many seeded deals the run plays (seeds 1 through N; default
@@ -69,6 +70,7 @@ consecutive runs, serial and parallel.
 | `pyramid` | **80.2%** | 15.2% |
 | `tripeaks` | **95.4%** | 0.0% |
 | `golf` | **22.6%** | 0.0% |
+| `scorpion` | **14.8%** | 2.8% |
 
 Reading the table honestly:
 
@@ -137,6 +139,25 @@ Reading the table honestly:
   structurally bounded at 51 actions. Budget history: the TriPeaks-sized 200k
   node cap measured 13.6% (61% of deals undecided); the shipped 1M cap with
   12-byte packed search nodes decides 92% of deals and is the baseline above.
+- **Scorpion (14.8% vs 2.8%)**: hints win 5.3x as often as random in a variant
+  that is structurally brutal — kings-only empty columns, same-suit-only
+  landings, and nothing banks until a full thirteen-card run assembles in
+  place. That all-or-nothing shape shows in the loss column: median 0 cards
+  banked at loss for *both* players (there is no partial credit to strand), so
+  the over-banking detector measures zero and the win-rate gap is the whole
+  story. Published practical win rates for Scorpion sit in the low teens, so
+  the follower plays at the level of a good human. Revisit events measure
+  zero — Scorpion's no-progress fallback (deal the stock) is monotone, unlike
+  Spider's score-losing column fills — so Scorpion's revisits are gated to
+  zero like Yukon's. Tuning directions already measured flat: node budget 60k
+  (14.8%, searches exhaust their improvement-free regions well under 30k),
+  same-suit-inversion weight 5 (15.0%, one game — noise), empty-pile weight 8
+  (15.0%, noise). The shipped weights keep the Yukon/Spider precedents. The
+  class-aware king-transfer prune (a correctness fix: pre-deal whole-pile
+  relocations touching the three deal columns are real moves, and only
+  same-class transfers are no-ops) also reproduced 14.8% exactly — the
+  affected position class is rare enough that no outcome changed in 500
+  deals.
 - These figures use the planners' full node budgets. The app additionally
   clips each interactive search at a fraction of a second so the UI never
   hitches; that clip rarely binds, so in-app quality is at most a hair below
@@ -150,16 +171,17 @@ add its sources to `run.sh`, then run 500 deals. Acceptance gates:
 - The hint column must **decisively beat the random control**.
 - **Zero stalemate-loops** for the hint player, machine-enforced: the probe
   exits nonzero if any hint follower loops in any variant. **Revisit events**
-  are additionally gated to zero for Yukon (its planner measures zero, so any
-  revisit is a regression signal); Spider's are reported but not gated — see
-  the baseline notes for why a few transients per 500 deals are structural
-  there. (Revisits are reported without reclassifying the game, so win rates
+  are additionally gated to zero for Yukon and Scorpion (their planners
+  measure zero, so any revisit is a regression signal); Spider's are reported
+  but not gated — see the baseline notes for why a few transients per 500
+  deals are structural there. (Revisits are reported without reclassifying the game, so win rates
   stay honestly measured; the exit code is what enforces the gates.)
 - **Watch the over-banking detector** (`losses with >=40 banked`): it should
   be zero for stockless variants (Yukon and FreeCell measure zero). The
   Klondike draw-1 baseline records a single such loss, and Spider records
-  6/7/1 by suit count (its losses can strand nearly-done boards); treat any
-  increase as a regression.
+  6/7/1 by suit count (its losses can strand nearly-done boards); Scorpion
+  measures zero by structure (a loss with three banked runs would need 40
+  cards banked — never observed). Treat any increase as a regression.
 - Record the measured numbers in the table above; they become the variant's
   regression baseline. Mechanical refactors must reproduce every figure
   exactly; deliberate quality changes must move the hint column up, never

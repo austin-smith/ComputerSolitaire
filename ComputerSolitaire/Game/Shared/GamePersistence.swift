@@ -201,7 +201,7 @@ struct SavedGamePayload: Codable {
             case .pyramid, .tripeaks, .golf:
                 // All three always draw a single card to the waste.
                 return DrawMode.one.rawValue
-            case .freecell, .yukon, .spider:
+            case .freecell, .yukon, .spider, .scorpion:
                 return DrawMode.three.rawValue
             }
         }()
@@ -297,7 +297,7 @@ struct SavedGamePayload: Codable {
             return min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
         case .pyramid, .tripeaks, .golf:
             return min(max(0, state.wasteDrawCount), min(1, state.waste.count))
-        case .freecell, .yukon, .spider:
+        case .freecell, .yukon, .spider, .scorpion:
             return 0
         }
     }
@@ -907,7 +907,7 @@ private extension GameState {
 
     private var expectedIdentityCounts: [CardIdentity: Int] {
         switch variant {
-        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion:
             var counts: [CardIdentity: Int] = [:]
             for suit in Suit.allCases {
                 for rank in Rank.allCases {
@@ -937,6 +937,8 @@ private extension GameState {
             return TriPeaksPersistenceRules.hasValidLayout(state: self)
         case .golf:
             return GolfPersistenceRules.hasValidLayout(state: self)
+        case .scorpion:
+            return ScorpionPersistenceRules.hasValidLayout(state: self)
         }
     }
 }
