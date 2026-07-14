@@ -622,105 +622,109 @@ struct FoundationView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        let foundation = viewModel.state.foundations[index]
-        let visibleDepth = min(foundation.count, 4)
-        let startIndex = foundation.count - visibleDepth
-        let isDragSource: Bool = {
-            guard viewModel.isDragging, let selection = viewModel.selection else { return false }
-            if case .foundation(let pile) = selection.source {
-                return pile == index
+        // Variant switches can shrink the foundations array while this view
+        // is still mounted; render nothing until the parent row rebuilds.
+        if viewModel.state.foundations.indices.contains(index) {
+            let foundation = viewModel.state.foundations[index]
+            let visibleDepth = min(foundation.count, 4)
+            let startIndex = foundation.count - visibleDepth
+            let isDragSource: Bool = {
+                guard viewModel.isDragging, let selection = viewModel.selection else { return false }
+                if case .foundation(let pile) = selection.source {
+                    return pile == index
+                }
+                return false
+            }()
+            let accessibleTopCard: Card? = foundation.last.flatMap { card in
+                let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+                return isDragged || hiddenCardIDs.contains(card.id) ? nil : card
             }
-            return false
-        }()
-        let accessibleTopCard: Card? = foundation.last.flatMap { card in
-            let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
-            return isDragged || hiddenCardIDs.contains(card.id) ? nil : card
-        }
-        let isAccessibleTopCardSelected = accessibleTopCard.map {
-            viewModel.isSelected(card: $0)
-        } ?? false
-        let highlightZ: Double = 1
-        ZStack {
-            PilePlaceholderView(cardSize: cardSize)
-            if foundation.isEmpty {
-                // Canfield foundations start at the dealt base rank, not the Ace.
-                if viewModel.gameVariant == .canfield {
-                    if let baseRank = CanfieldGameRules.baseRank(in: viewModel.state) {
-                        Text(baseRank.label)
+            let isAccessibleTopCardSelected = accessibleTopCard.map {
+                viewModel.isSelected(card: $0)
+            } ?? false
+            let highlightZ: Double = 1
+            ZStack {
+                PilePlaceholderView(cardSize: cardSize)
+                if foundation.isEmpty {
+                    // Canfield foundations start at the dealt base rank, not the Ace.
+                    if viewModel.gameVariant == .canfield {
+                        if let baseRank = CanfieldGameRules.baseRank(in: viewModel.state) {
+                            Text(baseRank.label)
+                                .font(.system(size: cardSize.width * 0.22, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.28))
+                                .allowsHitTesting(false)
+                        }
+                    } else {
+                        Image(systemName: "a")
                             .font(.system(size: cardSize.width * 0.22, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.28))
                             .allowsHitTesting(false)
                     }
-                } else {
-                    Image(systemName: "a")
-                        .font(.system(size: cardSize.width * 0.22, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.28))
-                        .allowsHitTesting(false)
                 }
-            }
-            DropHighlightView(
-                cardSize: cardSize,
-                isTargeted: isTargeted,
-                isHintTargeted: isHintTargeted,
-                hintOpacity: hintHighlightOpacity
-            )
-                .zIndex(highlightZ)
-            ForEach(Array(foundation.enumerated().dropFirst(startIndex)), id: \.element.id) { cardIndex, card in
-                let isTopCard = cardIndex == foundation.count - 1
-                let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
-                let isHidden = hiddenCardIDs.contains(card.id)
-                let cardView = CardView(
-                    card: card,
-                    isSelected: isTopCard && viewModel.isSelected(card: card),
+                DropHighlightView(
                     cardSize: cardSize,
-                    isCardTiltEnabled: isCardTiltEnabled,
-                    cardTilts: $cardTilts,
-                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
-                    isAccessibilityElement: false
+                    isTargeted: isTargeted,
+                    isHintTargeted: isHintTargeted,
+                    hintOpacity: hintHighlightOpacity
                 )
-                .opacity(isDragged || isHidden ? 0 : 1)
-                .zIndex(isTopCard && isDragged ? 20 : 0)
-                .allowsHitTesting(isTopCard && !isHidden)
+                    .zIndex(highlightZ)
+                ForEach(Array(foundation.enumerated().dropFirst(startIndex)), id: \.element.id) { cardIndex, card in
+                    let isTopCard = cardIndex == foundation.count - 1
+                    let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
+                    let isHidden = hiddenCardIDs.contains(card.id)
+                    let cardView = CardView(
+                        card: card,
+                        isSelected: isTopCard && viewModel.isSelected(card: card),
+                        cardSize: cardSize,
+                        isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts,
+                        hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
+                        isAccessibilityElement: false
+                    )
+                    .opacity(isDragged || isHidden ? 0 : 1)
+                    .zIndex(isTopCard && isDragged ? 20 : 0)
+                    .allowsHitTesting(isTopCard && !isHidden)
 
-                if isTopCard {
-                    cardView
-                        .gesture(dragGesture(.foundation(index)))
-                        .cardFramePreference(card.id)
-                } else {
-                    cardView
-                        .allowsHitTesting(false)
+                    if isTopCard {
+                        cardView
+                            .gesture(dragGesture(.foundation(index)))
+                            .cardFramePreference(card.id)
+                    } else {
+                        cardView
+                            .allowsHitTesting(false)
+                    }
                 }
             }
-        }
-        .onTapGesture {
-            viewModel.handleFoundationTap(index: index)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAddTraits(isAccessibleTopCardSelected ? .isSelected : [])
-        .background(
-            GeometryReader { proxy in
-                let boardFrame = proxy.frame(in: .named("board"))
-                let hitFrame = boardFrame.expanded(
-                    horizontal: DropTargetHitArea.foundationHorizontalGrace,
-                    top: DropTargetHitArea.foundationTopGrace,
-                    bottom: DropTargetHitArea.foundationBottomGrace
-                )
-                Color.clear
-                    .preference(
-                        key: DropTargetFrameKey.self,
-                        value: [
-                            .foundation(index): DropTargetGeometry(
-                                snapFrame: boardFrame,
-                                hitFrame: hitFrame
-                            )
-                        ]
-                    )
+            .onTapGesture {
+                viewModel.handleFoundationTap(index: index)
             }
-        )
-        .zIndex(isDragSource ? 10 : 0)
-        .accessibilityLabel("Foundation \(index + 1)")
-        .accessibilityValue(accessibleTopCard?.accessibilityName ?? "Empty")
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(isAccessibleTopCardSelected ? .isSelected : [])
+            .background(
+                GeometryReader { proxy in
+                    let boardFrame = proxy.frame(in: .named("board"))
+                    let hitFrame = boardFrame.expanded(
+                        horizontal: DropTargetHitArea.foundationHorizontalGrace,
+                        top: DropTargetHitArea.foundationTopGrace,
+                        bottom: DropTargetHitArea.foundationBottomGrace
+                    )
+                    Color.clear
+                        .preference(
+                            key: DropTargetFrameKey.self,
+                            value: [
+                                .foundation(index): DropTargetGeometry(
+                                    snapFrame: boardFrame,
+                                    hitFrame: hitFrame
+                                )
+                            ]
+                        )
+                }
+            )
+            .zIndex(isDragSource ? 10 : 0)
+            .accessibilityLabel("Foundation \(index + 1)")
+            .accessibilityValue(accessibleTopCard?.accessibilityName ?? "Empty")
+        }
     }
 }
 
