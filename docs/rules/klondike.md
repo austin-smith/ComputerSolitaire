@@ -7,13 +7,13 @@ Move all 52 cards to the four foundations, building each suit from Ace to King.
 
 ## Terminology
 - **Tableau:** Seven piles where cards are played and rearranged.
-- **Foundations:** Four suit piles built from Ace to King.
-- **Stock:** Face-down draw pile.
-- **Waste:** Face-up discard pile from the stock.
+- **Foundations:** Four suit piles built up from Ace to King.
+- **Stock:** The face-down draw pile.
+- **Waste:** Face-up cards turned from the stock — only the top card is playable.
 
 ## Setup
 - Use a standard 52-card deck (no jokers).
-- **Tableau:** Deal seven piles left to right. The first pile has 1 card face up; the second has 2 cards (top card face up); continue until the seventh pile has 7 cards with only the top card face up.
+- **Tableau:** Deal seven piles left to right. The first pile has 1 card, the second 2, and so on to the seventh with 7 — only each pile's top card is face up.
 - **Foundations:** Four empty piles, one per suit.
 - **Stock:** Remaining cards are placed face down.
 - **Waste:** Empty pile beside the stock.
@@ -49,10 +49,10 @@ Move all 52 cards to the four foundations, building each suit from Ace to King.
 You win when all cards are moved to the foundations in ascending order by suit.
 
 ## Rule choices
-Published Klondike rules differ mainly in how the stock is handled; this implementation uses:
-- **Unlimited stock passes in both draw modes** — several published rule sets cap 3-card draw at three passes.
-- **The classic −100 recycle penalty in 1-card draw**, where unlimited free passes would otherwise remove the mode's tension; 3-card recycles are free.
-- **Kings only on empty piles** (the standard rule; some variants allow any card).
+Published Klondike rules differ mainly in how the stock is handled. This implementation uses:
+- **Unlimited stock passes in both draw modes.** Several published rule sets cap 3-card draw at three passes.
+- **The classic −100 recycle penalty in 1-card draw**, where unlimited free passes would otherwise remove the mode's tension — 3-card recycles are free.
+- **Kings only on empty piles** (the standard rule, though some variants allow any card).
 
 ## Sources
 - https://en.wikipedia.org/wiki/Klondike_(solitaire)#Rules

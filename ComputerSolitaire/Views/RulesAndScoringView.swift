@@ -35,8 +35,8 @@ struct RulesAndScoringView: View {
         TermRow(term: "Tableau", definition: "The seven play piles where you build down in alternating colors."),
         TermRow(term: "Foundations", definition: "Four suit piles built up from Ace to King."),
         TermRow(term: "Stock", definition: "The face-down draw pile."),
-        TermRow(term: "Waste", definition: "Face-up cards drawn from the stock; only the top card is playable."),
-        TermRow(term: "Draw mode", definition: "How many cards are drawn from stock each time: 1-card or 3-card.")
+        TermRow(term: "Waste", definition: "Face-up cards drawn from the stock — only the top card is playable."),
+        TermRow(term: "Draw mode", definition: "How many cards you draw from the stock at a time: 1-card or 3-card.")
     ]
 
     private var gameVariant: GameVariant {
@@ -193,7 +193,7 @@ struct RulesAndScoringView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("On win, a time bonus is added.")
+                    Text("When you win, a time bonus is added.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(
@@ -235,10 +235,10 @@ struct RulesAndScoringView: View {
             return [
                 TermRow(term: "Cascade", definition: "One of eight tableau columns where all cards are face up."),
                 TermRow(term: "Free Cell", definition: "A temporary single-card holding slot (four total)."),
-                TermRow(term: "Foundation", definition: "Four suit piles built from Ace to King."),
+                TermRow(term: "Foundations", definition: "Four suit piles built up from Ace to King."),
                 TermRow(
                     term: "Supermove",
-                    definition: "A multi-card move enabled by available free cells and empty cascades."
+                    definition: "A multi-card move made possible by open free cells and empty cascades."
                 )
             ]
         case .yukon:
@@ -255,24 +255,24 @@ struct RulesAndScoringView: View {
                 TermRow(term: "Tableau", definition: "The ten play piles where you build down, regardless of suit."),
                 TermRow(
                     term: "Run",
-                    definition: "Face-up cards of one suit in descending order; only runs move together."
+                    definition: "Face-up cards of one suit in descending order — only runs move together."
                 ),
                 TermRow(
                     term: "Completed run",
-                    definition: "A full King-to-Ace run of one suit. It leaves the tableau automatically; eight complete the game."
+                    definition: "A full King-to-Ace run of one suit. It leaves the tableau automatically — eight complete the game."
                 ),
                 TermRow(term: "Stock", definition: "The face-down pile that deals one card onto every tableau pile at once."),
-                TermRow(term: "Suits", definition: "The difficulty: 1, 2, or 4 suits composing the two decks (104 cards).")
+                TermRow(term: "Suits", definition: "The difficulty setting: the two decks are made of 1, 2, or 4 suits, always 104 cards.")
             ]
         case .pyramid:
             return [
                 TermRow(
                     term: "Pyramid",
-                    definition: "Twenty-eight face-up cards in seven overlapping rows; a card is exposed once both cards covering it are gone."
+                    definition: "Twenty-eight face-up cards in seven overlapping rows — a card is exposed once both cards covering it are gone."
                 ),
                 TermRow(term: "Stock", definition: "The face-down draw pile."),
-                TermRow(term: "Waste", definition: "Face-up cards drawn from the stock; only the top card is playable."),
-                TermRow(term: "Discard", definition: "Where removed pairs and Kings go; cards there are out of play."),
+                TermRow(term: "Waste", definition: "Face-up cards drawn from the stock — only the top card is playable."),
+                TermRow(term: "Discard", definition: "Where removed pairs and Kings go — cards there are out of play."),
                 TermRow(
                     term: "Recycle",
                     definition: "Turning the waste back into the stock. Pyramid allows two recycles (three passes)."
@@ -282,28 +282,28 @@ struct RulesAndScoringView: View {
             return [
                 TermRow(
                     term: "Peaks",
-                    definition: "Twenty-eight cards in three overlapping peaks; a card is uncovered once both cards covering it are gone, and flips face up."
+                    definition: "Twenty-eight cards in three overlapping peaks — a card is uncovered once both cards covering it are gone, and flips face up."
                 ),
-                TermRow(term: "Stock", definition: "The face-down draw pile. One pass only — there are no recycles."),
+                TermRow(term: "Stock", definition: "The face-down draw pile. You get one pass through it — no recycles."),
                 TermRow(
                     term: "Waste",
-                    definition: "The growing face-up pile; play any uncovered card one rank above or below its top."
+                    definition: "The growing face-up pile — play any uncovered card one rank above or below its top."
                 ),
                 TermRow(
                     term: "Chain",
-                    definition: "Consecutive discards without flipping the stock; each discard in a chain is worth one more point than the last."
+                    definition: "Consecutive discards without flipping the stock — each discard in a chain is worth one more point than the last."
                 )
             ]
         case .golf:
             return [
                 TermRow(
                     term: "Columns",
-                    definition: "Seven face-up piles of five cards; only each column's exposed card may play."
+                    definition: "Seven face-up piles of five cards — only each column's exposed card may play."
                 ),
-                TermRow(term: "Stock", definition: "The face-down draw pile. One pass only — there are no recycles."),
+                TermRow(term: "Stock", definition: "The face-down draw pile. You get one pass through it — no recycles."),
                 TermRow(
                     term: "Waste",
-                    definition: "The growing face-up pile; play any exposed card one rank above or below its top."
+                    definition: "The growing face-up pile — play any exposed card one rank above or below its top."
                 ),
                 TermRow(term: "Hole", definition: "One deal. Nine holes make a match."),
                 TermRow(
@@ -315,38 +315,38 @@ struct RulesAndScoringView: View {
             return [
                 TermRow(
                     term: "Tableau",
-                    definition: "Ten columns of four face-up cards; build down by suit, one card at a time."
+                    definition: "Ten columns of four face-up cards — build down by suit, one card at a time."
                 ),
                 TermRow(
                     term: "Foundations",
-                    definition: "Eight suit piles built up from Ace to King — two per suit; cards placed here never return."
+                    definition: "Eight suit piles built up from Ace to King, two per suit. Cards placed here never return to play."
                 ),
-                TermRow(term: "Stock", definition: "The face-down draw pile. One pass only — there are no recycles."),
+                TermRow(term: "Stock", definition: "The face-down draw pile. You get one pass through it — no recycles."),
                 TermRow(
                     term: "Waste",
-                    definition: "Face-up cards drawn from the stock; only the top card is playable."
+                    definition: "Face-up cards drawn from the stock — only the top card is playable."
                 )
             ]
         case .canfield:
             return [
                 TermRow(
                     term: "Reserve",
-                    definition: "Thirteen face-down cards with the top one face up and playable; it must fill any empty tableau pile at once."
+                    definition: "Thirteen face-down cards with the top one face up and playable. Its top card automatically fills any empty tableau pile."
                 ),
                 TermRow(
                     term: "Base card",
-                    definition: "The card dealt to the first foundation; its rank starts all four foundations."
+                    definition: "The card dealt to the first foundation — its rank starts all four foundations."
                 ),
                 TermRow(
                     term: "Tableau",
-                    definition: "Four piles built down in alternating colors, wrapping from Ace to King; a pile moves only in its entirety."
+                    definition: "Four piles built down in alternating colors, wrapping from Ace to King. Piles move only as a whole."
                 ),
                 TermRow(
                     term: "Foundations",
-                    definition: "Four suit piles built up from the base rank, wrapping from King to Ace; cards placed here never return."
+                    definition: "Four suit piles built up from the base rank, wrapping from King to Ace. Cards placed here never return to play."
                 ),
-                TermRow(term: "Stock", definition: "The face-down draw pile; three cards turn at a time, with unlimited redeals."),
-                TermRow(term: "Waste", definition: "Face-up cards drawn from the stock; only the top card is playable.")
+                TermRow(term: "Stock", definition: "The face-down draw pile. Three cards turn over at a time, with unlimited redeals."),
+                TermRow(term: "Waste", definition: "Face-up cards drawn from the stock — only the top card is playable.")
             ]
         case .scorpion:
             return [
@@ -357,11 +357,11 @@ struct RulesAndScoringView: View {
                 ),
                 TermRow(
                     term: "Completed run",
-                    definition: "A full King-to-Ace run of one suit. It leaves the tableau automatically; four complete the game."
+                    definition: "A full King-to-Ace run of one suit. It leaves the tableau automatically — four complete the game."
                 ),
                 TermRow(
                     term: "Stock",
-                    definition: "Three face-down cards, dealt face up onto the first three piles at any time — once."
+                    definition: "Three face-down cards, dealt face up onto the first three piles at any time — but only once."
                 )
             ]
         }
@@ -371,98 +371,99 @@ struct RulesAndScoringView: View {
         switch gameVariant {
         case .klondike:
             return [
-                "Build tableau piles down by alternating colors.",
-                "Move Aces to foundations first, then build each suit up to King.",
+                "Deal seven tableau piles: the first holds one card, the second two, and so on to seven, with only each pile's top card face up. The rest of the deck forms the stock.",
+                "Build tableau piles down in alternating colors.",
+                "Move Aces to the foundations as they appear, then build each suit up to King.",
                 "Only Kings can fill an empty tableau pile.",
                 "In 1-card draw, flip one stock card at a time. In 3-card draw, flip three.",
-                "When stock is empty, recycle waste to stock and continue.",
-                "You win by moving all 52 cards to foundations."
+                "When the stock is empty, recycle the waste back into it and keep going.",
+                "You win by moving all 52 cards to the foundations."
             ]
         case .freecell:
             return [
                 "Deal all 52 cards face up into eight cascades (four with 7 cards, four with 6 cards).",
-                "Build cascades down by alternating colors.",
+                "Build cascades down in alternating colors.",
                 "Use the four free cells as temporary storage for one card each.",
-                "Build foundations by suit from Ace to King.",
-                "Any card may move to an empty cascade.",
-                "You win by moving all 52 cards to foundations."
+                "Build the foundations up by suit from Ace to King.",
+                "Any card can move to an empty cascade.",
+                "You win by moving all 52 cards to the foundations."
             ]
         case .yukon:
             return [
-                "Deal seven tableau piles: the first holds one face-up card; each pile after adds one more face-down card beneath five face-up cards. All 52 cards are dealt — there is no stock.",
+                "Deal seven tableau piles: the first holds one face-up card, and each pile after adds one more face-down card beneath five face-up cards. All 52 cards are dealt — there is no stock.",
                 "Move any face-up card along with all cards on top of it, even if they are not in sequence.",
                 "The moving group's bottom card must land on a card of the opposite color, one rank higher.",
-                "Build foundations by suit from Ace to King.",
+                "Build the foundations up by suit from Ace to King.",
                 "Only Kings (with any cards stacked on them) can fill an empty pile.",
                 "Face-down cards turn face up when they become the top of a pile.",
-                "You win by moving all 52 cards to foundations."
+                "You win by moving all 52 cards to the foundations."
             ]
         case .spider:
             return [
-                "Two decks (104 cards) are dealt into ten tableau piles: six cards in each of the first four, five in the rest, with only the top card face up. The remaining 50 cards form the stock.",
+                "Deal two decks (104 cards) into ten tableau piles: six cards in each of the first four piles and five in the rest, with only the top card face up. The remaining 50 cards form the stock.",
                 "A card can move onto any card one rank higher, regardless of suit. Nothing can be placed on an Ace.",
                 "Several cards move together only as a face-up run of one suit in descending order.",
                 "Any card or movable run can fill an empty pile.",
-                "Tapping the stock deals one face-up card onto every pile. Dealing is not allowed while any pile is empty.",
+                "Tap the stock to deal one face-up card onto every pile. You cannot deal while any pile is empty.",
                 "A completed King-to-Ace run of one suit is removed from the tableau automatically.",
                 "Face-down cards turn face up when they become the top of a pile.",
                 "You win by completing all eight runs."
             ]
         case .pyramid:
             return [
-                "Deal 28 cards face up into a seven-row pyramid; the remaining 24 form the stock.",
-                "Remove exposed pairs whose ranks total 13: Ace is 1, Jack 11, Queen 12.",
-                "Kings count 13 alone and are removed singly.",
-                "A card is exposed once neither card covering it remains. A card whose only cover is its matching partner may be removed together with it.",
-                "Tap the stock to draw one card to the waste; the top waste card can pair with exposed pyramid cards.",
+                "Deal 28 cards face up into a seven-row pyramid. The remaining 24 cards form the stock.",
+                "Remove pairs of exposed cards whose ranks total 13. Ace counts 1, Jack 11, and Queen 12.",
+                "Kings count 13 on their own and are removed singly.",
+                "A card is exposed once neither card covering it remains. A card whose only cover is its matching partner can be removed together with it.",
+                "Tap the stock to draw one card to the waste — the top waste card can pair with exposed pyramid cards.",
                 "When the stock runs out, recycle the waste back into it — at most twice.",
-                "You win by removing all 28 pyramid cards; stock and waste may keep cards."
+                "You win by removing all 28 pyramid cards. The stock and waste do not need to be empty."
             ]
         case .tripeaks:
             return [
-                "Deal 28 cards into three overlapping peaks — three face-down rows topped by a face-up base row of ten. One card starts the waste; the remaining 23 form the stock.",
+                "Deal 28 cards into three overlapping peaks, with three face-down rows under a face-up base row of ten. One card starts the waste, and the remaining 23 form the stock.",
                 "Play any uncovered card that is one rank above or below the top waste card, regardless of suit. It becomes the new target.",
                 "Ranks wrap around: a King plays on an Ace and an Ace plays on a King or a Two.",
                 "A face-down card flips face up once both cards covering it are removed.",
-                "Tap the stock to flip one card onto the waste. The stock allows a single pass — there are no recycles.",
-                "You win by clearing all 28 peak cards; stock and waste may keep cards."
+                "Tap the stock to flip one card onto the waste. You get one pass through the stock — no recycles.",
+                "You win by clearing all 28 peak cards. The stock and waste do not need to be empty."
             ]
         case .golf:
             return [
-                "Deal 35 cards face up into seven columns of five. One card starts the waste; the remaining 16 form the stock.",
+                "Deal 35 cards face up into seven columns of five. One card starts the waste, and the remaining 16 form the stock.",
                 "Play any exposed column card that is one rank above or below the top waste card, regardless of suit. It becomes the new target.",
                 "Ranks never wrap: an Ace connects only to a Two, and a King only to a Queen.",
-                "Nothing plays on a King — once a King tops the waste, flip the stock to bury it.",
-                "Tap the stock to flip one card onto the waste. The stock allows a single pass — there are no recycles.",
+                "Nothing plays on a King — once one tops the waste, flip the stock to bury it.",
+                "Tap the stock to flip one card onto the waste. You get one pass through the stock — no recycles.",
                 "The hole ends when you clear all 35 column cards, or when the stock is spent and nothing plays.",
-                "A match is nine holes; the lowest total wins. Switching games keeps the match — it resumes with your Golf session."
+                "A match is nine holes, and the lowest total wins. Switching games keeps the match — it resumes when you return to Golf."
             ]
         case .fortyThieves:
             return [
-                "Two decks (104 cards) are dealt into ten tableau columns of four face-up cards. The remaining 64 cards form the stock.",
-                "Build tableau columns down by suit, one rank at a time. Only the exposed top card of a column may move — sequences never move together.",
-                "Any single available card — an exposed tableau card or the top waste card — may fill an empty column.",
+                "Deal two decks (104 cards) into ten tableau columns of four face-up cards. The remaining 64 cards form the stock.",
+                "Build tableau columns down by suit, one rank at a time. Only the top card of a column can move, so sequences never move together.",
+                "Any single available card — an exposed tableau card or the top waste card — can fill an empty column.",
                 "Build the eight foundations up by suit from Ace to King, two per suit. Cards placed on a foundation never return to play.",
-                "Tap the stock to flip one card onto the waste, whenever you like. The stock allows a single pass — there are no recycles.",
-                "You win by moving all 104 cards to foundations. The game is lost when the stock is spent and no legal move remains."
+                "Tap the stock at any time to flip one card onto the waste. You get one pass through the stock — no recycles.",
+                "You win by moving all 104 cards to the foundations. The game is lost when the stock is spent and no legal move remains."
             ]
         case .canfield:
             return [
                 "Deal 13 cards into the reserve with the top card face up, one face-up base card onto the first foundation, and one face-up card onto each of four tableau piles. The remaining 34 cards form the stock.",
                 "All four foundations start at the base card's rank and build up by suit, wrapping from King to Ace. Cards placed on a foundation never return to play.",
-                "Build tableau piles down in alternating colors, wrapping from Ace to King. A pile moves onto another only in its entirety; the exposed top card may play to a foundation.",
-                "An empty tableau pile is filled at once from the reserve. Once the reserve is empty, fill it with the top waste card whenever you choose.",
+                "Build tableau piles down in alternating colors, wrapping from Ace to King. Piles move onto each other only as a whole, though the exposed top card can always play to a foundation.",
+                "An empty tableau pile fills immediately from the reserve. Once the reserve is empty, fill empty piles with the top waste card whenever you choose.",
                 "The reserve's top card is always available to play on foundations or tableau piles.",
-                "Tap the stock to turn three cards onto the waste; when it runs out, tap again to turn the waste over and keep going — redeals are unlimited.",
-                "You win by moving all 52 cards to foundations."
+                "Tap the stock to turn three cards onto the waste. When it runs out, tap again to turn the waste back into a new stock — redeals are unlimited.",
+                "You win by moving all 52 cards to the foundations."
             ]
         case .scorpion:
             return [
-                "Deal 49 cards into seven tableau piles of seven. The first four piles hide their bottom three cards face down; the last three are fully face up. The remaining three cards form the stock.",
+                "Deal 49 cards into seven tableau piles of seven. The first four piles hide their bottom three cards face down, while the last three are fully face up. The remaining three cards form the stock.",
                 "A card can move only onto the card one rank higher of its own suit. Nothing can be placed on an Ace.",
                 "Move any face-up card along with all cards on top of it, even if they are not in sequence.",
                 "Only Kings (with any cards stacked on them) can fill an empty pile.",
-                "Tapping the stock deals its three cards face up, one onto each of the first three piles. Deal at any time — but only once.",
+                "Tap the stock to deal its three cards face up, one onto each of the first three piles. You can deal at any time — but only once.",
                 "A completed King-to-Ace run of one suit is removed from the tableau automatically.",
                 "Face-down cards turn face up when they become the top of a pile.",
                 "You win by completing all four runs."
@@ -476,7 +477,7 @@ struct RulesAndScoringView: View {
             return scoringRows
         case .freecell:
             return [
-                ScoringRow(move: "Move cards", points: 0, note: "FreeCell currently tracks time and completion."),
+                ScoringRow(move: "Move cards", points: 0, note: "FreeCell tracks time and completion."),
                 ScoringRow(
                     move: "Win time bonus",
                     points: Scoring.timedMaxBonusDrawThree,
@@ -554,7 +555,7 @@ struct RulesAndScoringView: View {
                 ScoringRow(
                     move: "Clear the board",
                     points: Scoring.delta(for: .golfBoardClear(remainingStockCount: 1)),
-                    note: "Per stock card left — scores below zero are the best results."
+                    note: "One point per stock card left — scores below zero are the best results."
                 )
             ]
         case .fortyThieves:
