@@ -13,9 +13,11 @@ Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 ## Features
 
 - Fully native apps for iOS, iPadOS, and macOS
-- Multiple game variants: **Klondike** (both 1-card and 3-card draw), **Spider** (1, 2, or 4 suits), **FreeCell**, **Pyramid**, **TriPeaks**, **Golf**, **Yukon**, **Scorpion**, **Forty Thieves**, and **Canfield**
+- 10 game variants: **Klondike** (both 1-card and 3-card draw), **Spider** (1, 2, or 4 suits), **FreeCell**, **Pyramid**, **TriPeaks**, **Golf**, **Yukon**, **Scorpion**, **Forty Thieves**, and **Canfield**
+- Solver-computed hints
+- Game statistics for every variant
 - Automatic game persistence and resume
-- Customizable table appearance
+- Customizable cards and table appearance
 - Other things you enjoy
 
 ## Game Variants

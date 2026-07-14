@@ -13,15 +13,9 @@ import AppKit
 /// the capture; the macOS leg (which snapshot doesn't support) runs this same
 /// test via xcodebuild and collects the attachment instead.
 final class ScreenshotCaptureUITests: XCTestCase {
-    /// Kept in sync with `ScreenshotFixtures.bundled` by hand: UI tests run in
-    /// a separate process and cannot import the app module. One board per App
-    /// Store screenshot, in store order.
-    private static let boards = [
-        "klondike-draw3",
-        "freecell",
-        "yukon",
-        "spider"
-    ]
+    /// One board per App Store screenshot, in store order. The catalog source
+    /// is compiled into both targets because UI tests cannot import the app.
+    private static let boards = ScreenshotFixtureCatalog.bundled.map(\.name)
 
     /// Appearance for every screenshot, pinned via UserDefaults launch
     /// arguments so simulator state can't change the look between runs.

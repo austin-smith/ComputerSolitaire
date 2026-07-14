@@ -58,6 +58,11 @@
 			path = ComputerSolitaireUITests;
 			sourceTree = "<group>";
 		};
+		4B75C2002F1A233600761A12 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				4B75C1D32F1A233400761A12 /* ComputerSolitaire */,
+				4B75C2002F1A233600761A12 /* Shared */,
 				4B75C1E52F1A233500761A12 /* ComputerSolitaireTests */,
 				4B75C1F22F1A233600761A12 /* ComputerSolitaireUITests */,
 				4B75C1D22F1A233400761A12 /* Products */,
@@ -122,6 +128,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				4B75C1D32F1A233400761A12 /* ComputerSolitaire */,
+				4B75C2002F1A233600761A12 /* Shared */,
 			);
 			name = ComputerSolitaire;
 			packageProductDependencies = (
@@ -168,6 +175,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				4B75C1F22F1A233600761A12 /* ComputerSolitaireUITests */,
+				4B75C2002F1A233600761A12 /* Shared */,
 			);
 			name = ComputerSolitaireUITests;
 			packageProductDependencies = (
