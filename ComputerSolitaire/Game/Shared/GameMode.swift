@@ -14,12 +14,12 @@ enum GameMode: String, CaseIterable, Codable {
     case spiderTwoSuits = "spider.suits2"
     case spiderFourSuits = "spider.suits4"
     case freecell
-    case tripeaks
     case pyramid
+    case tripeaks
     case golf
-    case fortyThieves = "fortythieves"
     case yukon
     case scorpion
+    case fortyThieves = "fortythieves"
     case canfield
 
     var variant: GameVariant {

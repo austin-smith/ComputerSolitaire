@@ -120,17 +120,11 @@ struct GameMenuCommands: Commands {
         }
     }
 
-    /// ⌘1 through ⌘9 select the first nine variants and ⌘0 the tenth; any
-    /// beyond that get no shortcut — there are only ten digit keys.
+    /// ⌘0 through ⌘9 select the first ten variants in presentation order;
+    /// any beyond that get no shortcut — there are only ten digit keys.
     private static func variantShortcut(at index: Int) -> KeyEquivalent? {
-        let ordinal = index + 1
-        if ordinal <= 9 {
-            return KeyEquivalent(Character("\(ordinal)"))
-        }
-        if ordinal == 10 {
-            return "0"
-        }
-        return nil
+        guard (0...9).contains(index) else { return nil }
+        return KeyEquivalent(Character("\(index)"))
     }
 }
 #endif

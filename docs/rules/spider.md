@@ -1,16 +1,16 @@
 # Spider Rules
 
-These rules describe Spider as implemented in the app: **two decks (104 cards)** across **ten tableau piles**, cards building down regardless of suit while only same-suit runs move together, and the goal of assembling — and automatically banking — **eight full King-to-Ace runs**, one suit each.
+These rules describe Spider as implemented in the app: **two decks (104 cards)** across **ten tableau piles**, cards building down regardless of suit while only same-suit runs move together, and the goal of assembling **eight full King-to-Ace runs**, one suit each, which bank automatically as they complete.
 
 ## Objective
-Complete eight King-to-Ace runs of a single suit. Each completed run is removed from the tableau automatically; the game is won when all eight are done.
+Complete eight King-to-Ace runs of a single suit. Each completed run is removed from the tableau automatically — the game is won when all eight are done.
 
 ## Terminology
 - **Tableau:** Ten piles where cards are played and rearranged.
-- **Run:** Face-up cards of one suit in strict descending order; the only multi-card unit that moves together.
-- **Completed run:** A full King-to-Ace run of one suit; it leaves the tableau on its own.
+- **Run:** Face-up cards of one suit in strict descending order — the only multi-card unit that moves together.
+- **Completed run:** A full King-to-Ace run of one suit — it leaves the tableau on its own.
 - **Stock:** The face-down pile that deals one card onto every tableau pile at once.
-- **Suits (difficulty):** The two decks are composed of 1, 2, or 4 distinct suits — always 104 cards.
+- **Suits (difficulty):** The two decks are composed of 1, 2, or 4 distinct suits, always 104 cards.
 
 ## Setup
 - Use two standard 52-card decks (no jokers). Difficulty changes the composition: **1 suit** (eight sets of Spades), **2 suits** (four sets each of Spades and Hearts), or **4 suits** (two full decks).
@@ -28,7 +28,7 @@ Complete eight King-to-Ace runs of a single suit. Each completed run is removed 
 - When the last face-up card leaves a pile, flip the newly exposed face-down card face up.
 
 ### The stock
-- Tapping the stock deals **one face-up card onto every pile** (ten cards per deal; five deals in a game).
+- Tap the stock to deal **one face-up card onto every pile** (ten cards per deal, five deals in a game).
 - Dealing is **not allowed while any pile is empty** — fill every space first.
 
 ### Completed runs
@@ -43,13 +43,13 @@ Complete eight King-to-Ace runs of a single suit. Each completed run is removed 
 - The score never drops below zero.
 
 ## Winning
-You win when all eight runs are completed. With good play, roughly one in three 4-suit games is winnable; 2-suit games considerably more, and 1-suit games almost always.
+You win when all eight runs are completed. With good play, roughly one in three 4-suit games is winnable, 2-suit games considerably more, and 1-suit games almost always.
 
 ## Rule choices
-Published Spider rules differ in scoring and stock handling; this implementation uses:
-- **Classic Spider scoring** — the 500-point start with −1 per move and +100 per run, rather than per-card schemes some sites use.
-- **Deals blocked over empty piles** (the standard rule; some implementations allow dealing across gaps).
-- **Suit-count difficulty** as deck composition — 1, 2, or 4 suits always totaling 104 cards, each mode keeping its own statistics.
+Published Spider rules differ in scoring and stock handling. This implementation uses:
+- **Classic Spider scoring.** The 500-point start with −1 per move and +100 per run, rather than the per-card schemes some sites use.
+- **Deals blocked over empty piles** (the standard rule, though some implementations allow dealing across gaps).
+- **Suit-count difficulty** as deck composition. The two decks are made of 1, 2, or 4 suits, always totaling 104 cards, and each mode keeps its own statistics.
 
 ## Sources
 - https://en.wikipedia.org/wiki/Spider_(solitaire)

@@ -1,16 +1,16 @@
 # Pyramid Rules
 
-These rules describe Pyramid as implemented in the app: pairs of exposed cards totaling 13 are removed from a 28-card pyramid, with a draw-one stock and up to three passes. The published sources disagree on several points; the choices made here (and why) are called out below.
+These rules describe Pyramid as implemented in the app: pairs of exposed cards totaling 13 are removed from a 28-card pyramid, with a draw-one stock and up to three passes. The published sources disagree on several points — the choices made here (and why) are called out below.
 
 ## Objective
 Remove all 28 pyramid cards by discarding exposed pairs whose ranks total 13, and Kings alone. The stock and waste do **not** need to be emptied.
 
 ## Terminology
-- **Pyramid:** Twenty-eight face-up cards in seven overlapping rows; each card except the bottom row is covered by two cards below it.
+- **Pyramid:** Twenty-eight face-up cards in seven overlapping rows — each card except the bottom row is covered by two cards below it.
 - **Exposed:** A card with neither covering card remaining. Only exposed cards can be played.
 - **Stock:** The face-down draw pile (24 cards after the deal).
-- **Waste:** Face-up cards drawn from the stock; only the top card is playable.
-- **Discard:** Where removed pairs and Kings go; cards there are out of play permanently.
+- **Waste:** Face-up cards drawn from the stock — only the top card is playable.
+- **Discard:** Where removed pairs and Kings go — cards there are out of play permanently.
 - **Recycle:** Turning the exhausted stock's waste back into the stock for another pass.
 
 ## Card Values
@@ -18,7 +18,7 @@ Ace = 1, number cards = face value, Jack = 11, Queen = 12, King = 13.
 
 ## Setup
 - Use a standard 52-card deck (no jokers).
-- **Pyramid:** Deal 28 cards face up in seven rows — one card in the first row, two in the second, and so on to seven — each row overlapping the row above.
+- **Pyramid:** Deal 28 cards face up in seven rows, one card in the first row, two in the second, and so on to seven, with each row overlapping the row above.
 - **Stock:** The remaining 24 cards, face down.
 
 ## Play
@@ -26,22 +26,22 @@ Ace = 1, number cards = face value, Jack = 11, Queen = 12, King = 13.
 - **Kings** total 13 alone and are removed singly.
 - **Cover pair:** a pyramid card whose only remaining cover is its rank-13 partner (itself exposed) may be removed together with it in one move.
 - Tap the stock to draw **one** card to the waste.
-- When the stock is empty, the waste may be recycled into the stock — at most **twice** (three passes total). Recycling preserves draw order.
+- When the stock is empty, the waste may be recycled into the stock at most **twice** (three passes total). Recycling preserves draw order.
 - Gaps in the pyramid are never refilled, and there is no building.
 
 ## Scoring
 - Removing a pair: +10.
 - Removing a King: +5.
-- No recycle penalty — the pass limit is the cost.
-- On a win, a time bonus is added (same basis as the other stockless-choice variants).
+- There is no recycle penalty — the pass limit is the cost.
+- On a win, a time bonus is added: it starts at 900 and drops by one point per second of play.
 
 ## Winning
 You win the moment the last pyramid card is removed, regardless of the stock and waste.
 
 ## Rule choices
-The linked sources disagree; this implementation uses:
+Where the linked sources disagree, this implementation uses:
 - **Win = pyramid cleared** (cardgames.io, solitaired.com, and most digital implementations), not Wikipedia's strict all-52-cards variant (~1 in 50 winnable).
-- **Three passes** through the stock (solitaired.com; Wikipedia's "Par Pyramid"), not one pass (strict) or unlimited (cardgames.io).
+- **Three passes** through the stock (solitaired.com and Wikipedia's "Par Pyramid"), not one pass (strict) or unlimited (cardgames.io).
 - **Cover pairs allowed** (cardgames.io and most digital implementations).
 
 ## Sources

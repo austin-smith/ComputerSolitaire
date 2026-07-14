@@ -8,14 +8,14 @@ Move all 52 cards to the four foundations, building each suit from Ace to King.
 ## Terminology
 - **Cascades:** Eight tableau columns where cards are played and rearranged.
 - **Free cells:** Four slots that each hold one card temporarily.
-- **Foundations:** Four suit piles built from Ace to King.
+- **Foundations:** Four suit piles built up from Ace to King.
 - **Supermove:** Moving an ordered run of cards at once, as a shortcut for a series of single-card moves through free cells and empty cascades.
 
 ## Setup
 - Use a standard 52-card deck (no jokers).
 - Deal all 52 cards face up across the eight cascades, left to right: the first four cascades receive **7 cards** each, the last four **6 cards** each.
 - The four free cells and four foundations start empty.
-- There is no stock or waste — every card is visible and in play from the start.
+- There is no stock or waste, so every card is visible and in play from the start.
 
 ## Play
 
@@ -23,16 +23,16 @@ Move all 52 cards to the four foundations, building each suit from Ace to King.
 - Build cascades **down in rank** while **alternating colors** (e.g., red 6 on black 7).
 - You may move the **bottom (exposed) card** of a cascade, or a properly ordered run of cards ending with it (see Supermoves below).
 - An exposed card may move to:
-  - another cascade, onto a card one rank higher of the opposite color;
-  - an empty free cell;
-  - its foundation, if it is the next card in that suit's sequence.
-- **Any card** may be placed on an empty cascade — unlike Klondike, empty spaces are not restricted to Kings.
+  - another cascade, onto a card one rank higher of the opposite color
+  - an empty free cell
+  - its foundation, if it is the next card in that suit's sequence
+- **Any card** may be placed on an empty cascade. Unlike Klondike, empty spaces are not restricted to Kings.
 
 ### Free cells
 - Each free cell holds **exactly one card**.
 - Any exposed card may be moved to an empty free cell at any time.
 - A card in a free cell may return to a cascade (following the normal build rule), move to an empty cascade, or move to its foundation.
-- Free cells are the game's main maneuvering space; keeping them open preserves mobility.
+- Free cells are the game's main maneuvering space — keeping them open preserves mobility.
 
 ### Foundations
 - Foundations are built **by suit** from **Ace to King**.
@@ -54,13 +54,13 @@ Formally, FreeCell only allows moving one card at a time. Moving a run of cards 
 - The score never drops below zero.
 
 ## Winning
-You win when all 52 cards are moved to the foundations in ascending order by suit. Because all cards are visible from the deal, FreeCell is a game of near-complete information — of the original 32,000 Microsoft deals, only one (#11982) is unwinnable.
+You win when all 52 cards are moved to the foundations in ascending order by suit. Because all cards are visible from the deal, FreeCell is a game of near-complete information. Of the original 32,000 Microsoft deals, only one (#11982) is unwinnable.
 
 ## Rule choices
-FreeCell's rules are essentially settled; the decisions this implementation makes:
-- **Any card on an empty cascade** (standard FreeCell; some variants restrict empty columns).
+FreeCell's rules are essentially settled. The decisions this implementation makes:
+- **Any card on an empty cascade** (standard FreeCell, though some variants restrict empty columns).
 - **The strict supermove cap**, including the rule that a run's empty destination cascade doesn't count as maneuvering space for its own move.
-- **Time-and-completion scoring** — classic FreeCell awards no per-move points, so the win time bonus is the whole score.
+- **Time-and-completion scoring.** Classic FreeCell awards no per-move points, so the win time bonus is the whole score.
 
 ## Sources
 - https://en.wikipedia.org/wiki/FreeCell

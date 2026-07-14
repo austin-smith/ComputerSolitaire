@@ -86,6 +86,14 @@ private struct StatisticsOverviewView: View {
                 Text("Games")
             }
 
+#if os(iOS)
+            Section {
+                Button("Reset All Statistics", role: .destructive) {
+                    isShowingResetConfirmation = true
+                }
+            }
+#endif
+
             Text("Tracked since \(statsTrackedSinceLabel(aggregate))")
                 .font(.footnote)
                 .foregroundStyle(.tertiary)
@@ -98,12 +106,6 @@ private struct StatisticsOverviewView: View {
         .toolbar {
 #if os(macOS)
             ToolbarItem(placement: .automatic) {
-                Button("Reset Stats") {
-                    isShowingResetConfirmation = true
-                }
-            }
-#else
-            ToolbarItem(placement: .topBarLeading) {
                 Button("Reset Stats") {
                     isShowingResetConfirmation = true
                 }
@@ -287,6 +289,14 @@ private struct GameStatisticsDetailView: View {
                     Text("Performance")
                 }
 
+#if os(iOS)
+                Section {
+                    Button("Reset \(effectiveScopeTitle) Statistics", role: .destructive) {
+                        isShowingResetConfirmation = true
+                    }
+                }
+#endif
+
                 Text("Tracked since \(statsTrackedSinceLabel(stats))")
                     .font(.footnote)
                     .foregroundStyle(.tertiary)
@@ -300,12 +310,6 @@ private struct GameStatisticsDetailView: View {
         .toolbar {
 #if os(macOS)
             ToolbarItem(placement: .automatic) {
-                Button("Reset Stats") {
-                    isShowingResetConfirmation = true
-                }
-            }
-#else
-            ToolbarItem(placement: .topBarLeading) {
                 Button("Reset Stats") {
                     isShowingResetConfirmation = true
                 }

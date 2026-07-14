@@ -1,26 +1,26 @@
 # Yukon Rules
 
-These rules describe Yukon as implemented in the app. Yukon resembles Klondike — same tableau building and foundation rules, with face-down cards to uncover — but all 52 cards are dealt at the start (there is no stock or waste), and any face-up card may be moved together with every card stacked on top of it, **even if those cards are not in sequence**.
+These rules describe Yukon as implemented in the app. Yukon resembles Klondike in its tableau building and foundation rules, with face-down cards to uncover, but all 52 cards are dealt at the start (there is no stock or waste), and any face-up card may be moved together with every card stacked on top of it, **even if those cards are not in sequence**.
 
 ## Objective
 Move all 52 cards to the four foundations, building each suit from Ace to King.
 
 ## Terminology
 - **Tableau:** Seven piles where cards are played and rearranged.
-- **Foundations:** Four suit piles built from Ace to King.
+- **Foundations:** Four suit piles built up from Ace to King.
 - **Group move:** Moving a face-up card together with every card above it as one unit, regardless of order.
 
 ## Setup
 - Use a standard 52-card deck (no jokers).
-- **Tableau:** Deal seven piles left to right. The first pile has 1 card face up. Each following pile has one more face-down card than the last — 1 through 6 — with **5 cards face up** on top of them, so the piles hold 1, 6, 7, 8, 9, 10, and 11 cards.
+- **Tableau:** Deal seven piles left to right. The first pile has 1 card face up. Each following pile has one more face-down card than the last (1 through 6), with **5 cards face up** on top of them, so the piles hold 1, 6, 7, 8, 9, 10, and 11 cards.
 - **Foundations:** Four empty piles, one per suit.
-- All 52 cards are dealt (21 face down, 31 face up); there is no stock or waste.
+- All 52 cards are dealt (21 face down, 31 face up) — there is no stock or waste.
 
 ## Play
 
 ### Tableau
 - Build tableau piles **down in rank** while **alternating colors** (e.g., red 6 on black 7).
-- **Any face-up card may be moved**, carrying every card stacked on top of it along as a group — the group does **not** need to be in any order.
+- **Any face-up card may be moved**, carrying every card stacked on top of it along as a group. The group does **not** need to be in any order.
 - Only the **bottom card of the moving group** must fit the destination: one rank lower and the opposite color of the destination pile's top card.
 - When the last face-up card leaves a pile, flip the newly exposed face-down card face up.
 - Empty tableau spaces may be filled **only by a King** (alone or carrying a group).
@@ -28,7 +28,7 @@ Move all 52 cards to the four foundations, building each suit from Ace to King.
 ### Foundations
 - Foundations are built **by suit** from **Ace to King**.
 - Aces start each foundation pile.
-- Only one card at a time moves to a foundation — the top card of a tableau pile.
+- Only the top card of a tableau pile moves to a foundation, one card at a time.
 
 ### Group moves
 Group moves are what set Yukon apart:
@@ -45,13 +45,13 @@ Group moves are what set Yukon apart:
 - The score never drops below zero.
 
 ## Winning
-You win when all 52 cards are moved to the foundations in ascending order by suit. With no stock to cycle and most cards visible or discoverable through play, skilled play wins considerably more often than in Klondike — roughly 80% of deals are estimated to be winnable with best play.
+You win when all 52 cards are moved to the foundations in ascending order by suit. With no stock to cycle and most cards visible or discoverable through play, skilled play wins considerably more often than in Klondike. Roughly 80% of deals are estimated to be winnable with best play.
 
 ## Rule choices
-Yukon's play rules are essentially settled; the decisions this implementation makes:
-- **Kings only on empty piles** (the standard Yukon rule; some variants allow any card or group).
-- **Foundation rollbacks allowed** at −15, matching Klondike — pulling a banked card back down is sometimes the only way to untangle a pile.
-- **Klondike-style scoring minus the waste rows** — Yukon has no stock or waste, so only the foundation, reveal, and rollback values apply.
+Yukon's play rules are essentially settled. The decisions this implementation makes:
+- **Kings only on empty piles** (the standard Yukon rule, though some variants allow any card or group).
+- **Foundation rollbacks allowed** at −15, matching Klondike. Pulling a banked card back down is sometimes the only way to untangle a pile.
+- **Klondike-style scoring minus the waste rows.** Yukon has no stock or waste, so only the foundation, reveal, and rollback values apply.
 
 ## Sources
 - https://en.wikipedia.org/wiki/Yukon_(solitaire)
