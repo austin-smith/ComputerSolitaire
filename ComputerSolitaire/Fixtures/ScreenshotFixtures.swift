@@ -1,16 +1,5 @@
 import Foundation
 
-/// A staged mid-game board for App Store screenshots.
-struct ScreenshotFixture: Identifiable, Hashable {
-    /// Bundle resource name of the `SavedGamePayload` JSON, and the screenshot
-    /// file name the capture UI test emits.
-    let name: String
-    /// Human-readable description of the board.
-    let title: String
-
-    var id: String { name }
-}
-
 /// Staged boards for App Store screenshots.
 ///
 /// Launching with `-screenshotFixture <name>` restores the named board instead
@@ -28,18 +17,7 @@ enum ScreenshotFixtures {
 
     /// Boards shipped in the app bundle; validated by `ScreenshotFixtureTests`.
     /// One entry per App Store screenshot, in store order.
-    static let bundled: [ScreenshotFixture] = [
-        ScreenshotFixture(name: "klondike-draw3", title: "Klondike – Draw 3"),
-        ScreenshotFixture(name: "freecell", title: "FreeCell – fresh deal"),
-        ScreenshotFixture(name: "yukon", title: "Yukon – fresh deal"),
-        ScreenshotFixture(name: "spider", title: "Spider – 2 suits"),
-        ScreenshotFixture(name: "pyramid", title: "Pyramid – fresh deal"),
-        ScreenshotFixture(name: "tripeaks", title: "TriPeaks – fresh deal"),
-        ScreenshotFixture(name: "golf", title: "Golf – fresh deal"),
-        ScreenshotFixture(name: "fortythieves", title: "Forty Thieves – fresh deal"),
-        ScreenshotFixture(name: "scorpion", title: "Scorpion – fresh deal"),
-        ScreenshotFixture(name: "canfield", title: "Canfield – fresh deal")
-    ]
+    static let bundled = ScreenshotFixtureCatalog.bundled
 
     static func payloadFromLaunchArguments() -> SavedGamePayload? {
         guard let name = value(after: launchArgument) else { return nil }
