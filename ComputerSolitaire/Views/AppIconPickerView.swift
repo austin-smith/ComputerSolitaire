@@ -56,31 +56,33 @@ struct AppIconPreviewView: View {
     }
 }
 
+/// The pushed page hosting the alternate-icon chooser.
 struct AppIconPickerView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Binding var selection: AppIcon
+
+    var body: some View {
+        ScrollView {
+            AppIconGridView(selection: $selection)
+                .padding(24)
+        }
+        .navigationTitle("App Icon")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// The alternate-icon chooser grid.
+struct AppIconGridView: View {
     @Binding var selection: AppIcon
 
     private let columns = [GridItem(.adaptive(minimum: 130), spacing: 12)]
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(AppIcon.all) { icon in
-                    iconTile(icon)
-                }
-            }
-            .padding(24)
-        }
-        .navigationTitle("App Icon")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(AppIcon.all) { icon in
+                iconTile(icon)
             }
         }
+        .padding(.vertical, 4)
     }
 
     private func iconTile(_ icon: AppIcon) -> some View {

@@ -14,8 +14,13 @@ struct RulesAndScoringView: View {
 
     @State private var selectedSection: Section
 
-    init(initialSection: Section = .rules) {
+    /// Hidden when the view is pushed onto a navigation stack rather than
+    /// presented as its own sheet.
+    private let showsDoneButton: Bool
+
+    init(initialSection: Section = .rules, showsDoneButton: Bool = true) {
         _selectedSection = State(initialValue: initialSection)
+        self.showsDoneButton = showsDoneButton
     }
 
     private struct TermRow: Identifiable {
@@ -85,11 +90,13 @@ struct RulesAndScoringView: View {
         .navigationBarTitleDisplayMode(.inline)
 #endif
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    dismiss()
+            if showsDoneButton {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .keyboardShortcut(.cancelAction)
                 }
-                .keyboardShortcut(.cancelAction)
             }
         }
     }

@@ -13,6 +13,8 @@ struct StockView: View {
     let hintHighlightOpacity: Double
     let hintWiggleToken: UUID
 
+    @AppStorage(SettingsKey.showStockCount) private var isStockCountVisible = true
+
     var body: some View {
         Button {
             viewModel.handleStockTap()
@@ -30,10 +32,12 @@ struct StockView: View {
                 } else {
                     CardBackView(cardSize: cardSize)
                 }
-                Text("\(viewModel.state.stock.count)")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
+                if isStockCountVisible {
+                    Text("\(viewModel.state.stock.count)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
+                }
 
                 DropHighlightView(
                     cardSize: cardSize,

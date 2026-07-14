@@ -1,13 +1,13 @@
 import Foundation
 import SwiftUI
 
-#if os(iOS)
 enum AppInfo {
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
     static let copyrightYear = String(Calendar.current.component(.year, from: Date()))
     static let githubURL = URL(string: "https://github.com/austin-smith/ComputerSolitaire")
 }
 
+#if os(iOS)
 struct AboutView: View {
     var body: some View {
         ScrollView {

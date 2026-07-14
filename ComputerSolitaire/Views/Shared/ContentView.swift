@@ -404,12 +404,11 @@ struct ContentView: View {
     private func applySheets(to view: AnyView) -> AnyView {
         AnyView(
             view.sheet(isPresented: $isShowingSettings) {
-#if os(iOS)
                 NavigationStack {
                     SettingsView()
                 }
-#else
-                SettingsView()
+#if os(macOS)
+                .frame(minWidth: 420, idealWidth: 480, maxWidth: 520, minHeight: 380)
 #endif
             }
             .sheet(isPresented: $isShowingRulesAndScoring) {
