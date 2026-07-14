@@ -3,7 +3,7 @@ import SwiftUI
 
 #if os(iOS)
 enum AppInfo {
-    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
     static let copyrightYear = String(Calendar.current.component(.year, from: Date()))
     static let githubURL = URL(string: "https://github.com/austin-smith/ComputerSolitaire")
 }
@@ -32,7 +32,7 @@ struct AboutView: View {
 
                 Text(
                     "Computer Solitaire is a low-frills, ad-free solitaire game for your computer. "
-                        + "Includes Klondike, FreeCell, and other things you enjoy."
+                        + "Includes Klondike, Spider, FreeCell, and other things you enjoy."
                 )
                     .font(.system(size: 14))
                     .foregroundStyle(.primary)
@@ -88,7 +88,7 @@ struct AboutView: View {
     @Environment(\.openURL) private var openURL
 
     private var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
     }
 
     private var copyrightYear: String {
@@ -121,7 +121,7 @@ struct AboutView: View {
 
             Text(
                 "Computer Solitaire is a low-frills, ad-free solitaire game for your computer. "
-                    + "Includes Klondike, FreeCell, and other things you enjoy."
+                    + "Includes Klondike, Spider, FreeCell, and other things you enjoy."
             )
                 .font(.system(size: 11))
                 .foregroundStyle(.primary)

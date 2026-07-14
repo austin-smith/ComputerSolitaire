@@ -7,12 +7,12 @@ enum GameVariant: String, CaseIterable, Codable {
     case klondike
     case spider
     case freecell
-    case tripeaks
     case pyramid
+    case tripeaks
     case golf
-    case fortyThieves = "fortythieves"
     case yukon
     case scorpion
+    case fortyThieves = "fortythieves"
     case canfield
 
     var title: String {
