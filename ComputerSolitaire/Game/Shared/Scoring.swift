@@ -7,6 +7,8 @@ enum ScoringAction {
     case turnOverTableauCard
     case foundationToTableau
     case recycleWasteInDrawOne
+    case reserveToTableau
+    case reserveToFoundation
     case spiderMove
     case spiderCompletedRun
     case scorpionCompletedRun
@@ -50,6 +52,10 @@ enum Scoring {
             return -15
         case .recycleWasteInDrawOne:
             return -100
+        case .reserveToTableau:
+            return 5
+        case .reserveToFoundation:
+            return 10
         case .spiderMove:
             return -1
         case .spiderCompletedRun:

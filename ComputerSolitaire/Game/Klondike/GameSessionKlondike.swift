@@ -39,36 +39,6 @@ extension SolitaireViewModel {
         }
     }
 
-    func recycleWaste() {
-        guard state.stock.isEmpty, !state.waste.isEmpty else { return }
-        clearHint()
-        let visibleWasteIDs = visibleWasteCards().map(\.id)
-        let animatedWasteIDs = visibleWasteIDs.isEmpty
-            ? [state.waste.last?.id].compactMap { $0 }
-            : visibleWasteIDs
-        pushHistory(
-            undoContext: UndoAnimationContext(
-                action: .recycleWaste,
-                cardIDs: animatedWasteIDs
-            )
-        )
-        let recycledStock = state.waste.reversed().map { card in
-            var newCard = card
-            newCard.isFaceUp = false
-            return newCard
-        }
-        state.stock = recycledStock
-        state.waste.removeAll()
-        setWasteDrawCount(0)
-        incrementMovesCount()
-        if scoringDrawCount == DrawMode.one.rawValue {
-            applyScore(.recycleWasteInDrawOne)
-        }
-        SoundManager.shared.play(.wasteRecycleToStock)
-        HapticManager.shared.play(.wasteRecycle)
-        refreshAutoFinishAvailability()
-    }
-
     func applyKlondikeMoveScore(for source: Selection.Source, destination: Destination) {
         switch (source, destination) {
         case (.waste, .tableau):

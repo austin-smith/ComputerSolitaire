@@ -203,6 +203,9 @@ struct SavedGamePayload: Codable {
                 return DrawMode.one.rawValue
             case .freecell, .yukon, .spider, .scorpion:
                 return DrawMode.three.rawValue
+            case .canfield:
+                // Canfield always turns three.
+                return DrawMode.three.rawValue
             }
         }()
         let sanitizedMovesCount = max(0, movesCount)
@@ -295,6 +298,13 @@ struct SavedGamePayload: Codable {
         switch state.variant {
         case .klondike:
             return min(max(0, state.wasteDrawCount), min(stockDrawCount, state.waste.count))
+        case .canfield:
+            // The exposed waste top is always available, so the fan floors at
+            // one card while the waste holds any.
+            return min(
+                max(min(1, state.waste.count), state.wasteDrawCount),
+                min(stockDrawCount, state.waste.count)
+            )
         case .pyramid, .tripeaks, .golf, .fortyThieves:
             return min(max(0, state.wasteDrawCount), min(1, state.waste.count))
         case .freecell, .yukon, .spider, .scorpion:
@@ -879,7 +889,7 @@ private extension GameState {
     var allCards: [Card] {
         stock + waste + freeCells.compactMap { $0 } + foundations.flatMap { $0 }
             + tableau.flatMap { $0 } + pyramid.compactMap { $0 } + discard
-            + triPeaks.compactMap { $0 }
+            + triPeaks.compactMap { $0 } + reserve
     }
 
     var isValidForPersistence: Bool {
@@ -908,7 +918,7 @@ private extension GameState {
 
     private var expectedIdentityCounts: [CardIdentity: Int] {
         switch variant {
-        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion, .canfield:
             return Self.uniformIdentityCounts(copies: 1)
         case .fortyThieves:
             return Self.uniformIdentityCounts(copies: 2)
@@ -948,6 +958,8 @@ private extension GameState {
             return FortyThievesPersistenceRules.hasValidLayout(state: self)
         case .scorpion:
             return ScorpionPersistenceRules.hasValidLayout(state: self)
+        case .canfield:
+            return CanfieldPersistenceRules.hasValidLayout(state: self)
         }
     }
 }

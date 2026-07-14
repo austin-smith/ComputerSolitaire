@@ -484,6 +484,123 @@ enum GameStateFixtures {
         )
     }
 
+    /// A reproducible Canfield deal matching the shape of
+    /// `GameState.newCanfieldGame`. Mirrored by the hint probe's
+    /// `seededCanfieldDeal` so seeds are comparable.
+    static func seededCanfieldDeal(seed: UInt64) -> GameState {
+        var deck = seededDeck(seed: seed, faceUp: false)
+        var reserve: [Card] = []
+        for _ in 0..<CanfieldGameRules.reserveCardCount {
+            reserve.append(deck.removeLast())
+        }
+        reserve[reserve.count - 1].isFaceUp = true
+        var baseCard = deck.removeLast()
+        baseCard.isFaceUp = true
+        var foundations: [[Card]] = Array(repeating: [], count: 4)
+        foundations[0] = [baseCard]
+        var tableau: [[Card]] = []
+        for _ in 0..<CanfieldGameRules.tableauPileCount {
+            var card = deck.removeLast()
+            card.isFaceUp = true
+            tableau.append([card])
+        }
+        return GameState(
+            variant: .canfield,
+            stock: deck,
+            waste: [],
+            wasteDrawCount: 0,
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: foundations,
+            tableau: tableau,
+            reserve: reserve
+        )
+    }
+
+    /// Hand-constructed Canfield position for rules and planner tests.
+    /// `columns` is padded with empty piles to four and `foundations` with
+    /// empty piles to four; column, waste, and foundation cards are forced
+    /// face up, stock and reserve cards face down with the reserve top turned
+    /// up. Cards not placed anywhere can be buried at the bottom of the stock
+    /// (drawn last) so persistence-facing tests still see 52 cards without
+    /// changing the next draw.
+    static func canfieldState(
+        columns: [[Card]],
+        reserve: [Card] = [],
+        stock: [Card] = [],
+        waste: [Card] = [],
+        foundations: [[Card]] = [],
+        wasteDrawCount: Int? = nil,
+        fillStockFromRemainder: Bool = false
+    ) -> GameState {
+        var tableau = columns.map { column in
+            column.map { card in
+                var faceUp = card
+                faceUp.isFaceUp = true
+                return faceUp
+            }
+        }
+        if tableau.count < CanfieldGameRules.tableauPileCount {
+            tableau.append(
+                contentsOf: [[Card]](
+                    repeating: [],
+                    count: CanfieldGameRules.tableauPileCount - tableau.count
+                )
+            )
+        }
+        var fullReserve = reserve.map { card in
+            var faceDown = card
+            faceDown.isFaceUp = false
+            return faceDown
+        }
+        if !fullReserve.isEmpty {
+            fullReserve[fullReserve.count - 1].isFaceUp = true
+        }
+        var faceDownStock = stock.map { card in
+            var faceDown = card
+            faceDown.isFaceUp = false
+            return faceDown
+        }
+        let fullWaste = waste.map { card in
+            var faceUp = card
+            faceUp.isFaceUp = true
+            return faceUp
+        }
+        var fullFoundations = foundations.map { pile in
+            pile.map { card in
+                var faceUp = card
+                faceUp.isFaceUp = true
+                return faceUp
+            }
+        }
+        if fullFoundations.count < 4 {
+            fullFoundations.append(
+                contentsOf: [[Card]](repeating: [], count: 4 - fullFoundations.count)
+            )
+        }
+        if fillStockFromRemainder {
+            func identity(_ card: Card) -> Int {
+                (Suit.allCases.firstIndex(of: card.suit) ?? 0) * 16 + card.rank.rawValue
+            }
+            let placed = tableau.flatMap { $0 } + fullReserve + faceDownStock + fullWaste
+                + fullFoundations.flatMap { $0 }
+            let usedIdentities = Set(placed.map(identity))
+            let remainder = TestCards.fullDeck().filter { card in
+                !usedIdentities.contains(identity(card))
+            }
+            faceDownStock = remainder + faceDownStock
+        }
+        return GameState(
+            variant: .canfield,
+            stock: faceDownStock,
+            waste: fullWaste,
+            wasteDrawCount: wasteDrawCount ?? min(1, fullWaste.count),
+            freeCells: Array(repeating: nil, count: 4),
+            foundations: fullFoundations,
+            tableau: tableau,
+            reserve: fullReserve
+        )
+    }
+
     private static func seededDeck(seed: UInt64, faceUp: Bool) -> [Card] {
         seededShuffle(TestCards.fullDeck(faceUp: faceUp), seed: seed)
     }

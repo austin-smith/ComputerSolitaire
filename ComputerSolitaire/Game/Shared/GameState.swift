@@ -23,6 +23,9 @@ struct GameState: Equatable, Codable {
     /// Consecutive TriPeaks tableau discards since the last stock flip; the
     /// n-th discard in a chain scores n. Zero for the other variants.
     var triPeaksChainLength: Int
+    /// Canfield's thirteen-card reserve, bottom first; only the last card is
+    /// face up and available. Empty for the other variants.
+    var reserve: [Card]
 
     enum CodingKeys: String, CodingKey {
         case variant
@@ -37,6 +40,7 @@ struct GameState: Equatable, Codable {
         case wasteRecyclesUsed
         case triPeaks
         case triPeaksChainLength
+        case reserve
     }
 
     init(
@@ -51,7 +55,8 @@ struct GameState: Equatable, Codable {
         discard: [Card] = [],
         wasteRecyclesUsed: Int = 0,
         triPeaks: [Card?] = [],
-        triPeaksChainLength: Int = 0
+        triPeaksChainLength: Int = 0,
+        reserve: [Card] = []
     ) {
         self.variant = variant
         self.stock = stock
@@ -65,6 +70,7 @@ struct GameState: Equatable, Codable {
         self.wasteRecyclesUsed = wasteRecyclesUsed
         self.triPeaks = triPeaks
         self.triPeaksChainLength = triPeaksChainLength
+        self.reserve = reserve
     }
 
     init(from decoder: Decoder) throws {
@@ -82,14 +88,16 @@ struct GameState: Equatable, Codable {
         wasteRecyclesUsed = try container.decodeIfPresent(Int.self, forKey: .wasteRecyclesUsed) ?? 0
         triPeaks = try container.decodeIfPresent([Card?].self, forKey: .triPeaks) ?? []
         triPeaksChainLength = try container.decodeIfPresent(Int.self, forKey: .triPeaksChainLength) ?? 0
+        reserve = try container.decodeIfPresent([Card].self, forKey: .reserve) ?? []
     }
 
     var isWon: Bool {
         switch variant {
-        case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
+        case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion, .canfield:
             // Won once every foundation holds a full run (Ace-to-King on the
             // build-up variants, a banked King-to-Ace run per Spider or
-            // Scorpion foundation).
+            // Scorpion foundation, a wrapped base-to-base run per Canfield
+            // foundation).
             return foundations.allSatisfy { $0.count == Rank.allCases.count }
         case .pyramid:
             // Won once every pyramid slot is cleared; stock and waste may keep cards.
@@ -127,6 +135,8 @@ struct GameState: Equatable, Codable {
             return newFortyThievesGame()
         case .scorpion:
             return newScorpionGame()
+        case .canfield:
+            return newCanfieldGame()
         }
     }
 }

@@ -41,7 +41,7 @@ enum PyramidAutoMoveAdvisor {
             where PyramidGameRules.canRemovePairWithWasteTop(pyramidIndex: partnerIndex, in: state) {
                 destinations.append(.pyramid(partnerIndex))
             }
-        case .foundation, .freeCell, .tableau, .triPeaks:
+        case .foundation, .freeCell, .tableau, .triPeaks, .reserve:
             return []
         }
 

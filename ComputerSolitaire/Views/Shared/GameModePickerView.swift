@@ -363,6 +363,8 @@ private struct MiniBoardView: View {
                 pyramidRows
             case .tripeaks:
                 triPeaksRows
+            case .canfield:
+                canfieldRow
             case .klondike, .spider, .freecell, .yukon, .golf, .fortyThieves, .scorpion:
                 tableauRow
             }
@@ -420,6 +422,12 @@ private struct MiniBoardView: View {
                 miniCard(.faceDown)
                 miniCard(.faceUp)
                 Spacer(minLength: 0)
+            case .canfield:
+                miniCard(.faceDown)
+                miniCard(.slot)
+                Spacer(minLength: 0)
+                miniCard(.faceUp)
+                foundationSlots(count: 3)
             }
         }
     }
@@ -484,6 +492,19 @@ private struct MiniBoardView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// Canfield's tableau band: the face-down reserve at the left, then the
+    /// four single-card piles under the foundations — the base card renders
+    /// face up in `topRow`'s first foundation slot.
+    private var canfieldRow: some View {
+        HStack(alignment: .top, spacing: columnSpacing) {
+            miniCard(.faceDown)
+            Spacer(minLength: 0)
+            ForEach(0..<4, id: \.self) { _ in
+                miniCard(.faceUp)
+            }
+        }
+    }
+
     private var tableauRow: some View {
         HStack(alignment: .top, spacing: columnSpacing) {
             ForEach(tableauColumns.indices, id: \.self) { columnIndex in
@@ -525,7 +546,9 @@ private struct MiniBoardView: View {
                     ? Array(repeating: .faceDown, count: 3) + Array(repeating: .faceUp, count: 4)
                     : Array(repeating: .faceUp, count: 7)
             }
-        case .pyramid, .tripeaks:
+        case .pyramid, .tripeaks, .canfield:
+            // Pyramid, TriPeaks, and Canfield draw their boards through their
+            // own row builders.
             return []
         }
     }

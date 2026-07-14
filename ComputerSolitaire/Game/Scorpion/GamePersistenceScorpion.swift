@@ -16,6 +16,9 @@ enum ScorpionPersistenceRules {
             return false
         }
         guard state.triPeaks.isEmpty, state.triPeaksChainLength == 0 else { return false }
+        // Canfield's reserve belongs to that variant alone; a card stranded
+        // there would be invisible here.
+        guard state.reserve.isEmpty else { return false }
         guard state.wasteDrawCount == 0 else { return false }
         return state.foundations.allSatisfy(isValidFoundationPile)
     }

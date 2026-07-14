@@ -15,6 +15,9 @@ enum FortyThievesPersistenceRules {
               state.triPeaksChainLength == 0, state.wasteRecyclesUsed == 0 else {
             return false
         }
+        // Canfield's reserve belongs to that variant alone; a card stranded
+        // there would be invisible here.
+        guard state.reserve.isEmpty else { return false }
         // The stock deals 64 cards and only ever shrinks, face down.
         guard state.stock.count <= FortyThievesGameRules.dealStockCardCount else { return false }
         guard state.stock.allSatisfy({ !$0.isFaceUp }) else { return false }

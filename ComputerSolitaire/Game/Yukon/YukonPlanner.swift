@@ -321,8 +321,8 @@ private extension YukonPlanner {
             }
         case .foundation(let pile):
             _ = nextState.foundations[pile].popLast()
-        case .waste, .freeCell, .pyramid, .triPeaks:
-            // Yukon has no waste, free cells, pyramid, or peaks.
+        case .waste, .freeCell, .pyramid, .triPeaks, .reserve:
+            // Yukon has no waste, free cells, pyramid, peaks, or reserve.
             return nil
         }
         switch move.destination {

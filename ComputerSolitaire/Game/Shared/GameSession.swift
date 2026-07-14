@@ -574,6 +574,8 @@ final class SolitaireViewModel {
             configureGolfNewGame()
         case .fortyThieves:
             configureFortyThievesNewGame()
+        case .canfield:
+            configureCanfieldNewGame()
         }
     }
 
@@ -593,6 +595,8 @@ final class SolitaireViewModel {
             configureGolfRedeal()
         case .fortyThieves:
             configureFortyThievesRedeal()
+        case .canfield:
+            configureCanfieldRedeal()
         }
     }
 
@@ -613,6 +617,8 @@ final class SolitaireViewModel {
             return sanitizeGolfRedealState(state)
         case .fortyThieves:
             return sanitizeFortyThievesRedealState(state)
+        case .canfield:
+            return sanitizeCanfieldRedealState(state)
         }
     }
 
@@ -657,7 +663,7 @@ final class SolitaireViewModel {
                 cardIndex: cardIndex,
                 card: card
             )
-        case .freecell, .pyramid, .tripeaks, .fortyThieves:
+        case .freecell, .pyramid, .tripeaks, .fortyThieves, .canfield:
             return false
         }
     }
@@ -707,6 +713,9 @@ final class SolitaireViewModel {
         case .golf, .fortyThieves:
             // Only the exposed card of a column can ever move.
             return cards.count == 1
+        case .canfield:
+            // The exposed card (for foundations) or the whole pile.
+            return CanfieldAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .pyramid, .tripeaks:
             // Pyramid and TriPeaks have no tableau piles.
             return false
@@ -746,6 +755,8 @@ extension SolitaireViewModel {
             handleGolfStockTap()
         case .fortyThieves:
             handleFortyThievesStockTap()
+        case .canfield:
+            handleCanfieldStockTap()
         case .freecell, .yukon:
             break
         }
@@ -755,7 +766,7 @@ extension SolitaireViewModel {
     /// waste (Pyramid stops recycling once its passes are spent).
     var canInteractWithStock: Bool {
         switch state.variant {
-        case .klondike:
+        case .klondike, .canfield:
             return !(state.stock.isEmpty && state.waste.isEmpty)
         case .pyramid:
             return !state.stock.isEmpty || PyramidGameRules.canRecycleWaste(in: state)
@@ -773,7 +784,7 @@ extension SolitaireViewModel {
 
     func visibleWasteCards() -> [Card] {
         switch state.variant {
-        case .klondike:
+        case .klondike, .canfield:
             let count = min(state.wasteDrawCount, stockDrawCount)
             return Array(state.waste.suffix(count))
         case .pyramid, .tripeaks, .golf, .fortyThieves:
@@ -819,6 +830,40 @@ extension SolitaireViewModel {
         selection = Selection(source: .waste, cards: [top])
         isDragging = true
         return true
+    }
+
+    /// Turns the spent waste over to form the new stock, order preserved.
+    /// Klondike and Canfield recycle without limit (Klondike's draw-one
+    /// scoring charges for it); Pyramid recycles through its own pass-capped
+    /// handler.
+    func recycleWaste() {
+        guard state.stock.isEmpty, !state.waste.isEmpty else { return }
+        clearHint()
+        let visibleWasteIDs = visibleWasteCards().map(\.id)
+        let animatedWasteIDs = visibleWasteIDs.isEmpty
+            ? [state.waste.last?.id].compactMap { $0 }
+            : visibleWasteIDs
+        pushHistory(
+            undoContext: UndoAnimationContext(
+                action: .recycleWaste,
+                cardIDs: animatedWasteIDs
+            )
+        )
+        let recycledStock = state.waste.reversed().map { card in
+            var newCard = card
+            newCard.isFaceUp = false
+            return newCard
+        }
+        state.stock = recycledStock
+        state.waste.removeAll()
+        setWasteDrawCount(0)
+        incrementMovesCount()
+        if scoringDrawCount == DrawMode.one.rawValue {
+            applyScore(.recycleWasteInDrawOne)
+        }
+        SoundManager.shared.play(.wasteRecycleToStock)
+        HapticManager.shared.play(.wasteRecycle)
+        refreshAutoFinishAvailability()
     }
 
     func drawFromStock() {
@@ -882,7 +927,8 @@ extension SolitaireViewModel {
             guard selection.cards.count == 1 else { return false }
             guard GameRules.canMoveToFoundation(
                 card: movingCard,
-                foundation: state.foundations[index]
+                foundation: state.foundations[index],
+                in: state
             ) else { return false }
             clearHint()
             pushHistory(
@@ -959,7 +1005,9 @@ extension SolitaireViewModel {
         switch selection.source {
         case .waste:
             _ = state.waste.popLast()
-            if stockDrawCount == DrawMode.one.rawValue {
+            if state.variant == .canfield {
+                state.wasteDrawCount = CanfieldGameRules.wasteDrawCountAfterWastePlay(in: state)
+            } else if stockDrawCount == DrawMode.one.rawValue {
                 state.wasteDrawCount = min(1, state.waste.count)
             } else {
                 state.wasteDrawCount = max(0, state.wasteDrawCount - 1)
@@ -972,18 +1020,28 @@ extension SolitaireViewModel {
             var cards = state.tableau[pile]
             cards.removeSubrange(index..<cards.count)
             state.tableau[pile] = cards
-            flipTopCardIfNeeded(in: pile)
+            applyTableauSourceRemovalEffects(in: pile)
         case .pyramid(let index):
             state.pyramid[index] = nil
         case .triPeaks(let index):
             state.triPeaks[index] = nil
+        case .reserve:
+            _ = state.reserve.popLast()
+            if let newTopIndex = state.reserve.indices.last {
+                state.reserve[newTopIndex].isFaceUp = true
+            }
         }
     }
 
-    func flipTopCardIfNeeded(in pileIndex: Int) {
+    /// The session mirror of `AutoMoveAdvisor`'s per-variant source-removal
+    /// hook: a flip on the variants that deal face-down tableau cards,
+    /// Canfield's compulsory reserve fill on an emptied pile.
+    func applyTableauSourceRemovalEffects(in pileIndex: Int) {
         switch state.variant {
         case .klondike, .yukon, .spider, .scorpion:
             flipFaceDownTopCardIfNeeded(in: pileIndex)
+        case .canfield:
+            refillCanfieldSpaceFromReserve(in: pileIndex)
         case .freecell, .pyramid, .tripeaks, .golf, .fortyThieves:
             break
         }
@@ -1048,6 +1106,8 @@ extension SolitaireViewModel {
             break
         case .fortyThieves:
             applyFortyThievesMoveScore(for: source, destination: destination)
+        case .canfield:
+            applyCanfieldMoveScore(for: source, destination: destination)
         }
     }
 

@@ -37,6 +37,9 @@ enum HintAdvisor {
         if state.variant == .fortyThieves, !state.stock.isEmpty {
             return true
         }
+        if state.variant == .canfield, !state.stock.isEmpty || !state.waste.isEmpty {
+            return true
+        }
         for selection in AutoMoveAdvisor.candidateSelections(in: state) {
             // Foundation rollbacks only count as available moves where the hint
             // stack can actually turn one into a hint: Yukon's planner searches
@@ -115,6 +118,14 @@ enum HintAdvisor {
 /// legal at any time with no preparation needed, and holding it until the
 /// tableau is provably stuck is exactly the strong player's timing. Silence is
 /// reserved for positions with no line and no stock.
+/// Canfield hints work like Forty Thieves': cached `CanfieldPlanner` improving
+/// lines that may include stock taps, followed to their end before
+/// re-planning. The one difference recycling makes is in the fallback: a
+/// Canfield tap can cycle back to an earlier position, so when the planner's
+/// search was *exhaustive* — which, taps and recycles included, is a proof the
+/// position can never progress — the hint is silence, not a tap that would
+/// churn a dead game forever. A truncated no-progress still falls back to the
+/// tap, mirroring Forty Thieves' measured rationale.
 final class HintPlanner {
     /// How long a single interactive hint request may spend searching.
     private static let freeCellSearchBudget: TimeInterval = 0.3
@@ -130,6 +141,7 @@ final class HintPlanner {
     private static let golfSearchBudget: TimeInterval = 0.5
     private static let fortyThievesSearchBudget: TimeInterval = 0.3
     private static let scorpionSearchBudget: TimeInterval = 0.25
+    private static let canfieldSearchBudget: TimeInterval = 0.3
 
     private var freeCellPlan: [String: FreeCellSolver.Move] = [:]
     private var yukonPlan: [String: YukonPlanner.PlannedMove] = [:]
@@ -139,6 +151,7 @@ final class HintPlanner {
     private var golfPlan: [String: GolfPlanner.Move] = [:]
     private var fortyThievesPlan: [String: FortyThievesPlanner.PlannedAction] = [:]
     private var scorpionPlan: [String: ScorpionPlanner.PlannedAction] = [:]
+    private var canfieldPlan: [String: CanfieldPlanner.PlannedAction] = [:]
 
     func bestHint(in state: GameState, stockDrawCount: Int) -> HintAdvisor.Hint? {
         switch state.variant {
@@ -166,6 +179,8 @@ final class HintPlanner {
             return fortyThievesHint(in: state)
         case .scorpion:
             return scorpionHint(in: state)
+        case .canfield:
+            return canfieldHint(in: state)
         }
     }
 }
@@ -402,6 +417,40 @@ private extension HintPlanner {
         // materialize re-validates the cached action against the live state.
         guard let action = fortyThievesPlan[key] else { return nil }
         return FortyThievesPlanner.materialize(action, in: state)
+    }
+
+    func canfieldHint(in state: GameState) -> HintAdvisor.Hint? {
+        let key = CanfieldPlanner.stateKey(for: state)
+        if let hint = plannedCanfieldHint(for: key, in: state) {
+            return hint
+        }
+
+        canfieldPlan.removeAll()
+        let limits = CanfieldPlanner.Limits(
+            deadline: Date().addingTimeInterval(Self.canfieldSearchBudget)
+        )
+        switch CanfieldPlanner.bestLine(in: state, limits: limits) {
+        case .line(let line):
+            canfieldPlan = CanfieldPlanner.keyedActions(along: line, from: state)
+            return plannedCanfieldHint(for: key, in: state)
+
+        case .noProgress(let searchWasExhaustive):
+            // An exhaustive search covered every reachable position — taps and
+            // recycles included — so exhaustion is a proof the game is over;
+            // a tap hint would just churn the dead stock in a circle, and
+            // silence is the honest answer. Only a truncated no-progress falls
+            // back to the tap (a large searched region held no improvement,
+            // but the unexplored remainder may), mirroring Forty Thieves.
+            guard !searchWasExhaustive else { return nil }
+            guard !state.stock.isEmpty || !state.waste.isEmpty else { return nil }
+            return .stockTap
+        }
+    }
+
+    func plannedCanfieldHint(for key: String, in state: GameState) -> HintAdvisor.Hint? {
+        // materialize re-validates the cached action against the live state.
+        guard let action = canfieldPlan[key] else { return nil }
+        return CanfieldPlanner.materialize(action, in: state)
     }
 
     func plannedSpiderHint(for key: String, in state: GameState) -> HintAdvisor.Hint? {

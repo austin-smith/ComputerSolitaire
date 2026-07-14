@@ -26,7 +26,7 @@ enum AutoMoveAdvisor {
         if selection.cards.count == 1, state.variant.playerBuildsFoundations {
             for foundationIndex in state.foundations.indices {
                 let foundation = state.foundations[foundationIndex]
-                if GameRules.canMoveToFoundation(card: movingCard, foundation: foundation) {
+                if GameRules.canMoveToFoundation(card: movingCard, foundation: foundation, in: state) {
                     destinations.append(.foundation(foundationIndex))
                 }
             }
@@ -98,6 +98,12 @@ enum AutoMoveAdvisor {
             )
         }
 
+        // Canfield's reserve; empty for the other variants. Only its exposed
+        // top card is ever available.
+        if let topReserveCard = state.reserve.last, topReserveCard.isFaceUp {
+            selections.append(Selection(source: .reserve, cards: [topReserveCard]))
+        }
+
         for pileIndex in state.tableau.indices {
             let pile = state.tableau[pileIndex]
             for cardIndex in pile.indices where pile[cardIndex].isFaceUp {
@@ -148,7 +154,9 @@ enum AutoMoveAdvisor {
         switch selection.source {
         case .waste:
             _ = nextState.waste.popLast()
-            if stockDrawCount == DrawMode.one.rawValue {
+            if state.variant == .canfield {
+                nextState.wasteDrawCount = CanfieldGameRules.wasteDrawCountAfterWastePlay(in: nextState)
+            } else if stockDrawCount == DrawMode.one.rawValue {
                 nextState.wasteDrawCount = min(1, nextState.waste.count)
             } else {
                 nextState.wasteDrawCount = max(0, nextState.wasteDrawCount - 1)
@@ -160,6 +168,11 @@ enum AutoMoveAdvisor {
         case .tableau(let pile, let index):
             nextState.tableau[pile].removeSubrange(index..<nextState.tableau[pile].count)
             applyVariantTableauSourceRemovalEffects(on: &nextState, pileIndex: pile)
+        case .reserve:
+            _ = nextState.reserve.popLast()
+            if let newTopIndex = nextState.reserve.indices.last {
+                nextState.reserve[newTopIndex].isFaceUp = true
+            }
         case .pyramid, .triPeaks:
             // Unreachable: Pyramid and TriPeaks states dispatch wholesale above.
             return nil
@@ -221,6 +234,10 @@ enum AutoMoveAdvisor {
             guard state.triPeaks.indices.contains(index),
                   let card = state.triPeaks[index] else { return false }
             return card.id == selection.cards[0].id
+
+        case .reserve:
+            guard selection.cards.count == 1, let topReserve = state.reserve.last else { return false }
+            return topReserve.id == selection.cards[0].id
         }
     }
 
@@ -285,6 +302,8 @@ private extension AutoMoveAdvisor {
             return FortyThievesAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .scorpion:
             return ScorpionAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
+        case .canfield:
+            return CanfieldAutoMoveAdvisor.allowsTableauPickup(of: cards, in: state)
         case .pyramid, .tripeaks, .golf:
             // Unreachable: Pyramid, TriPeaks, and Golf dispatch wholesale
             // before the tableau flow.
@@ -334,6 +353,12 @@ private extension AutoMoveAdvisor {
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
             )
+        case .canfield:
+            return CanfieldAutoMoveAdvisor.allowsTableauTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
         case .pyramid, .tripeaks, .golf:
             // Unreachable: Pyramid, TriPeaks, and Golf dispatch wholesale
             // before the tableau flow.
@@ -375,6 +400,12 @@ private extension AutoMoveAdvisor {
             )
         case .scorpion:
             return ScorpionAutoMoveAdvisor.isRedundantEmptyColumnTransfer(
+                selection: selection,
+                destinationTableauIndex: destinationTableauIndex,
+                in: state
+            )
+        case .canfield:
+            return CanfieldAutoMoveAdvisor.isRedundantEmptyColumnTransfer(
                 selection: selection,
                 destinationTableauIndex: destinationTableauIndex,
                 in: state
@@ -428,6 +459,12 @@ private extension AutoMoveAdvisor {
                 in: state,
                 destinations: &destinations
             )
+        case .canfield:
+            CanfieldAutoMoveAdvisor.appendAuxiliaryDestinations(
+                for: selection,
+                in: state,
+                destinations: &destinations
+            )
         case .pyramid, .tripeaks, .golf:
             // Unreachable: Pyramid, TriPeaks, and Golf dispatch wholesale
             // before the tableau flow.
@@ -449,6 +486,8 @@ private extension AutoMoveAdvisor {
             FortyThievesAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .scorpion:
             ScorpionAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
+        case .canfield:
+            CanfieldAutoMoveAdvisor.applyTableauSourceRemovalEffects(on: &state, pileIndex: pileIndex)
         case .pyramid, .tripeaks, .golf:
             // Unreachable: Pyramid, TriPeaks, and Golf dispatch wholesale
             // before the tableau flow.
@@ -460,7 +499,7 @@ private extension AutoMoveAdvisor {
     /// bank any run the landing completed; the other variants have none.
     static func applyVariantTableauDestinationEffects(on state: inout GameState, pileIndex: Int) {
         switch state.variant {
-        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .fortyThieves:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .fortyThieves, .canfield:
             break
         case .spider:
             SpiderAutoMoveAdvisor.applyTableauDestinationEffects(on: &state, pileIndex: pileIndex)

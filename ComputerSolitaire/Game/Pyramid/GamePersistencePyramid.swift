@@ -14,6 +14,9 @@ enum PyramidPersistenceRules {
         // The TriPeaks fields belong to the TriPeaks variant alone; a card
         // stranded there would be invisible here.
         guard state.triPeaks.isEmpty, state.triPeaksChainLength == 0 else { return false }
+        // Canfield's reserve belongs to that variant alone; a card stranded
+        // there would be invisible here.
+        guard state.reserve.isEmpty else { return false }
         guard state.wasteDrawCount == min(1, state.waste.count) else { return false }
 
         // Legal play can never remove a card while a covering card remains, so an

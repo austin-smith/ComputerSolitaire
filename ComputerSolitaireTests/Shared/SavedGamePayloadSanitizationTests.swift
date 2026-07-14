@@ -21,6 +21,46 @@ final class SavedGamePayloadSanitizationTests: XCTestCase {
         XCTAssertNil(makePayload(state: state).sanitizedForRestore())
     }
 
+    func testEveryOtherVariantLayoutRuleRejectsStrandedReserveCards() {
+        // Canfield's reserve belongs to that variant alone: the census counts
+        // it, so without a layout guard a card smuggled there would keep a
+        // valid card count while being invisible everywhere else. The layout
+        // rules are census-independent, so the guard is checked in isolation:
+        // the same deal must flip from valid to rejected on the reserve alone.
+        let layoutRule: [GameVariant: (GameState) -> Bool] = [
+            .klondike: KlondikePersistenceRules.hasValidLayout,
+            .freecell: FreeCellPersistenceRules.hasValidLayout,
+            .yukon: YukonPersistenceRules.hasValidLayout,
+            .spider: SpiderPersistenceRules.hasValidLayout,
+            .pyramid: PyramidPersistenceRules.hasValidLayout,
+            .tripeaks: TriPeaksPersistenceRules.hasValidLayout,
+            .golf: GolfPersistenceRules.hasValidLayout,
+            .fortyThieves: FortyThievesPersistenceRules.hasValidLayout,
+            .scorpion: ScorpionPersistenceRules.hasValidLayout
+        ]
+        let deal: [GameVariant: GameState] = [
+            .klondike: GameStateFixtures.seededKlondikeDeal(seed: 5),
+            .freecell: GameStateFixtures.seededFreeCellDeal(seed: 5),
+            .yukon: GameStateFixtures.seededYukonDeal(seed: 5),
+            .spider: GameStateFixtures.seededSpiderDeal(seed: 5, suitCount: .two),
+            .pyramid: GameStateFixtures.seededPyramidDeal(seed: 5),
+            .tripeaks: GameStateFixtures.seededTriPeaksDeal(seed: 5),
+            .golf: GameStateFixtures.seededGolfDeal(seed: 5),
+            .fortyThieves: GameStateFixtures.seededFortyThievesDeal(seed: 5),
+            .scorpion: GameStateFixtures.seededScorpionDeal(seed: 5)
+        ]
+
+        for variant in GameVariant.allCases where variant != .canfield {
+            guard let rule = layoutRule[variant], var state = deal[variant] else {
+                XCTFail("\(variant): missing layout rule or deal fixture")
+                continue
+            }
+            XCTAssertTrue(rule(state), "\(variant): the untouched deal must pass its layout rule")
+            state.reserve = [TestCards.make(.spades, .ace, isFaceUp: false)]
+            XCTAssertFalse(rule(state), "\(variant): a card stranded in the reserve must be rejected")
+        }
+    }
+
     func testSanitizedForRestoreClampsDrawModesCountsAndHistory() {
         let validState = GameStateFixtures.validPersistenceState()
         let validSnapshot = GameSnapshot(
