@@ -258,6 +258,16 @@ struct GameModePickerOverlay: View {
     @FocusState private var isPickerFocused: Bool
     @AccessibilityFocusState private var isPickerAccessibilityFocused: Bool
 
+    /// Which panel edges have more content scrolled beyond them, driving the
+    /// edge fades. The bottom starts true because the scrolling fallback only
+    /// exists when the content overflows.
+    @State private var overflowingEdges = OverflowingEdges(top: false, bottom: true)
+
+    private struct OverflowingEdges: Equatable {
+        var top: Bool
+        var bottom: Bool
+    }
+
     var body: some View {
         ZStack {
             // The scrim is the picker's cancel button: clicking outside the
@@ -270,15 +280,14 @@ struct GameModePickerOverlay: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Dismiss game picker")
 
-            // Short windows (macOS near its minimum size, phone landscape,
-            // large accessibility text) can't fit the whole picker; fall back
-            // to scrolling the same content rather than clipping it.
+            // Short windows (a ten-family gallery on a phone, macOS near its
+            // minimum size, large accessibility text) can't fit the whole
+            // picker; fall back to scrolling the same content, opened at the
+            // current game and faded at whichever edges hide more of it.
             ViewThatFits(in: .vertical) {
                 picker
 
-                ScrollView {
-                    picker
-                }
+                scrollingPicker
             }
             .frame(maxWidth: 360)
             .background(
@@ -317,6 +326,52 @@ struct GameModePickerOverlay: View {
             cardBackColor: CardBackColor.from(rawValue: cardBackColorRawValue),
             onSelect: onSelect
         )
+    }
+
+    private var scrollingPicker: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                picker
+            }
+            .onScrollGeometryChange(for: OverflowingEdges.self) { geometry in
+                OverflowingEdges(
+                    top: geometry.contentOffset.y > 1,
+                    bottom: geometry.contentOffset.y + geometry.containerSize.height
+                        < geometry.contentSize.height - 1
+                )
+            } action: { _, edges in
+                overflowingEdges = edges
+            }
+            .mask(edgeFadeMask)
+            .onAppear {
+                // Land on the current game: a below-the-fold selection scrolls
+                // just into view, a visible one stays put.
+                proxy.scrollTo(currentMode.variant)
+            }
+        }
+    }
+
+    /// Fades the content at each edge that hides more of it, so the fold
+    /// reads as "scroll for more" instead of an accidental clip.
+    private var edgeFadeMask: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                colors: [.black.opacity(overflowingEdges.top ? 0 : 1), .black],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 24)
+
+            Color.black
+
+            LinearGradient(
+                colors: [.black, .black.opacity(overflowingEdges.bottom ? 0 : 1)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 24)
+        }
+        .animation(.easeInOut(duration: 0.15), value: overflowingEdges)
     }
 }
 
