@@ -44,8 +44,12 @@ struct RulesAndScoringView: View {
         TermRow(term: "Draw mode", definition: "How many cards you draw from the stock at a time: 1-card or 3-card.")
     ]
 
+    /// The variant being browsed. Defaults to the game in play, but the
+    /// picker lets any game's rules be read from anywhere.
+    @State private var selectedVariant: GameVariant?
+
     private var gameVariant: GameVariant {
-        GameVariant(rawValue: gameVariantRawValue) ?? .klondike
+        selectedVariant ?? GameVariant(rawValue: gameVariantRawValue) ?? .klondike
     }
 
     private let scoringRows: [ScoringRow] = [
@@ -64,6 +68,19 @@ struct RulesAndScoringView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 8) {
+                    Text("Game")
+                        .font(.subheadline.weight(.semibold))
+                    Picker("Game", selection: browsedVariantSelection) {
+                        ForEach(GameVariant.allCases, id: \.self) { variant in
+                            Text(variant.title).tag(variant)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .fixedSize()
+                }
+
                 Picker("Guide Section", selection: $selectedSection) {
                     ForEach(Section.allCases) { section in
                         Text(section.rawValue).tag(section)
@@ -101,6 +118,13 @@ struct RulesAndScoringView: View {
         }
     }
 
+    private var browsedVariantSelection: Binding<GameVariant> {
+        Binding(
+            get: { gameVariant },
+            set: { selectedVariant = $0 }
+        )
+    }
+
     private var contentHorizontalPadding: CGFloat {
 #if os(iOS)
         return 30
@@ -117,15 +141,12 @@ struct RulesAndScoringView: View {
 #endif
     }
 
+    // The card deliberately has no heading of its own — the selected segment
+    // above already names it.
     private func sectionCard<Content: View>(
-        title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-            content()
-        }
+        content()
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
@@ -139,7 +160,7 @@ struct RulesAndScoringView: View {
     }
 
     private var termsCard: some View {
-        sectionCard(title: "Terms") {
+        sectionCard {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(termsForCurrentVariant) { row in
                     VStack(alignment: .leading, spacing: 2) {
@@ -155,7 +176,7 @@ struct RulesAndScoringView: View {
     }
 
     private var rulesCard: some View {
-        sectionCard(title: "Rules") {
+        sectionCard {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(rulesForCurrentVariant, id: \.self) { rule in
                     rulesRow(rule)
@@ -165,7 +186,7 @@ struct RulesAndScoringView: View {
     }
 
     private var scoringCard: some View {
-        sectionCard(title: "Scoring") {
+        sectionCard {
             VStack(alignment: .leading, spacing: 10) {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                     GridRow {

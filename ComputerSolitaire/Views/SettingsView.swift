@@ -60,19 +60,61 @@ enum SettingsKey {
     static let cardBackColor = "settings.cardBackColor"
 }
 
-struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
+// MARK: - Shared rows
+
+/// The feedback toggles, shared by the iOS settings sheet and the macOS
+/// settings window. Haptics exist only on iOS.
+struct SoundSettingsRows: View {
     @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
+#if os(iOS)
     @AppStorage(SettingsKey.hapticFeedbackEnabled) private var isHapticFeedbackEnabled = true
-    @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
+#endif
+
+    var body: some View {
+        Toggle("Sound effects", isOn: $isSoundEffectsEnabled)
+            .toggleStyle(.switch)
+#if os(iOS)
+        Toggle("Haptic feedback", isOn: $isHapticFeedbackEnabled)
+            .toggleStyle(.switch)
+#endif
+    }
+}
+
+/// The in-play visibility toggles, shared by the iOS settings sheet and the
+/// macOS settings window.
+struct GameplaySettingsRows: View {
     @AppStorage(SettingsKey.showGameStats) private var isGameStatsVisible = true
     @AppStorage(SettingsKey.showStockCount) private var isStockCountVisible = true
+    @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
+
+    var body: some View {
+        Toggle(isOn: $isGameStatsVisible) {
+            Text("Show game stats")
+            Text("Display moves, time, and score above the board.")
+        }
+        .toggleStyle(.switch)
+        Toggle(isOn: $isStockCountVisible) {
+            Text("Show stock count")
+            Text("Display how many cards remain in the stock.")
+        }
+        .toggleStyle(.switch)
+        Toggle(isOn: $isHintButtonVisible) {
+            Text("Show hint button")
+            Text("Turn off to avoid spoilers about hint availability.")
+        }
+        .toggleStyle(.switch)
+    }
+}
+
+// MARK: - iOS settings sheet
+
+#if os(iOS)
+struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
     @AppStorage(SettingsKey.tableBackgroundColor)
     private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
-#if os(iOS)
     @State private var selectedAppIcon = AppIcon.current()
-#endif
 
     var body: some View {
         Form {
@@ -83,12 +125,7 @@ struct SettingsView: View {
             aboutSection
         }
         .navigationTitle("Settings")
-#if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-#else
-        .formStyle(.grouped)
-        .padding(16)
-#endif
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") {
@@ -155,7 +192,6 @@ struct SettingsView: View {
                     .frame(width: 17, height: 24)
                 }
             }
-#if os(iOS)
             if UIApplication.shared.supportsAlternateIcons {
                 NavigationLink {
                     AppIconPickerView(selection: $selectedAppIcon)
@@ -165,7 +201,6 @@ struct SettingsView: View {
                     }
                 }
             }
-#endif
         } header: {
             Text("Appearance")
         }
@@ -173,38 +208,15 @@ struct SettingsView: View {
 
     private var soundAndHapticsSection: some View {
         Section {
-            Toggle("Sound effects", isOn: $isSoundEffectsEnabled)
-                .toggleStyle(.switch)
-#if os(iOS)
-            Toggle("Haptic feedback", isOn: $isHapticFeedbackEnabled)
-                .toggleStyle(.switch)
-#endif
+            SoundSettingsRows()
         } header: {
-#if os(iOS)
             Text("Sound & Haptics")
-#else
-            Text("Sound")
-#endif
         }
     }
 
     private var gameplaySection: some View {
         Section {
-            Toggle(isOn: $isGameStatsVisible) {
-                Text("Show game stats")
-                Text("Display moves, time, and score above the board.")
-            }
-            .toggleStyle(.switch)
-            Toggle(isOn: $isStockCountVisible) {
-                Text("Show stock count")
-                Text("Display how many cards remain in the stock.")
-            }
-            .toggleStyle(.switch)
-            Toggle(isOn: $isHintButtonVisible) {
-                Text("Show hint button")
-                Text("Turn off to avoid spoilers about hint availability.")
-            }
-            .toggleStyle(.switch)
+            GameplaySettingsRows()
         } header: {
             Text("Gameplay")
         }
@@ -244,3 +256,4 @@ struct SettingsView: View {
         SettingsView()
     }
 }
+#endif

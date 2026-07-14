@@ -160,6 +160,9 @@ struct AboutView: View {
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 16)
+        // Match the About window's column so hosts of any width (like the
+        // settings pane) wrap the copy identically.
+        .frame(maxWidth: 320)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 0))
     }

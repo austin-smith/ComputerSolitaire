@@ -23,46 +23,38 @@ struct CardStylePreview: View {
     }
 }
 
-// MARK: - Table
+// MARK: - Table rows
 
-struct TableSettingsView: View {
+/// The table surface controls, shared by the iOS Table page and the macOS
+/// Appearance pane.
+struct TableSettingsRows: View {
     @AppStorage(SettingsKey.tableBackgroundColor)
     private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
     @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
 
     var body: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Background color")
-                        Spacer()
-                        if let selected = TableBackgroundColor(rawValue: tableBackgroundColorRawValue) {
-                            Text(selected.label)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    HStack(spacing: 8) {
-                        ForEach(TableBackgroundColor.allCases) { option in
-                            colorSwatch(option)
-                        }
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Background color")
+                Spacer()
+                if let selected = TableBackgroundColor(rawValue: tableBackgroundColorRawValue) {
+                    Text(selected.label)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.vertical, 4)
-                Toggle(isOn: $isFeltEffectEnabled) {
-                    Text("Felt texture")
-                    Text("Adds a fabric texture and vignette to the table.")
+            }
+            HStack(spacing: 8) {
+                ForEach(TableBackgroundColor.allCases) { option in
+                    colorSwatch(option)
                 }
-                .toggleStyle(.switch)
+                Spacer()
             }
         }
-        .navigationTitle("Table")
-#if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-#else
-        .formStyle(.grouped)
-        .padding(16)
-#endif
+        .padding(.vertical, 4)
+        Toggle(isOn: $isFeltEffectEnabled) {
+            Text("Felt texture")
+            Text("Adds a fabric texture and vignette to the table.")
+        }
+        .toggleStyle(.switch)
     }
 
     private func colorSwatch(_ option: TableBackgroundColor) -> some View {
@@ -90,8 +82,7 @@ struct TableSettingsView: View {
                             lineWidth: isSelected ? 2.5 : 1
                         )
                 }
-                .frame(maxWidth: .infinity)
-                .aspectRatio(1, contentMode: .fit)
+                .frame(width: 32, height: 32)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(option.label)
@@ -99,51 +90,44 @@ struct TableSettingsView: View {
     }
 }
 
-// MARK: - Cards
+// MARK: - Cards rows
 
-struct CardsSettingsView: View {
+/// The deck controls, shared by the iOS Cards page and the macOS Appearance
+/// pane: front style, back color, then the lone behavior toggle.
+struct CardsSettingsRows: View {
     @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
     @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
     @AppStorage(SettingsKey.cardBackColor) private var cardBackColorRawValue = CardBackColor.defaultValue.id
 
     var body: some View {
-        Form {
-            Section {
-                HStack(spacing: 12) {
-                    ForEach(CardStyle.allCases) { style in
-                        cardStyleChip(style)
-                    }
+        Group {
+            HStack(spacing: 12) {
+                ForEach(CardStyle.allCases) { style in
+                    cardStyleChip(style)
                 }
-                .padding(.vertical, 4)
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Card back color")
-                        Spacer()
-                        Text(CardBackColor.from(rawValue: cardBackColorRawValue).label)
-                            .foregroundStyle(.secondary)
-                    }
-                    HStack(spacing: 8) {
-                        ForEach(CardBackColor.all) { option in
-                            cardBackSwatch(option)
-                        }
-                        Spacer()
-                    }
-                }
-                .padding(.vertical, 4)
-                Toggle(isOn: $isCardTiltEnabled) {
-                    Text("Natural card tilt")
-                    Text("Adds a subtle organic angle to each card.")
-                }
-                .toggleStyle(.switch)
             }
+            .padding(.vertical, 4)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Card back color")
+                    Spacer()
+                    Text(CardBackColor.from(rawValue: cardBackColorRawValue).label)
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 8) {
+                    ForEach(CardBackColor.all) { option in
+                        cardBackSwatch(option)
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.vertical, 4)
+            Toggle(isOn: $isCardTiltEnabled) {
+                Text("Natural card tilt")
+                Text("Adds a subtle organic angle to each card.")
+            }
+            .toggleStyle(.switch)
         }
-        .navigationTitle("Cards")
-#if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-#else
-        .formStyle(.grouped)
-        .padding(16)
-#endif
         .onChange(of: cardStyleRawValue) { oldValue, newValue in
             guard oldValue != newValue else { return }
             HapticManager.shared.play(.settingsSelection)
@@ -211,6 +195,33 @@ struct CardsSettingsView: View {
     }
 }
 
+// MARK: - iOS pages
+
+#if os(iOS)
+struct TableSettingsView: View {
+    var body: some View {
+        Form {
+            Section {
+                TableSettingsRows()
+            }
+        }
+        .navigationTitle("Table")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct CardsSettingsView: View {
+    var body: some View {
+        Form {
+            Section {
+                CardsSettingsRows()
+            }
+        }
+        .navigationTitle("Cards")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 #Preview("Table") {
     NavigationStack {
         TableSettingsView()
@@ -222,3 +233,4 @@ struct CardsSettingsView: View {
         CardsSettingsView()
     }
 }
+#endif
