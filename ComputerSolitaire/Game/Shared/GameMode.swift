@@ -7,7 +7,7 @@ import Foundation
 /// statistics carry over.
 /// Cases are declared in presentation order, mirroring `GameVariant`; modes
 /// within a variant run easiest to hardest.
-enum GameMode: String, CaseIterable, Codable {
+nonisolated enum GameMode: String, CaseIterable, Codable {
     case klondikeDrawOne = "klondike.draw1"
     case klondikeDrawThree = "klondike.draw3"
     case spiderOneSuit = "spider.suits1"

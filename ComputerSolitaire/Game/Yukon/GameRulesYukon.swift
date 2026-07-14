@@ -3,7 +3,7 @@
 /// piles. Yukon differs from Klondike in what may be *picked up* (any face-up
 /// card with everything above it, regardless of order), not where it may *land* —
 /// see `YukonAutoMoveAdvisor.allowsTableauPickup`.
-enum YukonGameRules {
+nonisolated enum YukonGameRules {
     static func canMoveToTableau(card: Card, destinationPile: [Card]) -> Bool {
         SharedGameRules.canMoveToKingAnchoredTableau(card: card, destinationPile: destinationPile)
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-enum ScoringAction {
+nonisolated enum ScoringAction {
     case wasteToTableau
     case wasteToFoundation
     case tableauToFoundation
@@ -30,7 +30,7 @@ enum ScoringAction {
     case golfBoardClear(remainingStockCount: Int)
 }
 
-enum Scoring {
+nonisolated enum Scoring {
     static let minimumScore = 0
     static let timedPointsLostPerSecond = 1
     static let timedMaxBonusDrawOne = 600

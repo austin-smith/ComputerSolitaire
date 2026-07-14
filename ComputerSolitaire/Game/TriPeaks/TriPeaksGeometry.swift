@@ -11,7 +11,7 @@ import Foundation
 /// covered by two slots in the row below; the upper rows have horizontal gaps
 /// between peaks, which is why covering indices are computed per row rather
 /// than by a single triangular formula.
-enum TriPeaksGeometry {
+nonisolated enum TriPeaksGeometry {
     static let rowCount = 4
     static let cardCount = 28
     static let peakCount = 3

@@ -3,7 +3,7 @@ import Foundation
 /// Pyramid shares no foundation/tableau/free-cell move algebra with the other
 /// variants, so `AutoMoveAdvisor` dispatches to it wholesale instead of threading
 /// its moves through the pile-oriented hooks.
-enum PyramidAutoMoveAdvisor {
+nonisolated enum PyramidAutoMoveAdvisor {
     /// The top waste card (if any) plus every selectable pyramid card, each as a
     /// single-card selection.
     static func candidateSelections(in state: GameState) -> [Selection] {

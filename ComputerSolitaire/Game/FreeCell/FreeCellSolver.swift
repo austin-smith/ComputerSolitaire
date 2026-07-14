@@ -7,7 +7,7 @@ import Foundation
 /// `maxFreeCellTransferCount` rule, so every move in a returned solution is directly
 /// executable in the UI. Typical deals solve in a few thousand nodes; the search stops
 /// at `Limits.maxNodes` or `Limits.deadline`, whichever comes first.
-enum FreeCellSolver {
+nonisolated enum FreeCellSolver {
     /// A card is `suitIndex << 4 | rank` (rank 1...13); suit order follows `Suit.allCases`.
     typealias Code = UInt8
 
@@ -170,7 +170,7 @@ enum FreeCellSolver {
 
 // MARK: - Board model
 
-extension FreeCellSolver {
+nonisolated extension FreeCellSolver {
     struct Board: Hashable {
         var cascades: [[Code]]
         var cells: [Code]        // 0 = empty
@@ -225,7 +225,7 @@ extension FreeCellSolver {
 
 // MARK: - Search internals
 
-private extension FreeCellSolver {
+nonisolated private extension FreeCellSolver {
     /// Bias strongly toward foundation progress and untangling cascades; solution
     /// length matters less than finding one quickly. Tuned empirically: this config
     /// solves ~99% of random deals in a median of ~3ms (p95 ~35ms).

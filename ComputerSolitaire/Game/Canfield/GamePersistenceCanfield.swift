@@ -1,6 +1,6 @@
 import Foundation
 
-enum CanfieldPersistenceRules {
+nonisolated enum CanfieldPersistenceRules {
     static func hasValidLayout(state: GameState) -> Bool {
         guard state.tableau.count == CanfieldGameRules.tableauPileCount else { return false }
         // Every tableau card deals (and stays) face up, and every pile stays a

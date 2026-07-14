@@ -9,7 +9,7 @@ import Foundation
 ///
 /// The search reads the true state, including cards the player hasn't seen yet, but it
 /// only ever recommends actions that are legal right now.
-enum KlondikePlanner {
+nonisolated enum KlondikePlanner {
     struct Limits {
         var maxNodes: Int
         var maxDepth: Int
@@ -99,7 +99,7 @@ enum KlondikePlanner {
 
 // MARK: - Search internals
 
-private extension KlondikePlanner {
+nonisolated private extension KlondikePlanner {
     enum Action {
         case move(Selection, Destination)
         case stockTap

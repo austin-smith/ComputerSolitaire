@@ -1,6 +1,6 @@
 import Foundation
 
-enum YukonPersistenceRules {
+nonisolated enum YukonPersistenceRules {
     static func hasValidLayout(state: GameState) -> Bool {
         guard state.tableau.count == 7 else { return false }
         guard state.stock.isEmpty, state.waste.isEmpty else { return false }

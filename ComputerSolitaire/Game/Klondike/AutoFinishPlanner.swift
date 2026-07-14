@@ -9,7 +9,7 @@ import Foundation
 /// waste top. Canfield qualifies once its stock and waste are both spent, playing
 /// tableau tops and the reserve top (with the compulsory reserve fill mirrored in
 /// simulation).
-enum AutoFinishPlanner {
+nonisolated enum AutoFinishPlanner {
     struct AutoFinishMove {
         let selection: Selection
         let destination: Destination
@@ -42,7 +42,7 @@ enum AutoFinishPlanner {
     }
 }
 
-private extension AutoFinishPlanner {
+nonisolated private extension AutoFinishPlanner {
     static func isAutoFinishCandidateState(_ state: GameState) -> Bool {
         guard !state.isWon else { return false }
         switch state.variant {

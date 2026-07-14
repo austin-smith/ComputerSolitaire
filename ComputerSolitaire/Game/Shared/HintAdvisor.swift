@@ -1,6 +1,6 @@
 import Foundation
 
-enum HintAdvisor {
+nonisolated enum HintAdvisor {
     enum Hint: Equatable {
         case move(HintMove)
         case stockTap
@@ -126,7 +126,7 @@ enum HintAdvisor {
 /// position can never progress — the hint is silence, not a tap that would
 /// churn a dead game forever. A truncated no-progress still falls back to the
 /// tap, mirroring Forty Thieves' measured rationale.
-final class HintPlanner {
+nonisolated final class HintPlanner {
     /// How long a single interactive hint request may spend searching.
     private static let freeCellSearchBudget: TimeInterval = 0.3
     private static let klondikeSearchBudget: TimeInterval = 0.15
@@ -185,7 +185,7 @@ final class HintPlanner {
     }
 }
 
-private extension HintPlanner {
+nonisolated private extension HintPlanner {
     func freeCellHint(in state: GameState) -> HintAdvisor.Hint? {
         let key = FreeCellSolver.stateKey(for: state)
         if let hint = materializedHint(for: key, in: state) {

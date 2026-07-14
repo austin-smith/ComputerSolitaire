@@ -1,6 +1,6 @@
 import Foundation
 
-enum KlondikePersistenceRules {
+nonisolated enum KlondikePersistenceRules {
     static func hasValidLayout(state: GameState) -> Bool {
         guard state.tableau.count == 7 else { return false }
         // Klondike renders no free-cell slots, so a card stranded there would be

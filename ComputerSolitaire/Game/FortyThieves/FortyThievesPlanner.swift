@@ -21,7 +21,7 @@ import Foundation
 /// tap-crossing lines only win when the plays they enable pay for them.
 /// Foundations are locked and `candidateSelections` offers no foundation
 /// sources for rollback-free variants, so there is no rollback stage.
-enum FortyThievesPlanner {
+nonisolated enum FortyThievesPlanner {
     struct Limits {
         var maxNodes: Int
         var maxDepth: Int
@@ -164,7 +164,7 @@ enum FortyThievesPlanner {
 
 // MARK: - Search internals
 
-private extension FortyThievesPlanner {
+nonisolated private extension FortyThievesPlanner {
     static func search(in state: GameState, limits: Limits) -> SearchOutcome {
         let rootScore = score(state)
         var nodes: [Node] = [Node(state: state, parent: -1, action: nil, depth: 0, score: rootScore)]

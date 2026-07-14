@@ -3,7 +3,7 @@ import Foundation
 /// TriPeaks shares no foundation/tableau/free-cell move algebra with the other
 /// variants, so `AutoMoveAdvisor` dispatches to it wholesale instead of threading
 /// its moves through the pile-oriented hooks.
-enum TriPeaksAutoMoveAdvisor {
+nonisolated enum TriPeaksAutoMoveAdvisor {
     /// Every uncovered peak card (uncovered cards are always face up), each as a
     /// single-card selection. The waste top is never a selection: in TriPeaks it
     /// is the match target, not a mover.

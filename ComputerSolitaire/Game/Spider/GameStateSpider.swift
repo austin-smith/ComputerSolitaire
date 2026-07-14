@@ -2,7 +2,7 @@ import Foundation
 
 /// Spider always plays 104 cards from two decks; the difficulty decides how
 /// many distinct suits compose them.
-enum SpiderDeck {
+nonisolated enum SpiderDeck {
     static func suits(for suitCount: SpiderSuitCount) -> [Suit] {
         switch suitCount {
         case .one:
@@ -41,7 +41,7 @@ enum SpiderDeck {
     }
 }
 
-extension GameState {
+nonisolated extension GameState {
     static func newSpiderGame(suitCount: SpiderSuitCount) -> GameState {
         var deck = SpiderDeck.deck(suitCount: suitCount).shuffled()
         var tableau = Array(repeating: [Card](), count: 10)

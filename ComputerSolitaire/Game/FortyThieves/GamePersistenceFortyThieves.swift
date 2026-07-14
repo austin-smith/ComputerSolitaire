@@ -1,6 +1,6 @@
 import Foundation
 
-enum FortyThievesPersistenceRules {
+nonisolated enum FortyThievesPersistenceRules {
     static func hasValidLayout(state: GameState) -> Bool {
         guard state.tableau.count == FortyThievesGameRules.columnCount else { return false }
         // Every board card is dealt (and stays) face up. No depth cap: columns

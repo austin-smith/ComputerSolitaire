@@ -1,6 +1,6 @@
 import Foundation
 
-enum TriPeaksPersistenceRules {
+nonisolated enum TriPeaksPersistenceRules {
     static func hasValidLayout(state: GameState) -> Bool {
         guard state.triPeaks.count == TriPeaksGeometry.cardCount else { return false }
         guard state.tableau.isEmpty else { return false }

@@ -28,7 +28,7 @@ import Foundation
 /// Measured in the `tools/hint-probe` ledger: following every hint wins 14.8%
 /// of 500 seeded deals versus the random control's 2.8%, with zero revisit
 /// events — at the level of published practical win rates for Scorpion.
-enum ScorpionPlanner {
+nonisolated enum ScorpionPlanner {
     struct Limits {
         var maxNodes: Int
         var maxDepth: Int
@@ -120,7 +120,7 @@ enum ScorpionPlanner {
 
 // MARK: - Search internals
 
-private extension ScorpionPlanner {
+nonisolated private extension ScorpionPlanner {
     static func search(in state: GameState, limits: Limits) -> SearchOutcome {
         let rootScore = score(state)
         var nodes: [Node] = [Node(state: state, parent: -1, action: nil, depth: 0, score: rootScore)]

@@ -38,7 +38,7 @@ import Foundation
 /// best-effort lines); `bestLine` median 0.07ms. Hint-quality baselines live
 /// in the `tools/hint-probe` ledger: 95.4% of 500 deals won by following every
 /// hint against a 0.0% random-control floor, zero loops.
-enum TriPeaksPlanner {
+nonisolated enum TriPeaksPlanner {
     struct Limits {
         var maxNodes: Int
         var deadline: Date?
@@ -187,7 +187,7 @@ enum TriPeaksPlanner {
 
 // MARK: - Session move mapping
 
-private extension TriPeaksPlanner {
+nonisolated private extension TriPeaksPlanner {
     static func sessionMove(
         for move: Move,
         in state: GameState
@@ -202,7 +202,7 @@ private extension TriPeaksPlanner {
 
 // MARK: - Compact position
 
-private extension TriPeaksPlanner {
+nonisolated private extension TriPeaksPlanner {
     /// The deal's immutable rank tables plus the packed dynamic board. Stock cards
     /// are indexed in draw order relative to the root; cards already in the waste
     /// below its top are simply absent — the search never needs them.
@@ -276,7 +276,7 @@ private extension TriPeaksPlanner {
 
 // MARK: - Move generation and transitions
 
-private extension TriPeaksPlanner {
+nonisolated private extension TriPeaksPlanner {
     /// One rank above or below with wrap, mirroring
     /// `TriPeaksGameRules.ranksAdjacentWithWrap` on raw rank values.
     static func ranksAreAdjacent(_ first: Int, _ second: Int) -> Bool {
@@ -322,7 +322,7 @@ private extension TriPeaksPlanner {
 
 // MARK: - Search
 
-private extension TriPeaksPlanner {
+nonisolated private extension TriPeaksPlanner {
     struct Node {
         let board: Board
         let parent: Int

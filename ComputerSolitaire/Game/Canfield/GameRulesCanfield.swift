@@ -1,6 +1,6 @@
 import Foundation
 
-enum CanfieldGameRules {
+nonisolated enum CanfieldGameRules {
     static let tableauPileCount = 4
     static let reserveCardCount = 13
     /// The 52-card deal minus the reserve, the base card, and four tableau cards.
@@ -137,7 +137,7 @@ enum CanfieldGameRules {
     }
 }
 
-private extension CanfieldGameRules {
+nonisolated private extension CanfieldGameRules {
     /// The raw rank one step above `rank`, turning the corner from King to Ace.
     static func wrappedRankAbove(_ rank: Rank) -> Int {
         rank.rawValue % Rank.allCases.count + 1

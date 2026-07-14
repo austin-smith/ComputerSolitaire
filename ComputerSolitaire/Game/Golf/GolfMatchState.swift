@@ -6,7 +6,7 @@ import Foundation
 /// match total is a plain sum. Lower is better throughout, and negative
 /// scores are legal results (a cleared board banks one bonus stroke per
 /// leftover stock card).
-struct GolfMatchState: Codable, Equatable {
+nonisolated struct GolfMatchState: Codable, Equatable {
     static let holeCount = 9
     /// Traditional par framing: a nine-hole total of 45 or under is par.
     static let parTotal = 45

@@ -1,4 +1,4 @@
-enum GameRules {
+nonisolated enum GameRules {
     /// The Ace-anchored foundation rule shared by every variant except
     /// Canfield, whose foundations start at a dealt base rank; state-aware
     /// callers should prefer `canMoveToFoundation(card:foundation:in:)`.
@@ -86,7 +86,7 @@ enum GameRules {
     }
 }
 
-enum SharedGameRules {
+nonisolated enum SharedGameRules {
     /// Tableau landing rule shared by Klondike and Yukon: empty piles take Kings
     /// only; otherwise the moving card goes on a face-up top of the opposite color,
     /// one rank higher.

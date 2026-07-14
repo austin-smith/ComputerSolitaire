@@ -1,6 +1,6 @@
 import Foundation
 
-enum FortyThievesAutoMoveAdvisor {
+nonisolated enum FortyThievesAutoMoveAdvisor {
     static func allowsTableauPickup(of cards: [Card], in state: GameState) -> Bool {
         // Forty Thieves' defining rule: only the exposed top card of a column
         // moves — never a sequence, however well ordered.

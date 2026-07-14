@@ -1,6 +1,6 @@
 import Foundation
 
-extension GameState {
+nonisolated extension GameState {
     static func newYukonGame() -> GameState {
         var deck = Card.fullDeck().shuffled()
         var tableau = Array(repeating: [Card](), count: 7)

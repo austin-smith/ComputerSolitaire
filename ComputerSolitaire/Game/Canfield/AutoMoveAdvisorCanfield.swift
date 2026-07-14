@@ -1,6 +1,6 @@
 import Foundation
 
-enum CanfieldAutoMoveAdvisor {
+nonisolated enum CanfieldAutoMoveAdvisor {
     static func allowsTableauPickup(of cards: [Card], in state: GameState) -> Bool {
         // Canfield's defining transfer rule: a pile moves between tableau
         // piles only in its entirety, and its exposed top card plays to a

@@ -1,6 +1,6 @@
 import Foundation
 
-enum FortyThievesGameRules {
+nonisolated enum FortyThievesGameRules {
     static let columnCount = 10
     static let dealColumnDepth = 4
     static let dealTableauCardCount = 40

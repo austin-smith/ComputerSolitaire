@@ -5,7 +5,7 @@ import Foundation
 /// Unlike hint planning, a tap always resolves to the best *legal* destination so a tap
 /// never dead-ends while a legal move exists. Destination preference is deterministic:
 /// higher tier wins, then a larger resulting build, then the lowest pile index.
-enum TapMovePolicy {
+nonisolated enum TapMovePolicy {
     static func bestDestination(for selection: Selection, in state: GameState) -> Destination? {
         // Tapping a foundation card only selects it; pulling cards back off the
         // foundation is deliberate enough to require a drag.
@@ -67,7 +67,7 @@ enum TapMovePolicy {
     }
 }
 
-private extension TapMovePolicy {
+nonisolated private extension TapMovePolicy {
     struct Priority {
         let tier: Int
         let buildLength: Int

@@ -1,6 +1,6 @@
 import Foundation
 
-struct Selection: Equatable {
+nonisolated struct Selection: Equatable {
     enum Source: Equatable {
         case waste
         case freeCell(slot: Int)
@@ -19,7 +19,7 @@ struct Selection: Equatable {
     let cards: [Card]
 }
 
-enum Destination: Equatable {
+nonisolated enum Destination: Equatable {
     case foundation(Int)
     case tableau(Int)
     case freeCell(Int)

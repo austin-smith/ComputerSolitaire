@@ -1,6 +1,6 @@
 import Foundation
 
-extension GameState {
+nonisolated extension GameState {
     /// The Canfield deal: thirteen cards face down into the reserve with its
     /// top card turned face up, one face-up base card onto the first
     /// foundation (its rank is where all four foundations start), one face-up

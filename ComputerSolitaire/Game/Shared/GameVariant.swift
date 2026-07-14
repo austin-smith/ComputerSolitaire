@@ -3,7 +3,7 @@ import Foundation
 /// Cases are declared in presentation order — most-played game types first —
 /// and every list in the app (picker, menus, statistics) follows it. Slot new
 /// variants by how widely played they are, not at the end.
-enum GameVariant: String, CaseIterable, Codable {
+nonisolated enum GameVariant: String, CaseIterable, Codable {
     case klondike
     case spider
     case freecell
@@ -163,7 +163,7 @@ enum GameVariant: String, CaseIterable, Codable {
     }
 }
 
-enum DrawMode: Int, CaseIterable, Codable {
+nonisolated enum DrawMode: Int, CaseIterable, Codable {
     case one = 1
     case three = 3
 
@@ -179,7 +179,7 @@ enum DrawMode: Int, CaseIterable, Codable {
 
 /// Spider difficulty: how many distinct suits the two-deck (104-card) deal
 /// is composed of.
-enum SpiderSuitCount: Int, CaseIterable, Codable {
+nonisolated enum SpiderSuitCount: Int, CaseIterable, Codable {
     case one = 1
     case two = 2
     case four = 4

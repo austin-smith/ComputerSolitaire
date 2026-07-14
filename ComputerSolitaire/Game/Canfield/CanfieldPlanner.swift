@@ -31,7 +31,7 @@ import Foundation
 /// hint wins 25.0% of games versus the 1.2% random control, with zero
 /// stalemate loops, zero exact-position revisits, and every loss an honest
 /// deadlock proven by an exhaustive search.
-enum CanfieldPlanner {
+nonisolated enum CanfieldPlanner {
     struct Limits {
         var maxNodes: Int
         var maxDepth: Int
@@ -198,7 +198,7 @@ enum CanfieldPlanner {
 
 // MARK: - Search internals
 
-private extension CanfieldPlanner {
+nonisolated private extension CanfieldPlanner {
     static func search(in state: GameState, limits: Limits) -> SearchOutcome {
         let rootScore = score(state)
         var nodes: [Node] = [Node(state: state, parent: -1, action: nil, depth: 0, score: rootScore)]

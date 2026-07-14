@@ -1,6 +1,6 @@
 import Foundation
 
-enum PyramidPersistenceRules {
+nonisolated enum PyramidPersistenceRules {
     static func hasValidLayout(state: GameState) -> Bool {
         guard state.pyramid.count == PyramidGeometry.cardCount else { return false }
         guard state.tableau.isEmpty else { return false }

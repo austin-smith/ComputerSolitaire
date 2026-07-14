@@ -1,6 +1,6 @@
 import Foundation
 
-struct GameState: Equatable, Codable {
+nonisolated struct GameState: Equatable, Codable {
     var variant: GameVariant
     var stock: [Card]
     var waste: [Card]

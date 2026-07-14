@@ -27,7 +27,7 @@ import Foundation
 ///
 /// Hint-quality baselines live in the `tools/hint-probe` ledger; the measured
 /// verdict split is recorded below `Limits`.
-enum GolfPlanner {
+nonisolated enum GolfPlanner {
     struct Limits {
         var maxNodes: Int
         var deadline: Date?
@@ -175,7 +175,7 @@ enum GolfPlanner {
 
 // MARK: - Session move mapping
 
-private extension GolfPlanner {
+nonisolated private extension GolfPlanner {
     static func sessionMove(
         for move: Move,
         in state: GameState
@@ -197,7 +197,7 @@ private extension GolfPlanner {
 
 // MARK: - Compact position
 
-private extension GolfPlanner {
+nonisolated private extension GolfPlanner {
     /// The deal's immutable rank tables plus the packed dynamic board. Stock cards
     /// are indexed in draw order relative to the root; cards already in the waste
     /// below its top are simply absent — the search never needs them.
@@ -283,7 +283,7 @@ private extension GolfPlanner {
 
 // MARK: - Move generation and transitions
 
-private extension GolfPlanner {
+nonisolated private extension GolfPlanner {
     /// Legal moves in a fixed, deterministic order: playable columns ascending,
     /// then draw — so equal-depth ties favor clearing over flipping and lines
     /// read sensibly. Legality is `GolfGameRules.canPlayRank`, so the strict
@@ -327,7 +327,7 @@ private extension GolfPlanner {
 
 // MARK: - Search
 
-private extension GolfPlanner {
+nonisolated private extension GolfPlanner {
     /// One explored position, packed to 12 bytes so the million-node budget
     /// costs ~12 MB of nodes instead of ~50: the 30-bit board code stands in
     /// for the whole board (it round-trips through `Board(code:)`), the move

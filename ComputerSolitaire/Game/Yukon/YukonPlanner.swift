@@ -22,7 +22,7 @@ import Foundation
 /// search the full move set including rollbacks — a rollback can be the only way to
 /// unbury a card whose landing spots were banked prematurely, so only a search over
 /// every legal move may declare the position provably stuck.
-enum YukonPlanner {
+nonisolated enum YukonPlanner {
     struct Limits {
         var maxNodes: Int
         var maxDepth: Int
@@ -115,7 +115,7 @@ enum YukonPlanner {
 
 // MARK: - Search internals
 
-private extension YukonPlanner {
+nonisolated private extension YukonPlanner {
     static func search(
         in state: GameState,
         limits: Limits,

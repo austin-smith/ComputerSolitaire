@@ -1,6 +1,6 @@
 import Foundation
 
-enum TriPeaksGameRules {
+nonisolated enum TriPeaksGameRules {
     /// One rank above or below, suit ignored; ranks wrap, so K↔A and A↔2 both
     /// connect (difference 1 or 12 around the 13-rank cycle).
     static func ranksAdjacentWithWrap(_ first: Rank, _ second: Rank) -> Bool {
