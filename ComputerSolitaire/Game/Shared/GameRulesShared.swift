@@ -1,10 +1,27 @@
 enum GameRules {
+    /// The Ace-anchored foundation rule shared by every variant except
+    /// Canfield, whose foundations start at a dealt base rank; state-aware
+    /// callers should prefer `canMoveToFoundation(card:foundation:in:)`.
     static func canMoveToFoundation(card: Card, foundation: [Card]) -> Bool {
         if foundation.isEmpty {
             return card.rank == .ace
         }
         guard let top = foundation.last else { return false }
         return top.suit == card.suit && card.rank.rawValue == top.rank.rawValue + 1
+    }
+
+    static func canMoveToFoundation(card: Card, foundation: [Card], in state: GameState) -> Bool {
+        switch state.variant {
+        case .klondike, .freecell, .yukon, .spider, .pyramid, .tripeaks, .golf, .fortyThieves,
+             .scorpion:
+            return canMoveToFoundation(card: card, foundation: foundation)
+        case .canfield:
+            return CanfieldGameRules.canMoveToFoundation(
+                card: card,
+                foundation: foundation,
+                in: state
+            )
+        }
     }
 
     static func canMoveToTableau(
@@ -33,6 +50,11 @@ enum GameRules {
             return false
         case .fortyThieves:
             return FortyThievesGameRules.canMoveToTableau(
+                card: card,
+                destinationPile: destinationPile
+            )
+        case .canfield:
+            return CanfieldGameRules.canMoveToTableau(
                 card: card,
                 destinationPile: destinationPile
             )

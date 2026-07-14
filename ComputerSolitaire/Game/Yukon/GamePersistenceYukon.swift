@@ -13,6 +13,9 @@ enum YukonPersistenceRules {
             return false
         }
         guard state.triPeaks.isEmpty, state.triPeaksChainLength == 0 else { return false }
+        // Canfield's reserve belongs to that variant alone; a card stranded
+        // there would be invisible here.
+        guard state.reserve.isEmpty else { return false }
         return state.wasteDrawCount == 0
     }
 }

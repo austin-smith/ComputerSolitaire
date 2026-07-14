@@ -537,6 +537,26 @@ struct TopRowView: View {
                     fanProgress: fanProgress,
                     dragGesture: dragGesture
                 )
+            case .canfield:
+                CanfieldTopRowView(
+                    viewModel: viewModel,
+                    cardSize: cardSize,
+                    columnSpacing: columnSpacing,
+                    wasteFanSpacing: wasteFanSpacing,
+                    activeTarget: activeTarget,
+                    hintedTarget: hintedTarget,
+                    isStockHinted: isStockHinted,
+                    isWasteHinted: isWasteHinted,
+                    hintHighlightOpacity: hintHighlightOpacity,
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
+                    hiddenCardIDs: hiddenCardIDs,
+                    hintedCardIDs: hintedCardIDs,
+                    hintWiggleToken: hintWiggleToken,
+                    drawingCardIDs: drawingCardIDs,
+                    fanProgress: fanProgress,
+                    dragGesture: dragGesture
+                )
             }
         }
     }
@@ -623,10 +643,20 @@ struct FoundationView: View {
         ZStack {
             PilePlaceholderView(cardSize: cardSize)
             if foundation.isEmpty {
-                Image(systemName: "a")
-                    .font(.system(size: cardSize.width * 0.22, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.28))
-                    .allowsHitTesting(false)
+                // Canfield foundations start at the dealt base rank, not the Ace.
+                if viewModel.gameVariant == .canfield {
+                    if let baseRank = CanfieldGameRules.baseRank(in: viewModel.state) {
+                        Text(baseRank.label)
+                            .font(.system(size: cardSize.width * 0.22, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.28))
+                            .allowsHitTesting(false)
+                    }
+                } else {
+                    Image(systemName: "a")
+                        .font(.system(size: cardSize.width * 0.22, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.28))
+                        .allowsHitTesting(false)
+                }
             }
             DropHighlightView(
                 cardSize: cardSize,

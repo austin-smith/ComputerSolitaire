@@ -52,9 +52,14 @@ struct GameMenuCommands: Commands {
                 set: { actions?.switchVariant($0) }
             )) {
                 ForEach(Array(GameVariant.allCases.enumerated()), id: \.element) { index, variant in
-                    Text(variant.title)
-                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
-                        .tag(variant)
+                    if let shortcut = Self.variantShortcut(at: index) {
+                        Text(variant.title)
+                            .keyboardShortcut(shortcut, modifiers: .command)
+                            .tag(variant)
+                    } else {
+                        Text(variant.title)
+                            .tag(variant)
+                    }
                 }
             }
             .pickerStyle(.inline)
@@ -113,6 +118,19 @@ struct GameMenuCommands: Commands {
             }
             .disabled(actions == nil)
         }
+    }
+
+    /// ⌘1 through ⌘9 select the first nine variants and ⌘0 the tenth; any
+    /// beyond that get no shortcut — there are only ten digit keys.
+    private static func variantShortcut(at index: Int) -> KeyEquivalent? {
+        let ordinal = index + 1
+        if ordinal <= 9 {
+            return KeyEquivalent(Character("\(ordinal)"))
+        }
+        if ordinal == 10 {
+            return "0"
+        }
+        return nil
     }
 }
 #endif

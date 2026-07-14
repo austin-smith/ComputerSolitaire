@@ -103,6 +103,11 @@ private extension TapMovePolicy {
                 // safety gate matters even more; the shared rule assumes one
                 // foundation per suit, so Forty Thieves brings its own.
                 tier = FortyThievesGameRules.isSafeFoundationMove(card: card, in: state) ? 100 : 60
+            case .canfield:
+                // Foundations are locked here too, and the shared rule
+                // assumes Ace-anchored foundations; Canfield's own rule works
+                // in offset space above the dealt base rank.
+                tier = CanfieldGameRules.isSafeFoundationMove(card: card, in: state) ? 100 : 60
             case .spider, .scorpion:
                 // Unreachable: Spider and Scorpion foundations are never
                 // player destinations.
@@ -140,6 +145,16 @@ private extension TapMovePolicy {
                 return Priority(
                     tier: pile.isEmpty ? 40 : 80,
                     buildLength: topSameSuitRunLength(of: pile) + selection.cards.count,
+                    pileOrder: -index
+                )
+            }
+            if state.variant == .canfield {
+                // A Canfield pile is packed in its entirety (its runs turn
+                // the corner from Ace to King, which `topRunLength` would
+                // stop at), so the whole pile is the build.
+                return Priority(
+                    tier: pile.isEmpty ? 40 : 80,
+                    buildLength: pile.count + selection.cards.count,
                     pileOrder: -index
                 )
             }

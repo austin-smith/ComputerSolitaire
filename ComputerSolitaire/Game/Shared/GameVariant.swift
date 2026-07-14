@@ -13,6 +13,7 @@ enum GameVariant: String, CaseIterable, Codable {
     case fortyThieves = "fortythieves"
     case yukon
     case scorpion
+    case canfield
 
     var title: String {
         switch self {
@@ -34,6 +35,8 @@ enum GameVariant: String, CaseIterable, Codable {
             return "Forty Thieves"
         case .scorpion:
             return "Scorpion"
+        case .canfield:
+            return "Canfield"
         }
     }
 
@@ -57,12 +60,17 @@ enum GameVariant: String, CaseIterable, Codable {
             return "Two decks, build down by suit"
         case .scorpion:
             return "Untangle runs suit by suit"
+        case .canfield:
+            return "Drain the 13-card reserve"
         }
     }
 
+    /// How many card-widths the board lays out. Canfield's tableau is only
+    /// four piles, but its top row (stock, waste, reserve, four foundations)
+    /// spans seven slots, so the board sizes cards for seven columns.
     var boardColumnCount: Int {
         switch self {
-        case .klondike, .yukon, .pyramid, .golf, .scorpion:
+        case .klondike, .yukon, .pyramid, .golf, .scorpion, .canfield:
             return 7
         case .freecell:
             return 8
@@ -78,7 +86,7 @@ enum GameVariant: String, CaseIterable, Codable {
         switch self {
         case .klondike, .yukon, .spider, .scorpion:
             return true
-        case .freecell, .pyramid, .tripeaks, .golf, .fortyThieves:
+        case .freecell, .pyramid, .tripeaks, .golf, .fortyThieves, .canfield:
             return false
         }
     }
@@ -87,7 +95,7 @@ enum GameVariant: String, CaseIterable, Codable {
     /// Scorpion have stocks but deal them onto the tableau, never into a waste.
     var dealsFromStock: Bool {
         switch self {
-        case .klondike, .pyramid, .tripeaks, .golf, .fortyThieves:
+        case .klondike, .pyramid, .tripeaks, .golf, .fortyThieves, .canfield:
             return true
         case .freecell, .yukon, .spider, .scorpion:
             return false
@@ -100,7 +108,7 @@ enum GameVariant: String, CaseIterable, Codable {
     /// other variants build one foundation per suit.
     var foundationPileCount: Int {
         switch self {
-        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion, .canfield:
             return 4
         case .spider, .fortyThieves:
             return 8
@@ -110,7 +118,7 @@ enum GameVariant: String, CaseIterable, Codable {
     /// How many cards a deal uses. Spider and Forty Thieves play with two decks.
     var deckCardCount: Int {
         switch self {
-        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion:
+        case .klondike, .freecell, .yukon, .pyramid, .tripeaks, .golf, .scorpion, .canfield:
             return 52
         case .spider, .fortyThieves:
             return 104
@@ -124,7 +132,7 @@ enum GameVariant: String, CaseIterable, Codable {
     /// so none of them treats foundations as a drag, drop, or tap target.
     var playerBuildsFoundations: Bool {
         switch self {
-        case .klondike, .freecell, .yukon, .fortyThieves:
+        case .klondike, .freecell, .yukon, .fortyThieves, .canfield:
             return true
         case .spider, .pyramid, .tripeaks, .golf, .scorpion:
             return false
@@ -132,14 +140,15 @@ enum GameVariant: String, CaseIterable, Codable {
     }
 
     /// Whether a card already on a foundation may be picked back up (a scored
-    /// rollback in Klondike, FreeCell, and Yukon). Forty Thieves builds its
-    /// foundations but locks them: a placed card never returns to play. The
-    /// variants that never build foundations have nothing to roll back.
+    /// rollback in Klondike, FreeCell, and Yukon). Forty Thieves and Canfield
+    /// build their foundations but lock them: a placed card never returns to
+    /// play. The variants that never build foundations have nothing to roll
+    /// back.
     var allowsFoundationRollback: Bool {
         switch self {
         case .klondike, .freecell, .yukon:
             return true
-        case .spider, .pyramid, .tripeaks, .golf, .fortyThieves, .scorpion:
+        case .spider, .pyramid, .tripeaks, .golf, .fortyThieves, .scorpion, .canfield:
             return false
         }
     }

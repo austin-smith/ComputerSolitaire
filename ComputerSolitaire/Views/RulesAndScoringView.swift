@@ -327,6 +327,27 @@ struct RulesAndScoringView: View {
                     definition: "Face-up cards drawn from the stock; only the top card is playable."
                 )
             ]
+        case .canfield:
+            return [
+                TermRow(
+                    term: "Reserve",
+                    definition: "Thirteen face-down cards with the top one face up and playable; it must fill any empty tableau pile at once."
+                ),
+                TermRow(
+                    term: "Base card",
+                    definition: "The card dealt to the first foundation; its rank starts all four foundations."
+                ),
+                TermRow(
+                    term: "Tableau",
+                    definition: "Four piles built down in alternating colors, wrapping from Ace to King; a pile moves only in its entirety."
+                ),
+                TermRow(
+                    term: "Foundations",
+                    definition: "Four suit piles built up from the base rank, wrapping from King to Ace; cards placed here never return."
+                ),
+                TermRow(term: "Stock", definition: "The face-down draw pile; three cards turn at a time, with unlimited redeals."),
+                TermRow(term: "Waste", definition: "Face-up cards drawn from the stock; only the top card is playable.")
+            ]
         case .scorpion:
             return [
                 TermRow(term: "Tableau", definition: "The seven play piles where you build down by suit."),
@@ -424,6 +445,16 @@ struct RulesAndScoringView: View {
                 "Build the eight foundations up by suit from Ace to King, two per suit. Cards placed on a foundation never return to play.",
                 "Tap the stock to flip one card onto the waste, whenever you like. The stock allows a single pass — there are no recycles.",
                 "You win by moving all 104 cards to foundations. The game is lost when the stock is spent and no legal move remains."
+            ]
+        case .canfield:
+            return [
+                "Deal 13 cards into the reserve with the top card face up, one face-up base card onto the first foundation, and one face-up card onto each of four tableau piles. The remaining 34 cards form the stock.",
+                "All four foundations start at the base card's rank and build up by suit, wrapping from King to Ace. Cards placed on a foundation never return to play.",
+                "Build tableau piles down in alternating colors, wrapping from Ace to King. A pile moves onto another only in its entirety; the exposed top card may play to a foundation.",
+                "An empty tableau pile is filled at once from the reserve. Once the reserve is empty, fill it with the top waste card whenever you choose.",
+                "The reserve's top card is always available to play on foundations or tableau piles.",
+                "Tap the stock to turn three cards onto the waste; when it runs out, tap again to turn the waste over and keep going — redeals are unlimited.",
+                "You win by moving all 52 cards to foundations."
             ]
         case .scorpion:
             return [
@@ -530,6 +561,19 @@ struct RulesAndScoringView: View {
             return [
                 ScoringRow(move: "Waste to Tableau", points: Scoring.delta(for: .wasteToTableau), note: nil),
                 ScoringRow(move: "Waste to Foundation", points: Scoring.delta(for: .wasteToFoundation), note: nil),
+                ScoringRow(move: "Tableau to Foundation", points: Scoring.delta(for: .tableauToFoundation), note: nil),
+                ScoringRow(
+                    move: "Win time bonus",
+                    points: Scoring.timedMaxBonusDrawThree,
+                    note: "Reduced by elapsed time."
+                )
+            ]
+        case .canfield:
+            return [
+                ScoringRow(move: "Waste to Tableau", points: Scoring.delta(for: .wasteToTableau), note: nil),
+                ScoringRow(move: "Waste to Foundation", points: Scoring.delta(for: .wasteToFoundation), note: nil),
+                ScoringRow(move: "Reserve to Tableau", points: Scoring.delta(for: .reserveToTableau), note: nil),
+                ScoringRow(move: "Reserve to Foundation", points: Scoring.delta(for: .reserveToFoundation), note: nil),
                 ScoringRow(move: "Tableau to Foundation", points: Scoring.delta(for: .tableauToFoundation), note: nil),
                 ScoringRow(
                     move: "Win time bonus",

@@ -635,6 +635,25 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
+                    } else if viewModel.gameVariant == .canfield {
+                        CanfieldBoardRowView(
+                            viewModel: viewModel,
+                            cardSize: cardSize,
+                            columnSpacing: metrics.columnSpacing,
+                            faceDownOffset: metrics.tableauFaceDownOffset,
+                            faceUpOffset: metrics.tableauFaceUpOffset,
+                            maxPileHeight: metrics.tableauMaxHeight,
+                            activeTarget: activeTarget,
+                            hintedTarget: hintedTarget,
+                            hintHighlightOpacity: hintHighlightOpacity,
+                            isCardTiltEnabled: isCardTiltEnabled,
+                            cardTilts: $cardTilts,
+                            hiddenCardIDs: effectiveHiddenCardIDs,
+                            hintedCardIDs: viewModel.hintedCardIDs,
+                            hintWiggleToken: viewModel.hintWiggleToken,
+                            dragGesture: dragGesture(for:)
+                        )
+                        .frame(width: boardContentWidth, alignment: .leading)
                     } else {
                         TableauRowView(
                             viewModel: viewModel,
@@ -1169,6 +1188,8 @@ struct ContentView: View {
             started = viewModel.startDragFromPyramid(index: index)
         case .triPeaks(let index):
             started = viewModel.startDragFromTriPeaks(index: index)
+        case .reserve:
+            started = viewModel.startDragFromReserve()
         }
 
         if started, let firstCard = viewModel.selection?.cards.first {
@@ -1891,7 +1912,7 @@ struct ContentView: View {
             return [viewModel.state.discard]
         case .tripeaks, .golf:
             return [viewModel.state.waste]
-        case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
+        case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion, .canfield:
             return viewModel.state.foundations
         }
     }
@@ -1902,7 +1923,7 @@ struct ContentView: View {
             return [.discard]
         case .tripeaks, .golf:
             return [.waste]
-        case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
+        case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion, .canfield:
             return viewModel.state.foundations.indices.map(DropTarget.foundation)
         }
     }

@@ -10,6 +10,9 @@ struct Selection: Equatable {
         case pyramid(index: Int)
         /// A single uncovered card at a TriPeaks slot (TriPeaks only).
         case triPeaks(index: Int)
+        /// The face-up top card of the reserve (Canfield only). The reserve is
+        /// never a destination.
+        case reserve
     }
 
     let source: Source

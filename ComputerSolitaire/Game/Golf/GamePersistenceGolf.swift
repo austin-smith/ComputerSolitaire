@@ -19,6 +19,9 @@ enum GolfPersistenceRules {
               state.wasteRecyclesUsed == 0 else {
             return false
         }
+        // Canfield's reserve belongs to that variant alone; a card stranded
+        // there would be invisible here.
+        guard state.reserve.isEmpty else { return false }
         // The deal starts the waste with one card and the waste only grows, so
         // an empty waste is corrupt (there would be no match target).
         guard !state.waste.isEmpty else { return false }

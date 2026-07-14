@@ -177,7 +177,7 @@ private extension KlondikePlanner {
                    !nextState.tableau[pile][topIndex].isFaceUp {
                     nextState.tableau[pile][topIndex].isFaceUp = true
                 }
-            case .pyramid, .triPeaks:
+            case .pyramid, .triPeaks, .reserve:
                 // Unreachable: this planner only searches Klondike states.
                 return nil
             }

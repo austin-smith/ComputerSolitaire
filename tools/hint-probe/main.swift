@@ -240,6 +240,34 @@ func seededDeal(variant: GameVariant, seed: UInt64, spiderSuitCount: SpiderSuitC
             foundations: Array(repeating: [], count: 4),
             tableau: tableau
         )
+
+    case .canfield:
+        // Mirrors GameState.newCanfieldGame (and GameStateFixtures.seededCanfieldDeal).
+        var deck = seededDeck(seed: seed, faceUp: false)
+        var reserve: [Card] = []
+        for _ in 0..<CanfieldGameRules.reserveCardCount {
+            reserve.append(deck.removeLast())
+        }
+        reserve[reserve.count - 1].isFaceUp = true
+        var baseCard = deck.removeLast()
+        baseCard.isFaceUp = true
+        var foundations: [[Card]] = Array(repeating: [], count: 4)
+        foundations[0] = [baseCard]
+        var tableau: [[Card]] = []
+        for _ in 0..<CanfieldGameRules.tableauPileCount {
+            var card = deck.removeLast()
+            card.isFaceUp = true
+            tableau.append([card])
+        }
+        return GameState(
+            variant: .canfield,
+            stock: deck,
+            waste: [],
+            wasteDrawCount: 0,
+            foundations: foundations,
+            tableau: tableau,
+            reserve: reserve
+        )
     }
 }
 
@@ -283,6 +311,8 @@ func fingerprint(_ state: GameState) -> UInt64 {
         mix(0xF9)
         if let card = slot { mix(card: card) }
     }
+    mix(0xF8)
+    for card in state.reserve { mix(card: card) }
     return hash
 }
 
@@ -348,6 +378,12 @@ func fortyThievesStockTap(_ state: GameState) -> GameState? {
     FortyThievesPlanner.apply(.stockTap, to: state)
 }
 
+/// Mirrors handleCanfieldStockTap in the session: turn three, or turn the
+/// spent waste over. The planner's apply is the same pure logic.
+func canfieldStockTap(_ state: GameState) -> GameState? {
+    CanfieldPlanner.apply(.stockTap, to: state)
+}
+
 func golfCleared(_ state: GameState) -> Int {
     GolfGameRules.dealTableauCardCount - state.tableau.reduce(0) { $0 + $1.count }
 }
@@ -390,8 +426,9 @@ enum Outcome {
 /// Golf at 51: every action consumes a board card or a stock card.)
 func actionCap(for variant: GameVariant) -> Int {
     switch variant {
-    case .klondike, .fortyThieves:
-        // Forty Thieves needs 104 banks plus 64 draws plus tableau grooming.
+    case .klondike, .fortyThieves, .canfield:
+        // Forty Thieves needs 104 banks plus 64 draws plus tableau grooming;
+        // Klondike and Canfield need headroom for unlimited stock cycling.
         return 1_200
     case .spider:
         return 1_000
@@ -878,6 +915,76 @@ func playFortyThievesFollowingHints(seed: UInt64) -> (outcome: Outcome, revisitE
     return (.actionCap(foundation: foundationCount(state)), revisitEvents)
 }
 
+func playCanfieldFollowingHints(seed: UInt64) -> (outcome: Outcome, revisitEvents: Int) {
+    // Replicates HintPlanner's Canfield path without its wall-clock deadline:
+    // follow each improving line (which may include stock taps) to its end,
+    // then replan. On no-progress the exhaustive/truncated distinction is
+    // load-bearing: an exhaustive search proved the position dead (taps and
+    // recycles were searched too), so the follower stops there like the real
+    // hint stack goes silent; only a truncated verdict falls back to one tap.
+    // Unlike Forty Thieves' single-pass tap the fallback is not monotone —
+    // a tap on the spent stock recycles — so the revisit accounting below is
+    // what verifies the fallback cannot circle in practice.
+    var state = seededDeal(variant: .canfield, seed: seed)
+    var visitCounts: [UInt64: Int] = [fingerprint(state): 1]
+    var revisitEvents = 0
+    var actions = 0
+
+    func record(_ nextState: GameState) -> Outcome? {
+        state = nextState
+        actions += 1
+        let key = fingerprint(state)
+        let count = (visitCounts[key] ?? 0) + 1
+        visitCounts[key] = count
+        if count > 1 { revisitEvents += 1 }
+        // A transient cross-line revisit is survivable (the next plan differs);
+        // a third visit to the same exact layout means the hints are looping.
+        if count >= 3 {
+            return .stalemateLoop(foundation: foundationCount(state))
+        }
+        // Cap before win, matching the other players: their win check only
+        // runs on the next loop iteration, so a win landed on the final
+        // permitted action classifies as .actionCap everywhere.
+        if actions >= actionCap(for: .canfield) {
+            return .actionCap(foundation: foundationCount(state))
+        }
+        if state.isWon { return .win(moves: actions) }
+        return nil
+    }
+
+    func applied(_ action: CanfieldPlanner.PlannedAction) -> GameState? {
+        switch action {
+        case .move(let selection, let destination):
+            return apply(selection, destination, to: state, stockDrawCount: 3)
+        case .stockTap:
+            return canfieldStockTap(state)
+        }
+    }
+
+    while actions < actionCap(for: .canfield) {
+        if state.isWon { return (.win(moves: actions), revisitEvents) }
+        switch CanfieldPlanner.bestLine(in: state) {
+        case .line(let line):
+            for action in line {
+                guard let next = applied(action) else {
+                    fatalError("Seed \(seed): illegal Canfield hint")
+                }
+                if let outcome = record(next) { return (outcome, revisitEvents) }
+            }
+
+        case .noProgress(let searchWasExhaustive):
+            guard !searchWasExhaustive else {
+                return (.deadlock(foundation: foundationCount(state)), revisitEvents)
+            }
+            guard let next = canfieldStockTap(state) else {
+                return (.deadlock(foundation: foundationCount(state)), revisitEvents)
+            }
+            if let outcome = record(next) { return (outcome, revisitEvents) }
+        }
+    }
+    return (.actionCap(foundation: foundationCount(state)), revisitEvents)
+}
+
 // MARK: - Control player
 
 // The random-moves floor calibrates each variant's deal universe. Deliberately
@@ -906,7 +1013,7 @@ func playRandom(
         lossProgress = triPeaksCleared
     case .golf:
         lossProgress = golfCleared
-    case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
+    case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion, .canfield:
         lossProgress = foundationCount
     }
     var actions = 0
@@ -922,7 +1029,7 @@ func playRandom(
         }
         let canTapStock: Bool
         switch variant {
-        case .klondike:
+        case .klondike, .canfield:
             canTapStock = !state.stock.isEmpty || !state.waste.isEmpty
         case .spider:
             canTapStock = SpiderGameRules.canDealFromStock(state: state)
@@ -954,6 +1061,8 @@ func playRandom(
                 tapped = golfStockTap(state)
             case .fortyThieves:
                 tapped = fortyThievesStockTap(state)
+            case .canfield:
+                tapped = canfieldStockTap(state)
             case .klondike, .freecell, .yukon:
                 tapped = stockTap(state, drawCount: drawCount)
             }
@@ -1087,6 +1196,8 @@ func run(
         label = "fortythieves"
     case .scorpion:
         label = "scorpion"
+    case .canfield:
+        label = "canfield"
     }
     // Pyramid, TriPeaks, and Golf bank no foundations; their loss columns
     // record board cards cleared.
@@ -1098,7 +1209,7 @@ func run(
         lossProgressLabel = "tripeaks-cleared-at-loss"
     case .golf:
         lossProgressLabel = "golf-cleared-at-loss"
-    case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion:
+    case .klondike, .freecell, .yukon, .spider, .fortyThieves, .scorpion, .canfield:
         lossProgressLabel = "foundation-at-loss"
     }
     let tracksOverBanking = variant != .pyramid && variant != .tripeaks && variant != .golf
@@ -1127,6 +1238,8 @@ func run(
             return playFortyThievesFollowingHints(seed: seed)
         case .scorpion:
             return playScorpionFollowingHints(seed: seed)
+        case .canfield:
+            return playCanfieldFollowingHints(seed: seed)
         }
     }
     let seconds = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1e9
@@ -1145,7 +1258,8 @@ func run(
         tracksOverBanking: tracksOverBanking
     )
     print(String(format: "elapsed: %.1fs", seconds))
-    if variant == .yukon || variant == .spider || variant == .fortyThieves || variant == .scorpion {
+    if variant == .yukon || variant == .spider || variant == .fortyThieves || variant == .scorpion
+        || variant == .canfield {
         print("hint revisit events: \(revisitEvents)")
     }
     if followerLoops > 0 {
@@ -1155,10 +1269,13 @@ func run(
     // Spider revisit events are reported but not gated: the deal-preparation
     // fallback deliberately plays score-losing fills, so a later line can
     // transiently re-cross an earlier position (a handful per 500 deals).
-    // Yukon's, Forty Thieves', and Scorpion's planners measure zero (Forty
-    // Thieves' bare stock-tap fallback and Scorpion's stock-deal fallback are
-    // strictly monotone), so for them any revisit is a regression.
-    if variant == .yukon || variant == .fortyThieves || variant == .scorpion, revisitEvents > 0 {
+    // Yukon's, Forty Thieves', Scorpion's, and Canfield's planners measure
+    // zero (Forty Thieves' bare stock-tap fallback and Scorpion's stock-deal
+    // fallback are strictly monotone; Canfield's tap can recycle but its
+    // exhaustion-aware fallback measured zero revisits over 500 deals), so
+    // for them any revisit is a regression.
+    if variant == .yukon || variant == .fortyThieves || variant == .scorpion || variant == .canfield,
+       revisitEvents > 0 {
         print("GATE VIOLATION: \(label) hint follower revisited positions \(revisitEvents) time(s)")
         gateViolations += revisitEvents
     }
@@ -1192,7 +1309,8 @@ setvbuf(stdout, nil, _IOLBF, 0)
 
 func exitWithUsage() -> Never {
     print(
-        "usage: run.sh <yukon|klondike|freecell|spider|pyramid|tripeaks|golf|fortythieves|scorpion|all> "
+        "usage: run.sh <yukon|klondike|freecell|spider|pyramid|tripeaks|golf|fortythieves|scorpion"
+            + "|canfield|all> "
             + "[deals >= 1] [klondike draw count: 1 or 3 | spider suit count: 1, 2, or 4]"
     )
     exit(1)
@@ -1236,6 +1354,8 @@ case "fortythieves":
     run(variant: .fortyThieves, seeds: seeds, drawCount: 1)
 case "scorpion":
     run(variant: .scorpion, seeds: seeds, drawCount: 3)
+case "canfield":
+    run(variant: .canfield, seeds: seeds, drawCount: 3)
 case "all":
     run(variant: .yukon, seeds: seeds, drawCount: 3)
     run(variant: .klondike, seeds: seeds, drawCount: 1)
@@ -1249,6 +1369,7 @@ case "all":
     run(variant: .golf, seeds: seeds, drawCount: 1)
     run(variant: .fortyThieves, seeds: seeds, drawCount: 1)
     run(variant: .scorpion, seeds: seeds, drawCount: 3)
+    run(variant: .canfield, seeds: seeds, drawCount: 3)
 default:
     exitWithUsage()
 }

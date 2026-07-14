@@ -29,6 +29,7 @@ tools/hint-probe/run.sh tripeaks 500
 tools/hint-probe/run.sh golf 500
 tools/hint-probe/run.sh fortythieves 500
 tools/hint-probe/run.sh scorpion 500
+tools/hint-probe/run.sh canfield 500
 ```
 
 The number is how many seeded deals the run plays (seeds 1 through N; default
@@ -73,6 +74,7 @@ consecutive runs, serial and parallel.
 | `golf` | **22.6%** | 0.0% |
 | `fortythieves` | **3.4%** | 0.0% |
 | `scorpion` | **14.8%** | 2.8% |
+| `canfield` | **25.0%** | 1.2% |
 
 Reading the table honestly:
 
@@ -179,6 +181,23 @@ Reading the table honestly:
   same-class transfers are no-ops) also reproduced 14.8% exactly — the
   affected position class is rare enough that no outcome changed in 500
   deals.
+- **Canfield (25.0% vs 1.2%)**: solver studies put theoretical winnability
+  near 67% under the strict whole-pile rules this app implements, with expert
+  human play claiming ~35%, so the follower plays within reach of a skilled
+  human and far above the greedy floor. The random control winning 1.2%
+  despite unlimited redeals says Canfield wins are essentially never stumbled
+  into (contrast Klondike draw-1's 39.4%: Canfield's base-rank foundations and
+  13-card reserve demand plans, not passes); the control also never reaches a
+  true deadlock — its 494 losses are all action caps, aimless cycling through
+  the recycling stock. Every follower loss is an honest deadlock proven by an
+  exhaustive search: Canfield is the one variant whose no-progress fallback
+  tap can *recycle* (not monotone like Forty Thieves' single-pass tap), so the
+  follower only taps on truncated verdicts and stops on exhaustive ones —
+  taps and recycles are inside the searched space, making exhaustion a proof
+  the game is over. Revisit events measure zero under that policy and are
+  gated to zero like Yukon's; zero action caps means no follower game ever
+  wandered. The banked-at-loss gap (median 14 vs 7) is the per-deal quality
+  signal on the lost majority, and the over-banking detector measures zero.
 - These figures use the planners' full node budgets. The app additionally
   clips each interactive search at a fraction of a second so the UI never
   hitches; that clip rarely binds, so in-app quality is at most a hair below
@@ -192,20 +211,20 @@ add its sources to `run.sh`, then run 500 deals. Acceptance gates:
 - The hint column must **decisively beat the random control**.
 - **Zero stalemate-loops** for the hint player, machine-enforced: the probe
   exits nonzero if any hint follower loops in any variant. **Revisit events**
-  are additionally gated to zero for Yukon, Forty Thieves, and Scorpion
-  (their planners measure zero, so any revisit is a regression signal);
-  Spider's are reported but not gated — see the baseline notes for why a few
-  transients per 500 deals are structural there. (Revisits are reported
-  without reclassifying the game, so win rates stay honestly measured; the
-  exit code is what enforces the gates.)
+  are additionally gated to zero for Yukon, Forty Thieves, Scorpion, and
+  Canfield (their planners measure zero, so any revisit is a regression
+  signal); Spider's are reported but not gated — see the baseline notes for
+  why a few transients per 500 deals are structural there. (Revisits are
+  reported without reclassifying the game, so win rates stay honestly
+  measured; the exit code is what enforces the gates.)
 - **Watch the over-banking detector** (`losses with >=40 banked`): it should
   be zero for stockless variants (Yukon and FreeCell measure zero). The
   Klondike draw-1 baseline records a single such loss, and Spider records
   6/7/1 by suit count (its losses can strand nearly-done boards); Forty
   Thieves records 167 — legitimately high, its losses strand well-banked
   boards by nature; Scorpion measures zero by structure (a loss with three
-  banked runs would need 40 cards banked — never observed). Treat any
-  increase as a regression.
+  banked runs would need 40 cards banked — never observed); Canfield measures
+  zero. Treat any increase as a regression.
 - Record the measured numbers in the table above; they become the variant's
   regression baseline. Mechanical refactors must reproduce every figure
   exactly; deliberate quality changes must move the hint column up, never

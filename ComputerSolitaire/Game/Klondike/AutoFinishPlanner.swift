@@ -6,7 +6,9 @@ import Foundation
 /// Yukon once every tableau card is face up; FreeCell qualifies whenever repeatedly
 /// playing eligible cards (from cascade tops and free cells) reaches a win in simulation;
 /// Forty Thieves once its single-pass stock is spent, playing tableau tops and the
-/// waste top.
+/// waste top. Canfield qualifies once its stock and waste are both spent, playing
+/// tableau tops and the reserve top (with the compulsory reserve fill mirrored in
+/// simulation).
 enum AutoFinishPlanner {
     struct AutoFinishMove {
         let selection: Selection
@@ -19,6 +21,7 @@ enum AutoFinishPlanner {
         let maxSteps = simulatedState.tableau.reduce(0) { partialResult, pile in
             partialResult + pile.count
         } + simulatedState.freeCells.count + simulatedState.waste.count
+            + simulatedState.reserve.count
 
         for _ in 0..<maxSteps {
             if simulatedState.isWon {
@@ -71,6 +74,11 @@ private extension AutoFinishPlanner {
             // spent the position is fully determined; the simulation below
             // still verifies the greedy run actually reaches a win.
             return state.stock.isEmpty
+        case .canfield:
+            // Recycling makes a live stock or waste an open choice, so both
+            // must be spent; the reserve plays out deterministically from the
+            // top. The simulation below verifies the greedy run reaches a win.
+            return state.stock.isEmpty && state.waste.isEmpty
         }
     }
 
@@ -84,7 +92,8 @@ private extension AutoFinishPlanner {
 
             for foundationIndex in state.foundations.indices {
                 let foundation = state.foundations[foundationIndex]
-                guard GameRules.canMoveToFoundation(card: card, foundation: foundation) else { continue }
+                guard GameRules.canMoveToFoundation(card: card, foundation: foundation, in: state)
+                else { continue }
 
                 let selection = Selection(
                     source: .tableau(pile: pileIndex, index: topIndex),
@@ -93,7 +102,7 @@ private extension AutoFinishPlanner {
                 candidates.append(
                     (
                         move: AutoFinishMove(selection: selection, destination: .foundation(foundationIndex)),
-                        rankValue: card.rank.rawValue,
+                        rankValue: foundationOrderValue(of: card, in: state),
                         sourceOrder: pileIndex,
                         foundationPile: foundationIndex
                     )
@@ -106,13 +115,14 @@ private extension AutoFinishPlanner {
                 guard let card = state.freeCells[slot] else { continue }
                 for foundationIndex in state.foundations.indices {
                     let foundation = state.foundations[foundationIndex]
-                    guard GameRules.canMoveToFoundation(card: card, foundation: foundation) else { continue }
+                    guard GameRules.canMoveToFoundation(card: card, foundation: foundation, in: state)
+                    else { continue }
 
                     let selection = Selection(source: .freeCell(slot: slot), cards: [card])
                     candidates.append(
                         (
                             move: AutoFinishMove(selection: selection, destination: .foundation(foundationIndex)),
-                            rankValue: card.rank.rawValue,
+                            rankValue: foundationOrderValue(of: card, in: state),
                             sourceOrder: state.tableau.count + slot,
                             foundationPile: foundationIndex
                         )
@@ -124,13 +134,32 @@ private extension AutoFinishPlanner {
         if state.variant == .fortyThieves, let card = state.waste.last {
             for foundationIndex in state.foundations.indices {
                 let foundation = state.foundations[foundationIndex]
-                guard GameRules.canMoveToFoundation(card: card, foundation: foundation) else { continue }
+                guard GameRules.canMoveToFoundation(card: card, foundation: foundation, in: state)
+                else { continue }
 
                 let selection = Selection(source: .waste, cards: [card])
                 candidates.append(
                     (
                         move: AutoFinishMove(selection: selection, destination: .foundation(foundationIndex)),
                         rankValue: card.rank.rawValue,
+                        sourceOrder: state.tableau.count,
+                        foundationPile: foundationIndex
+                    )
+                )
+            }
+        }
+
+        if state.variant == .canfield, let card = state.reserve.last, card.isFaceUp {
+            for foundationIndex in state.foundations.indices {
+                let foundation = state.foundations[foundationIndex]
+                guard GameRules.canMoveToFoundation(card: card, foundation: foundation, in: state)
+                else { continue }
+
+                let selection = Selection(source: .reserve, cards: [card])
+                candidates.append(
+                    (
+                        move: AutoFinishMove(selection: selection, destination: .foundation(foundationIndex)),
+                        rankValue: foundationOrderValue(of: card, in: state),
                         sourceOrder: state.tableau.count,
                         foundationPile: foundationIndex
                     )
@@ -150,6 +179,17 @@ private extension AutoFinishPlanner {
         return sorted.first?.move
     }
 
+    /// Lowest-needed-first ordering for the greedy run: the raw rank
+    /// everywhere except Canfield, whose foundations start at a dealt base
+    /// rank and wrap, so its "lowest" is the smallest offset above the base.
+    static func foundationOrderValue(of card: Card, in state: GameState) -> Int {
+        guard state.variant == .canfield,
+              let base = CanfieldGameRules.baseRank(in: state) else {
+            return card.rank.rawValue
+        }
+        return CanfieldGameRules.foundationOffset(of: card.rank, from: base)
+    }
+
     @discardableResult
     static func applyAutoFinishMove(_ move: AutoFinishMove, in state: inout GameState) -> Bool {
         guard case .foundation(let foundationIndex) = move.destination,
@@ -159,7 +199,11 @@ private extension AutoFinishPlanner {
         guard move.selection.cards.count == 1, let movingCard = move.selection.cards.first else {
             return false
         }
-        guard GameRules.canMoveToFoundation(card: movingCard, foundation: state.foundations[foundationIndex]) else {
+        guard GameRules.canMoveToFoundation(
+            card: movingCard,
+            foundation: state.foundations[foundationIndex],
+            in: state
+        ) else {
             return false
         }
 
@@ -176,6 +220,9 @@ private extension AutoFinishPlanner {
                !state.tableau[pileIndex][newTopIndex].isFaceUp {
                 state.tableau[pileIndex][newTopIndex].isFaceUp = true
             }
+            if state.variant == .canfield {
+                CanfieldGameRules.refillEmptyPileFromReserve(on: &state, pileIndex: pileIndex)
+            }
 
         case .freeCell(let slot):
             guard state.freeCells.indices.contains(slot),
@@ -188,6 +235,13 @@ private extension AutoFinishPlanner {
             guard state.waste.last?.id == movingCard.id else { return false }
             _ = state.waste.popLast()
             state.wasteDrawCount = min(1, state.waste.count)
+
+        case .reserve:
+            guard state.reserve.last?.id == movingCard.id else { return false }
+            _ = state.reserve.popLast()
+            if let newTopIndex = state.reserve.indices.last {
+                state.reserve[newTopIndex].isFaceUp = true
+            }
 
         case .foundation, .pyramid, .triPeaks:
             return false

@@ -513,6 +513,58 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         print("Scorpion fixture — seed \(seed), photogenic \(bestScore)")
     }
 
+    /// The staged Canfield board is a fresh deal with the first three-card
+    /// turn fanned in the waste. The eye lands on the base card, the reserve
+    /// top, the four tableau singles, and the fan, so seeds are scanned for
+    /// the most photogenic spread across those nine cards.
+    func testGenerateCanfieldFixture() throws {
+        try skipUnlessGenerating()
+
+        var bestSeed: UInt64?
+        var bestScore = Int.min
+        for seed in Self.candidateSeeds {
+            let deal = GameStateFixtures.seededCanfieldDeal(seed: seed)
+            let score = canfieldDealScore(of: deal)
+            if score > bestScore {
+                bestScore = score
+                bestSeed = seed
+            }
+        }
+        let seed = try XCTUnwrap(bestSeed)
+
+        let viewModel = SolitaireViewModel()
+        viewModel.state = GameStateFixtures.seededCanfieldDeal(seed: seed)
+        viewModel.configureCanfieldNewGame()
+        viewModel.handleStockTap()
+
+        let savedAt = DateFixtures.reference
+        let payload = SavedGamePayload(
+            savedAt: savedAt,
+            state: viewModel.state,
+            movesCount: viewModel.movesCount,
+            score: viewModel.score,
+            gameStartedAt: savedAt.addingTimeInterval(-Self.stagedElapsedSeconds),
+            stockDrawCount: DrawMode.three.rawValue,
+            history: [],
+            hasStartedTrackedGame: false
+        )
+
+        XCTAssertNotNil(payload.sanitizedForRestore(), "Generated fixture failed the validity gate")
+        let restoredViewModel = SolitaireViewModel()
+        XCTAssertTrue(restoredViewModel.restore(from: payload), "Generated fixture failed to restore")
+        XCTAssertEqual(restoredViewModel.gameVariant, .canfield, "Fixture did not restore as Canfield")
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("canfield.json")
+        try data.write(to: outputURL)
+
+        print("SCREENSHOT-FIXTURE-OUTPUT: \(outputURL.path)")
+        print("Canfield fixture — seed \(seed), photogenic \(bestScore)")
+    }
+
     // MARK: - Photogenic scoring
 
     private struct Candidate {
@@ -667,6 +719,28 @@ final class ScreenshotFixtureGeneratorTests: XCTestCase {
         score += Set(visible.map(\.suit)).count == Suit.allCases.count ? 8 : 0
         score += visible.count(where: { $0.rank >= .jack }) >= 3 ? 6 : 0
         score += deal.tableau.compactMap { $0.last }.contains(where: { $0.rank == .ace }) ? 6 : 0
+        return score
+    }
+
+    /// Scores a fresh Canfield deal by the nine cards the eye lands on (the
+    /// base card, the reserve top, the four tableau singles, and the three
+    /// stock cards a first turn fans into the waste): rank variety, red/black
+    /// balance, all four suits, a few face cards, and a mid-rank base card —
+    /// the deal's signature — read well.
+    private func canfieldDealScore(of deal: GameState) -> Int {
+        let visible = deal.foundations.compactMap { $0.last }
+            + Array(deal.reserve.suffix(1))
+            + deal.tableau.compactMap { $0.last }
+            + Array(deal.stock.suffix(DrawMode.three.rawValue))
+        var score = 0
+        score += Set(visible.map(\.rank)).count * 6
+        let redCount = visible.count(where: { $0.suit.isRed })
+        score -= abs(redCount * 2 - visible.count) * 4
+        score += Set(visible.map(\.suit)).count == Suit.allCases.count ? 8 : 0
+        score += visible.count(where: { $0.rank >= .jack }) >= 3 ? 6 : 0
+        if let base = CanfieldGameRules.baseRank(in: deal) {
+            score += (base >= .four && base <= .ten) ? 6 : 0
+        }
         return score
     }
 
