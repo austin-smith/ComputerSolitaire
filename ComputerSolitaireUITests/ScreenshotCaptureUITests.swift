@@ -26,7 +26,7 @@ final class ScreenshotCaptureUITests: XCTestCase {
     /// Appearance for every screenshot, pinned via UserDefaults launch
     /// arguments so simulator state can't change the look between runs.
     private static let appearance = [
-        "-settings.tableBackgroundColor", "#67a3d9", // sky
+        "-settings.tableBackgroundColor", "#5B9A9A",
         "-settings.cardStyle", "classic",
         "-settings.feltEffectEnabled", "YES"
     ]
