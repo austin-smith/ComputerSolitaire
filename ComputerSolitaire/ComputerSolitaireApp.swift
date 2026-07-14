@@ -44,6 +44,10 @@ struct ComputerSolitaireApp: App {
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
+        Settings {
+            MacSettingsView()
+        }
+        .windowResizability(.contentSize)
 #else
         WindowGroup {
             ContentView()
@@ -91,14 +95,17 @@ struct ComputerSolitaireApp: App {
             }
         }
         GameMenuCommands()
-#endif
+#else
+        // On macOS the Settings scene provides the Settings… menu item and
+        // Command-Comma; this custom command covers iPad hardware keyboards.
         CommandGroup(replacing: .appSettings) {
             Button {
                 NotificationCenter.default.post(name: .openSettings, object: nil)
             } label: {
-                Label("Settings…", systemImage: "gearshape")
+                Label("Settings…", systemImage: "gear")
             }
             .keyboardShortcut(",", modifiers: .command)
         }
+#endif
     }
 }

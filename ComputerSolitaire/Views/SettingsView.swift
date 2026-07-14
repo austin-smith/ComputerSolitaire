@@ -52,54 +52,80 @@ enum SettingsKey {
     static let tableBackgroundColor = "settings.tableBackgroundColor"
     static let feltEffectEnabled = "settings.feltEffectEnabled"
     static let soundEffectsEnabled = "settings.soundEffectsEnabled"
+    static let hapticFeedbackEnabled = "settings.hapticFeedbackEnabled"
     static let showHintButton = "settings.showHintButton"
+    static let showGameStats = "settings.showGameStats"
+    static let showStockCount = "settings.showStockCount"
     static let cardStyle = "settings.cardStyle"
     static let cardBackColor = "settings.cardBackColor"
 }
 
-struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var isShowingRulesAndScoring = false
-    @AppStorage(SettingsKey.cardTiltEnabled) private var isCardTiltEnabled = true
-    @AppStorage(SettingsKey.tableBackgroundColor)
-    private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
-    @AppStorage(SettingsKey.feltEffectEnabled) private var isFeltEffectEnabled = true
+// MARK: - Shared rows
+
+/// The feedback toggles, shared by the iOS settings sheet and the macOS
+/// settings window. Haptics exist only on iOS.
+struct SoundSettingsRows: View {
     @AppStorage(SettingsKey.soundEffectsEnabled) private var isSoundEffectsEnabled = true
-    @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
-    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
-    @AppStorage(SettingsKey.cardBackColor) private var cardBackColorRawValue = CardBackColor.defaultValue.id
 #if os(iOS)
-    @State private var selectedAppIcon = AppIcon.current()
-    @State private var isShowingAppIconPicker = false
+    @AppStorage(SettingsKey.hapticFeedbackEnabled) private var isHapticFeedbackEnabled = true
 #endif
 
     var body: some View {
+        Toggle("Sound effects", isOn: $isSoundEffectsEnabled)
+            .toggleStyle(.switch)
+#if os(iOS)
+        Toggle("Haptic feedback", isOn: $isHapticFeedbackEnabled)
+            .toggleStyle(.switch)
+#endif
+    }
+}
+
+/// The in-play visibility toggles, shared by the iOS settings sheet and the
+/// macOS settings window.
+struct GameplaySettingsRows: View {
+    @AppStorage(SettingsKey.showGameStats) private var isGameStatsVisible = true
+    @AppStorage(SettingsKey.showStockCount) private var isStockCountVisible = true
+    @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
+
+    var body: some View {
+        Toggle(isOn: $isGameStatsVisible) {
+            Text("Show game stats")
+            Text("Display moves, time, and score above the board.")
+        }
+        .toggleStyle(.switch)
+        Toggle(isOn: $isStockCountVisible) {
+            Text("Show stock count")
+            Text("Display how many cards remain in the stock.")
+        }
+        .toggleStyle(.switch)
+        Toggle(isOn: $isHintButtonVisible) {
+            Text("Show hint button")
+            Text("Turn off to avoid spoilers about hint availability.")
+        }
+        .toggleStyle(.switch)
+    }
+}
+
+// MARK: - iOS settings sheet
+
+#if os(iOS)
+struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(SettingsKey.tableBackgroundColor)
+    private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
+    @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
+    @State private var selectedAppIcon = AppIcon.current()
+
+    var body: some View {
         Form {
-            tableSection
-            cardsSection
-            audioSection
+            appearanceSection
+            soundAndHapticsSection
             gameplaySection
-
-#if os(iOS)
-            if UIApplication.shared.supportsAlternateIcons {
-                appIconSection
-            }
-#endif
-
             helpSection
-
-#if os(iOS)
             aboutSection
-#endif
         }
         .navigationTitle("Settings")
-#if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-#else
-        .formStyle(.grouped)
-        .padding(16)
-        .frame(minWidth: 420, idealWidth: 480, maxWidth: 520, minHeight: 320)
-#endif
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") {
@@ -108,160 +134,104 @@ struct SettingsView: View {
                 .keyboardShortcut(.cancelAction)
             }
         }
-        .sheet(isPresented: $isShowingRulesAndScoring) {
-            NavigationStack {
-                RulesAndScoringView()
-            }
+    }
+
+    /// Title on the left, the current selection shown as a trailing preview —
+    /// the preview itself is the value, no restating it in text.
+    private func appearanceRow(
+        title: String,
+        value: String,
+        @ViewBuilder preview: () -> some View
+    ) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+            Spacer()
+            preview()
+                .frame(width: 24, height: 24)
         }
-#if os(iOS)
-        .sheet(isPresented: $isShowingAppIconPicker) {
-            NavigationStack {
-                AppIconPickerView(selection: $selectedAppIcon)
-            }
-            .presentationDetents([.medium, .large])
-        }
-#endif
-        .onChange(of: cardStyleRawValue) { oldValue, newValue in
-            guard oldValue != newValue else { return }
-            HapticManager.shared.play(.settingsSelection)
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(value)
+    }
+
+    private var selectedTableColor: TableBackgroundColor {
+        TableBackgroundColor(rawValue: tableBackgroundColorRawValue) ?? .defaultValue
+    }
+
+    private var selectedCardStyle: CardStyle {
+        CardStyle(rawValue: cardStyleRawValue) ?? .defaultValue
     }
 
     // MARK: - Sections
 
-    private var tableSection: some View {
+    private var appearanceSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Background color")
-                    Spacer()
-                    if let selected = TableBackgroundColor(rawValue: tableBackgroundColorRawValue) {
-                        Text(selected.label)
-                            .foregroundStyle(.secondary)
-                    }
+            NavigationLink {
+                TableSettingsView()
+            } label: {
+                appearanceRow(title: "Table", value: selectedTableColor.label) {
+                    Circle()
+                        .fill(selectedTableColor.color)
+                        .overlay {
+                            Circle().stroke(Color.primary.opacity(0.18), lineWidth: 1)
+                        }
+                        .frame(width: 22, height: 22)
                 }
-                HStack(spacing: 8) {
-                    ForEach(TableBackgroundColor.allCases) { option in
-                        colorSwatch(option)
+            }
+            NavigationLink {
+                CardsSettingsView()
+            } label: {
+                appearanceRow(title: "Cards", value: selectedCardStyle.title) {
+                    // Rendered at the chip size the card art is tuned for,
+                    // then scaled down; tiny layout sizes distort the art.
+                    CardStylePreview(
+                        style: selectedCardStyle,
+                        cardSize: CGSize(width: 44, height: 64)
+                    )
+                    .frame(width: 44, height: 64)
+                    .scaleEffect(24.0 / 64.0)
+                    .frame(width: 17, height: 24)
+                }
+            }
+            if UIApplication.shared.supportsAlternateIcons {
+                NavigationLink {
+                    AppIconPickerView(selection: $selectedAppIcon)
+                } label: {
+                    appearanceRow(title: "App Icon", value: selectedAppIcon.name) {
+                        AppIconPreviewView(icon: selectedAppIcon, size: 24)
                     }
                 }
             }
-            .padding(.vertical, 4)
-            Toggle(isOn: $isFeltEffectEnabled) {
-                Text("Felt texture")
-                Text("Adds a fabric texture and vignette to the table.")
-            }
-            .toggleStyle(.switch)
         } header: {
-            Text("Table")
+            Text("Appearance")
         }
     }
 
-    private var cardsSection: some View {
+    private var soundAndHapticsSection: some View {
         Section {
-            HStack(spacing: 12) {
-                ForEach(CardStyle.allCases) { style in
-                    cardStyleCard(style)
-                }
-            }
-            .padding(.vertical, 4)
-            Toggle(isOn: $isCardTiltEnabled) {
-                Text("Natural card tilt")
-                Text("Adds a subtle organic angle to each card.")
-            }
-            .toggleStyle(.switch)
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Card back color")
-                    Spacer()
-                    Text(CardBackColor.from(rawValue: cardBackColorRawValue).label)
-                        .foregroundStyle(.secondary)
-                }
-                HStack(spacing: 8) {
-                    ForEach(CardBackColor.all) { option in
-                        cardBackSwatch(option)
-                    }
-                    Spacer()
-                }
-            }
-            .padding(.vertical, 4)
+            SoundSettingsRows()
         } header: {
-            Text("Cards")
-        }
-    }
-
-    private var audioSection: some View {
-        Section {
-            Toggle(isOn: $isSoundEffectsEnabled) {
-                Text("Sound effects")
-                Text("Play card and game action sounds.")
-            }
-            .toggleStyle(.switch)
-        } header: {
-            Text("Audio")
+            Text("Sound & Haptics")
         }
     }
 
     private var gameplaySection: some View {
         Section {
-            Toggle(isOn: $isHintButtonVisible) {
-                Text("Show hint button")
-                Text("Turn off to avoid spoilers about hint availability.")
-            }
-            .toggleStyle(.switch)
+            GameplaySettingsRows()
         } header: {
             Text("Gameplay")
         }
     }
 
-#if os(iOS)
-    private var appIconSection: some View {
-        Section {
-            Button {
-                isShowingAppIconPicker = true
-            } label: {
-                HStack(spacing: 10) {
-                    AppIconPreviewView(icon: selectedAppIcon, size: 30)
-                    Text(selectedAppIcon.name)
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        } header: {
-            Text("App Icon")
-        }
-    }
-#endif
-
     private var helpSection: some View {
         Section {
-            Button {
-                isShowingRulesAndScoring = true
-            } label: {
-                HStack {
-                    Text("Rules & Scoring")
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .contentShape(Rectangle())
+            NavigationLink("Rules & Scoring") {
+                RulesAndScoringView(showsDoneButton: false)
             }
-            .buttonStyle(.plain)
         } header: {
             Text("Help")
         }
     }
 
-#if os(iOS)
     private var aboutSection: some View {
         Section {
             NavigationLink {
@@ -279,126 +249,6 @@ struct SettingsView: View {
             Text("About")
         }
     }
-#endif
-
-    // MARK: - Custom controls
-
-    private func cardStyleCard(_ style: CardStyle) -> some View {
-        let isSelected = cardStyleRawValue == style.rawValue
-
-        return Button {
-            guard !isSelected else { return }
-            HapticManager.shared.play(.settingsSelection)
-            withAnimation(.smooth(duration: 0.3)) {
-                cardStyleRawValue = style.rawValue
-            }
-        } label: {
-            VStack(spacing: 6) {
-                cardStylePreview(style)
-                    .frame(width: 44, height: 64)
-
-                VStack(spacing: 1) {
-                    Text(style.title)
-                        .font(.caption.weight(.bold))
-                    Text(style.subtitle)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .selectionChip(isSelected: isSelected)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    @ViewBuilder
-    private func cardStylePreview(_ style: CardStyle) -> some View {
-        switch style {
-        case .classic:
-            ClassicCardFrontView(
-                card: Card(suit: .hearts, rank: .queen, isFaceUp: true),
-                cardSize: CGSize(width: 44, height: 64),
-                isSelected: false
-            )
-        case .simple:
-            SimpleCardFrontView(
-                card: Card(suit: .hearts, rank: .queen, isFaceUp: true),
-                cardSize: CGSize(width: 44, height: 64),
-                isSelected: false
-            )
-        case .pixel:
-            PixelCardFrontView(
-                card: Card(suit: .hearts, rank: .queen, isFaceUp: true),
-                cardSize: CGSize(width: 44, height: 64),
-                isSelected: false
-            )
-        }
-    }
-
-    private func colorSwatch(_ option: TableBackgroundColor) -> some View {
-        let isSelected = tableBackgroundColorRawValue == option.rawValue
-
-        return Button {
-            guard !isSelected else { return }
-            HapticManager.shared.play(.settingsSelection)
-            tableBackgroundColorRawValue = option.rawValue
-        } label: {
-            Circle()
-                .fill(option.color)
-                .overlay {
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .overlay {
-                    Circle()
-                        .stroke(
-                            isSelected ? Color.accentColor : Color.primary.opacity(0.18),
-                            lineWidth: isSelected ? 2.5 : 1
-                        )
-                }
-                .frame(maxWidth: .infinity)
-                .aspectRatio(1, contentMode: .fit)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(option.label)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private func cardBackSwatch(_ option: CardBackColor) -> some View {
-        let isSelected = cardBackColorRawValue == option.id
-
-        return Button {
-            guard !isSelected else { return }
-            HapticManager.shared.play(.settingsSelection)
-            cardBackColorRawValue = option.id
-        } label: {
-            Circle()
-                .fill(option.swatch)
-                .overlay {
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .overlay {
-                    Circle()
-                        .stroke(
-                            isSelected ? Color.accentColor : Color.primary.opacity(0.18),
-                            lineWidth: isSelected ? 2.5 : 1
-                        )
-                }
-                .frame(width: 32, height: 32)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(option.label)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
 }
 
 #Preview {
@@ -406,3 +256,4 @@ struct SettingsView: View {
         SettingsView()
     }
 }
+#endif

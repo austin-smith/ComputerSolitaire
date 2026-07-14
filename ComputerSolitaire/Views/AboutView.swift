@@ -1,13 +1,13 @@
 import Foundation
 import SwiftUI
 
-#if os(iOS)
 enum AppInfo {
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
     static let copyrightYear = String(Calendar.current.component(.year, from: Date()))
     static let githubURL = URL(string: "https://github.com/austin-smith/ComputerSolitaire")
 }
 
+#if os(iOS)
 struct AboutView: View {
     var body: some View {
         ScrollView {
@@ -160,6 +160,9 @@ struct AboutView: View {
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 16)
+        // Match the About window's column so hosts of any width (like the
+        // settings pane) wrap the copy identically.
+        .frame(maxWidth: 320)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 0))
     }

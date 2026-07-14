@@ -25,9 +25,18 @@ final class HapticManager {
 
     func play(_ event: Event) {
 #if os(iOS)
+        guard isHapticFeedbackEnabled else { return }
         lastEvent = event
         trigger &+= 1
 #endif
+    }
+
+    private var isHapticFeedbackEnabled: Bool {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: SettingsKey.hapticFeedbackEnabled) != nil else {
+            return true
+        }
+        return defaults.bool(forKey: SettingsKey.hapticFeedbackEnabled)
     }
 
     var feedbackForTrigger: SensoryFeedback? {

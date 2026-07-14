@@ -211,6 +211,8 @@ struct HeaderView: View {
     let onGameTitleTapped: () -> Void
     let onScoreTapped: () -> Void
 
+    @AppStorage(SettingsKey.showGameStats) private var isGameStatsVisible = true
+
     // The title gets its own row so the stat strip keeps the full board
     // width and stays balanced over the board; sharing a row would push the
     // strip off the board's centerline.
@@ -218,10 +220,12 @@ struct HeaderView: View {
         VStack(alignment: .leading, spacing: 6) {
             gameTitleButton
                 .padding(.leading, 4)
-            HStack(spacing: 10) {
-                statTiles
+            if isGameStatsVisible {
+                HStack(spacing: 10) {
+                    statTiles
+                }
+                .headerContainer()
             }
-            .headerContainer()
         }
     }
 

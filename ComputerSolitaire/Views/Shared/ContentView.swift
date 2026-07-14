@@ -100,7 +100,11 @@ struct ContentView: View {
     @State private var wasteReturnAnchorFrame: CGRect?
     @State private var cardTilts: [UUID: Double] = [:]
     @State private var overlayTilt: Double = 0
+#if os(iOS)
     @State private var isShowingSettings = false
+#else
+    @Environment(\.openSettings) private var openSettings
+#endif
     @State private var stockFrame: CGRect = .zero
     @State private var wasteFrame: CGRect = .zero
     @State private var drawAnimationCards: [DrawAnimationCard] = []
@@ -168,7 +172,13 @@ struct ContentView: View {
     }
 
     private var isAnyMenuPresented: Bool {
+#if os(iOS)
         isShowingSettings || isShowingRulesAndScoring || isShowingStats || isShowingGamePicker
+#else
+        // The macOS settings window is separate; the game pauses through the
+        // main window losing active appearance instead.
+        isShowingRulesAndScoring || isShowingStats || isShowingGamePicker
+#endif
     }
 
     private var shouldPauseForLifecycle: Bool {
@@ -251,7 +261,7 @@ struct ContentView: View {
                             }
                         }
                         Section {
-                            Button("Settings", systemImage: "gearshape") {
+                            Button("Settings", systemImage: "gear") {
                                 isShowingSettings = true
                             }
                         }
@@ -359,9 +369,9 @@ struct ContentView: View {
                     .labelStyle(.iconOnly)
                     .help("Statistics")
                     Button {
-                        isShowingSettings = true
+                        openSettings()
                     } label: {
-                        Label("Settings", systemImage: "gearshape")
+                        Label("Settings", systemImage: "gear")
                     }
                     .labelStyle(.iconOnly)
                     .help("Settings")
@@ -402,17 +412,17 @@ struct ContentView: View {
     }
 
     private func applySheets(to view: AnyView) -> AnyView {
-        AnyView(
-            view.sheet(isPresented: $isShowingSettings) {
 #if os(iOS)
+        let view = AnyView(
+            view.sheet(isPresented: $isShowingSettings) {
                 NavigationStack {
                     SettingsView()
                 }
-#else
-                SettingsView()
-#endif
             }
-            .sheet(isPresented: $isShowingRulesAndScoring) {
+        )
+#endif
+        return AnyView(
+            view.sheet(isPresented: $isShowingRulesAndScoring) {
                 NavigationStack {
                     RulesAndScoringView(initialSection: rulesAndScoringInitialSection)
                 }
@@ -426,11 +436,15 @@ struct ContentView: View {
     }
 
     private func applyObservers(to view: AnyView) -> AnyView {
-        let commandObservedView = AnyView(
-            view
-                .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+#if os(iOS)
+        let view = AnyView(
+            view.onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
                 isShowingSettings = true
             }
+        )
+#endif
+        let commandObservedView = AnyView(
+            view
             .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
                 presentRulesAndScoring(initialSection: .rules)
             }

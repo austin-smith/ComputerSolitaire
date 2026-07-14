@@ -12,6 +12,8 @@ struct TableauStockView: View {
     /// How a deal lands, for accessibility — e.g. "Deals one card to each pile".
     let dealDescription: String
 
+    @AppStorage(SettingsKey.showStockCount) private var isStockCountVisible = true
+
     var body: some View {
         Button {
             viewModel.handleStockTap()
@@ -21,10 +23,12 @@ struct TableauStockView: View {
                     .allowsHitTesting(false)
                 if !viewModel.state.stock.isEmpty {
                     CardBackView(cardSize: cardSize)
-                    Text("\(viewModel.state.stock.count)")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
+                    if isStockCountVisible {
+                        Text("\(viewModel.state.stock.count)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
+                    }
                 }
 
                 DropHighlightView(
