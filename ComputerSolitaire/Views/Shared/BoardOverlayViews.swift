@@ -111,18 +111,29 @@ private struct DrawOverlayCardView: View {
 
 struct DragOverlayView: View {
     @Bindable var viewModel: SolitaireViewModel
-    /// The gesture's fast-changing state. Read here — and only here — so the
-    /// per-frame translation writes re-render just this overlay, never the
-    /// board tree behind it.
+    /// The gesture's per-frame translation. Read here — and only here — so the
+    /// per-frame writes re-render just this overlay, never the board tree
+    /// behind it. The flight-boundary fields arrive as plain values from
+    /// ContentView's `@State` so their `withAnimation` springs survive (see
+    /// DragInteractionController's doc comment).
     let drag: DragInteractionController
     let cardFrames: [UUID: CGRect]
+    let overlayTilt: Double
+    let dragReturnOffset: CGSize
+    let isReturningDrag: Bool
+    let returningCards: [Card]
+    let isDroppingCards: Bool
+    let droppingCards: [Card]
+    let dropAnimationOffset: CGSize
+    let wasteReturnAnchorCardID: UUID?
+    let wasteReturnAnchorFrame: CGRect?
 
     var body: some View {
         Group {
-            if drag.isDroppingCards {
-                dragCards(drag.droppingSelection?.cards ?? [], additionalOffset: drag.dropAnimationOffset)
-            } else if drag.isReturningDrag {
-                dragCards(drag.returningCards, additionalOffset: drag.dragReturnOffset)
+            if isDroppingCards {
+                dragCards(droppingCards, additionalOffset: dropAnimationOffset)
+            } else if isReturningDrag {
+                dragCards(returningCards, additionalOffset: dragReturnOffset)
             } else if viewModel.isDragging, let selection = viewModel.selection {
                 dragCards(selection.cards, additionalOffset: .zero)
             }
@@ -136,10 +147,10 @@ struct DragOverlayView: View {
     /// it left, not to wherever the fan has since collapsed to — the anchor
     /// frame captured at pickup overrides the card's live frame.
     private var effectiveCardFrames: [UUID: CGRect] {
-        guard drag.isReturningDrag,
-              let returningCard = drag.returningCards.first,
-              returningCard.id == drag.wasteReturnAnchorCardID,
-              let anchorFrame = drag.wasteReturnAnchorFrame else {
+        guard isReturningDrag,
+              let returningCard = returningCards.first,
+              returningCard.id == wasteReturnAnchorCardID,
+              let anchorFrame = wasteReturnAnchorFrame else {
             return cardFrames
         }
         var frames = cardFrames
@@ -163,7 +174,7 @@ struct DragOverlayView: View {
                         cardTilts: .constant([:]),
                         isAccessibilityElement: false
                     )
-                    .rotationEffect(.degrees(drag.overlayTilt))
+                    .rotationEffect(.degrees(overlayTilt))
                     .position(x: frame.midX, y: frame.midY)
                     .offset(
                         x: drag.dragTranslation.width + additionalOffset.width,
