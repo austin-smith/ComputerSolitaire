@@ -76,6 +76,7 @@ extension View {
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var isReduceMotionEnabled
 #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 #endif
@@ -152,9 +153,22 @@ struct ContentView: View {
     @AppStorage(SettingsKey.cardStyle) private var cardStyleRawValue = CardStyle.defaultValue.rawValue
     @AppStorage(SettingsKey.tableBackgroundColor)
     private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
+    @AppStorage(SettingsKey.animationSpeed)
+    private var animationSpeedRawValue = AnimationSpeed.defaultValue.id
+
+    /// Every gameplay animation and completion delay routes through this
+    /// policy so the speed setting and system Reduce Motion scale them as one.
+    private var motion: MotionPolicy {
+        MotionPolicy(
+            speed: .from(rawValue: animationSpeedRawValue),
+            reduceMotion: isReduceMotionEnabled
+        )
+    }
 
     /// The one move spring, applied per board region in `boardRoot`.
-    private static let boardSpring = Animation.spring(response: 0.35, dampingFraction: 0.86)
+    private var boardSpring: Animation? {
+        motion.spring(response: 0.35, dampingFraction: 0.86)
+    }
 
     private var gameVariant: GameVariant {
         GameVariant(rawValue: gameVariantRawValue) ?? .klondike
@@ -208,6 +222,7 @@ struct ContentView: View {
                 boardRoot(for: geometry)
             }
             .environment(\.cardStyle, currentCardStyle)
+            .environment(\.motionPolicy, motion)
         )
         .accessibilityHidden(isShowingGamePicker)
         .overlay {
@@ -486,11 +501,11 @@ struct ContentView: View {
             }
             .onChange(of: viewModel.hasActiveHint) { _, hasActiveHint in
                 if !hasActiveHint {
-                    withAnimation(.easeOut(duration: 0.3)) {
+                    withAnimation(motion.easeOut(0.3)) {
                         hintHighlightOpacity = 0
                     }
                 } else {
-                    withAnimation(.easeOut(duration: 0.12)) {
+                    withAnimation(motion.easeOut(0.12)) {
                         hintHighlightOpacity = 1
                     }
                 }
@@ -595,7 +610,7 @@ struct ContentView: View {
                             guard abs(newHeight - headerHeight) >= 0.5 else { return }
                             headerHeight = newHeight
                         }
-                        .animation(Self.boardSpring, value: viewModel.state)
+                        .animation(boardSpring, value: viewModel.state)
                     }
                     TopRowView(
                         session: viewModel,
@@ -624,7 +639,7 @@ struct ContentView: View {
                     // change never opens an animation transaction over the
                     // whole board. The top row (stock, waste, foundations,
                     // free cells) is small enough to key on the whole state.
-                    .animation(Self.boardSpring, value: viewModel.state)
+                    .animation(boardSpring, value: viewModel.state)
                     if viewModel.gameVariant == .pyramid {
                         PyramidBoardView(
                             session: viewModel,
@@ -644,7 +659,7 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
-                        .animation(Self.boardSpring, value: viewModel.state.pyramid)
+                        .animation(boardSpring, value: viewModel.state.pyramid)
                     } else if viewModel.gameVariant == .tripeaks {
                         TriPeaksBoardView(
                             session: viewModel,
@@ -661,7 +676,7 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
-                        .animation(Self.boardSpring, value: viewModel.state.triPeaks)
+                        .animation(boardSpring, value: viewModel.state.triPeaks)
                     } else if viewModel.gameVariant == .canfield {
                         CanfieldBoardRowView(
                             session: viewModel,
@@ -686,7 +701,7 @@ struct ContentView: View {
                         .frame(width: boardContentWidth, alignment: .leading)
                         // Canfield's row renders the tableau and the reserve,
                         // so it keys on the whole state like the top row.
-                        .animation(Self.boardSpring, value: viewModel.state)
+                        .animation(boardSpring, value: viewModel.state)
                     } else {
                         TableauRowView(
                             session: viewModel,
@@ -709,7 +724,7 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
-                        .animation(Self.boardSpring, value: viewModel.state.tableau)
+                        .animation(boardSpring, value: viewModel.state.tableau)
                     }
                     Spacer(minLength: 0)
                 }
@@ -770,15 +785,29 @@ struct ContentView: View {
             guard !isHydratingGame else { return }
             if isWin {
                 HapticManager.shared.play(.gameWon)
-                winCelebration.beginIfNeededForWin(
-                    launchPiles: winCascadeLaunchPiles,
-                    launchTargets: winCascadeLaunchTargets,
-                    dropFrames: dropFrames,
-                    boardViewportSize: boardViewportSize
-                )
+                if isReduceMotionEnabled {
+                    // The cascade is full-screen motion — under Reduce Motion,
+                    // present the settled end state the relaunch path uses.
+                    // The Animation Speed setting deliberately does not touch
+                    // the celebration: it is a reward, not a wait.
+                    presentSettledCelebration()
+                } else {
+                    winCelebration.beginIfNeededForWin(
+                        launchPiles: winCascadeLaunchPiles,
+                        launchTargets: winCascadeLaunchTargets,
+                        dropFrames: dropFrames,
+                        boardViewportSize: boardViewportSize
+                    )
+                }
             } else if winCelebration.phase != .idle {
                 winCelebration.reset(to: .idle)
             }
+        }
+        .onChange(of: isReduceMotionEnabled) { _, isEnabled in
+            // The win handler samples Reduce Motion once; a toggle while the
+            // cascade is mid-flight must land the cards, not finish the show.
+            guard isEnabled, winCelebration.isAnimating, viewModel.isWin else { return }
+            presentSettledCelebration()
         }
         .onChange(of: viewModel.state.waste.count) { _, newValue in
             let stockCount = viewModel.state.stock.count
@@ -832,7 +861,7 @@ struct ContentView: View {
             guard !dealingCardIDs.isEmpty || !dealAnimationCards.isEmpty else { return }
             cancelDealAnimation()
         }
-        .animation(.easeInOut(duration: 0.12), value: drag.activeTarget)
+        .animation(motion.easeInOut(0.12), value: drag.activeTarget)
         .overlay {
             GeometryReader { _ in
                 ZStack {
@@ -1177,7 +1206,7 @@ struct ContentView: View {
         if let firstCard = request.selection.cards.first {
             overlayTilt = cardTilts[firstCard.id] ?? 0
             let tiltSettleDuration = isAutoFinishing ? 0.1 : 0.15
-            withAnimation(.easeOut(duration: tiltSettleDuration)) {
+            withAnimation(motion.easeOut(tiltSettleDuration)) {
                 overlayTilt = 0
             }
         }
@@ -1237,7 +1266,7 @@ struct ContentView: View {
             HapticManager.shared.play(.cardPickUp)
             // Start with the card's current tilt, then animate to straight
             overlayTilt = cardTilts[firstCard.id] ?? 0
-            withAnimation(.easeOut(duration: 0.15)) {
+            withAnimation(motion.easeOut(0.15)) {
                 overlayTilt = 0
             }
         }
@@ -1295,11 +1324,11 @@ struct ContentView: View {
         )
 
         let dropDuration = isAutoFinishing ? 0.18 : 0.25
-        withAnimation(.spring(response: dropDuration, dampingFraction: 0.85)) {
+        withAnimation(motion.spring(response: dropDuration, dampingFraction: 0.85)) {
             dropAnimationOffset = offsetToTarget
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + dropDuration) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + motion.duration(dropDuration)) {
             // Clear old tilts so cards get fresh tilts at new position
             if let cards = droppingSelection?.cards {
                 for card in cards {
@@ -1350,11 +1379,11 @@ struct ContentView: View {
         // Keep viewModel.isDragging true to hide original card during animation
         isReturningDrag = true
         dragReturnOffset = .zero
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+        withAnimation(motion.spring(response: 0.32, dampingFraction: 0.9)) {
             dragReturnOffset = CGSize(width: -currentTranslation.width, height: -currentTranslation.height)
             overlayTilt = targetTilt
         }
-        let returnDuration = 0.32
+        let returnDuration = motion.duration(0.32)
         DispatchQueue.main.asyncAfter(deadline: .now() + returnDuration) {
             viewModel.cancelDrag()
             wasteReturnAnchorCardID = nil
@@ -1390,7 +1419,7 @@ struct ContentView: View {
         drawingCardIDs = plan.cardIDs
         drawAnimationToken = plan.token
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + plan.travelDuration + plan.settleDuration) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + motion.duration(plan.travelDuration + plan.settleDuration)) {
             guard drawAnimationToken == plan.token else { return }
             drawAnimationCards = []
             drawingCardIDs = []
@@ -1458,7 +1487,7 @@ struct ContentView: View {
         // trimming the hidden set to the flying cards un-hides those.
         dealingCardIDs = plan.cardIDs
 
-        let total = plan.maxDelay + plan.travelDuration + plan.settleDuration
+        let total = motion.duration(plan.maxDelay + plan.travelDuration + plan.settleDuration)
         DispatchQueue.main.asyncAfter(deadline: .now() + total) {
             guard dealAnimationToken == token else { return }
             dealAnimationCards = []
@@ -1639,7 +1668,7 @@ struct ContentView: View {
 
         if !resolvedItems.isEmpty, hasMovement {
             undoAnimationItems = resolvedItems
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) {
+            withAnimation(motion.spring(response: 0.3, dampingFraction: 0.88)) {
                 undoAnimationProgress = 1
             }
             // One turn later — once the overlay views exist with their takeoff
@@ -1662,7 +1691,7 @@ struct ContentView: View {
             }
             // Slightly past the flight spring AND the mid-air flip (which
             // starts a turn late and runs 0.32s) so neither gets clipped.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + motion.duration(0.38)) {
                 finishUndoAnimation()
             }
             return
@@ -1943,6 +1972,12 @@ struct ContentView: View {
         guard hasLoadedGame, viewModel.isWin else { return }
         guard winCelebration.phase == .completed else { return }
         guard winCelebration.cards.isEmpty else { return }
+        presentSettledCelebration()
+    }
+
+    /// The celebration's end state without the flight, as after a relaunch
+    /// into a won game.
+    private func presentSettledCelebration() {
         winCelebration.syncForLoadedGame(
             launchPiles: winCascadeLaunchPiles,
             launchTargets: winCascadeLaunchTargets,
