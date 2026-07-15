@@ -201,12 +201,10 @@ struct ContentView: View {
 
     var body: some View {
         sceneDecorations(
-            for: AnyView(
-                GeometryReader { geometry in
-                    boardRoot(for: geometry)
-                }
-                .environment(\.cardStyle, currentCardStyle)
-            )
+            for: GeometryReader { geometry in
+                boardRoot(for: geometry)
+            }
+            .environment(\.cardStyle, currentCardStyle)
         )
         .accessibilityHidden(isShowingGamePicker)
         .overlay {
@@ -233,15 +231,17 @@ struct ContentView: View {
         }
     }
 
-    private func sceneDecorations(for baseView: AnyView) -> some View {
+    // The decoration helpers are generic over their content — never AnyView.
+    // Type erasure here would strip the board's structural identity, forcing
+    // SwiftUI to diff the whole scene through an opaque box on every update.
+    private func sceneDecorations(for baseView: some View) -> some View {
         let toolbarView = applyToolbar(to: baseView)
         let sheetsView = applySheets(to: toolbarView)
         return applyObservers(to: sheetsView)
     }
 
-    private func applyToolbar(to view: AnyView) -> AnyView {
-        AnyView(
-            view
+    private func applyToolbar(to view: some View) -> some View {
+        view
             .toolbar {
 #if os(iOS)
                 ToolbarItem(placement: .bottomBar) {
@@ -381,7 +381,6 @@ struct ContentView: View {
                 }
 #endif
             }
-        )
     }
 
     private func gameModePickerEntries() -> [GameModePickerView.Entry] {
@@ -414,18 +413,16 @@ struct ContentView: View {
         switchGame(to: mode)
     }
 
-    private func applySheets(to view: AnyView) -> AnyView {
+    private func applySheets(to view: some View) -> some View {
 #if os(iOS)
-        let view = AnyView(
-            view.sheet(isPresented: $isShowingSettings) {
-                NavigationStack {
-                    SettingsView()
-                }
+        let view = view.sheet(isPresented: $isShowingSettings) {
+            NavigationStack {
+                SettingsView()
             }
-        )
+        }
 #endif
-        return AnyView(
-            view.sheet(isPresented: $isShowingRulesAndScoring) {
+        return view
+            .sheet(isPresented: $isShowingRulesAndScoring) {
                 NavigationStack {
                     RulesAndScoringView(initialSection: rulesAndScoringInitialSection)
                 }
@@ -435,26 +432,20 @@ struct ContentView: View {
                 // all-games overview into per-game detail on both platforms.
                 StatisticsView(viewModel: viewModel, initialMode: viewModel.gameMode)
             }
-        )
     }
 
-    private func applyObservers(to view: AnyView) -> AnyView {
+    private func applyObservers(to view: some View) -> some View {
 #if os(iOS)
-        let view = AnyView(
-            view.onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
-                isShowingSettings = true
-            }
-        )
+        let view = view.onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+            isShowingSettings = true
+        }
 #endif
-        let commandObservedView = AnyView(
-            view
+        let commandObservedView = view
             .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
                 presentRulesAndScoring(initialSection: .rules)
             }
-        )
 
-        let gameStateObservedView = AnyView(
-            commandObservedView
+        let gameStateObservedView = commandObservedView
             .onChange(of: gameVariantRawValue) { _, newValue in
                 guard hasLoadedGame, !isHydratingGame else { return }
                 let variant = GameVariant(rawValue: newValue) ?? .klondike
@@ -517,10 +508,8 @@ struct ContentView: View {
                 processPendingAutoMoveIfPossible()
                 queueAutoFinishStepIfPossible()
             }
-        )
 
-        return AnyView(
-            gameStateObservedView
+        return gameStateObservedView
             .onChange(of: scenePhase) { _, _ in
                 syncLifecyclePauseState()
             }
@@ -540,7 +529,6 @@ struct ContentView: View {
             .focusedSceneValue(\.gameMenuActions, gameMenuActions)
             .focusedSceneValue(\.gameMenuState, gameMenuState)
 #endif
-        )
     }
 
     @ViewBuilder
