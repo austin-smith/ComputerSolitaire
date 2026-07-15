@@ -825,7 +825,7 @@ struct ContentView: View {
                         progress: undoAnimationProgress
                     )
                     .zIndex(75)
-                    WinCascadeOverlayView(cards: winCelebration.cards)
+                    WinCascadeOverlayView(winCelebration: winCelebration)
                         .zIndex(90)
                     DragOverlayView(
                         viewModel: viewModel,

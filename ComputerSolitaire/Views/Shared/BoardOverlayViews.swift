@@ -48,10 +48,13 @@ struct UndoOverlayView: View {
 }
 
 struct WinCascadeOverlayView: View {
-    let cards: [WinCascadeCardState]
+    /// The cascade task mutates `cards` every frame while cards fly; reading
+    /// it here — not in ContentView — keeps the per-tick re-render confined
+    /// to this overlay.
+    let winCelebration: WinCelebrationController
 
     var body: some View {
-        ForEach(cards) { item in
+        ForEach(winCelebration.cards) { item in
             let isVisible = item.elapsed >= item.activationDelay
             CardView(
                 card: item.card,
