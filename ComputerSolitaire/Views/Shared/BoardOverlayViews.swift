@@ -48,10 +48,13 @@ struct UndoOverlayView: View {
 }
 
 struct WinCascadeOverlayView: View {
-    let cards: [WinCascadeCardState]
+    /// The cascade task mutates `cards` every frame while cards fly; reading
+    /// it here — not in ContentView — keeps the per-tick re-render confined
+    /// to this overlay.
+    let winCelebration: WinCelebrationController
 
     var body: some View {
-        ForEach(cards) { item in
+        ForEach(winCelebration.cards) { item in
             let isVisible = item.elapsed >= item.activationDelay
             CardView(
                 card: item.card,
@@ -108,23 +111,18 @@ private struct DrawOverlayCardView: View {
 
 struct DragOverlayView: View {
     @Bindable var viewModel: SolitaireViewModel
+    /// The gesture's fast-changing state. Read here — and only here — so the
+    /// per-frame translation writes re-render just this overlay, never the
+    /// board tree behind it.
+    let drag: DragInteractionController
     let cardFrames: [UUID: CGRect]
-    let cardTilts: [UUID: Double]
-    let dragTranslation: CGSize
-    let dragReturnOffset: CGSize
-    let isReturningDrag: Bool
-    let returningCards: [Card]
-    let isDroppingCards: Bool
-    let droppingCards: [Card]
-    let dropAnimationOffset: CGSize
-    let overlayTilt: Double
 
     var body: some View {
         Group {
-            if isDroppingCards {
-                dragCards(droppingCards, additionalOffset: dropAnimationOffset)
-            } else if isReturningDrag {
-                dragCards(returningCards, additionalOffset: dragReturnOffset)
+            if drag.isDroppingCards {
+                dragCards(drag.droppingSelection?.cards ?? [], additionalOffset: drag.dropAnimationOffset)
+            } else if drag.isReturningDrag {
+                dragCards(drag.returningCards, additionalOffset: drag.dragReturnOffset)
             } else if viewModel.isDragging, let selection = viewModel.selection {
                 dragCards(selection.cards, additionalOffset: .zero)
             }
@@ -134,13 +132,29 @@ struct DragOverlayView: View {
         .accessibilityElement(children: .ignore)
     }
 
+    /// A waste card returning from an invalid drop flies back to the fan slot
+    /// it left, not to wherever the fan has since collapsed to — the anchor
+    /// frame captured at pickup overrides the card's live frame.
+    private var effectiveCardFrames: [UUID: CGRect] {
+        guard drag.isReturningDrag,
+              let returningCard = drag.returningCards.first,
+              returningCard.id == drag.wasteReturnAnchorCardID,
+              let anchorFrame = drag.wasteReturnAnchorFrame else {
+            return cardFrames
+        }
+        var frames = cardFrames
+        frames[returningCard.id] = anchorFrame
+        return frames
+    }
+
     @ViewBuilder
     private func dragCards(_ cards: [Card], additionalOffset: CGSize) -> some View {
         if cards.isEmpty {
             EmptyView()
         } else {
+            let frames = effectiveCardFrames
             ForEach(cards, id: \.id) { card in
-                if let frame = cardFrames[card.id] {
+                if let frame = frames[card.id] {
                     CardView(
                         card: card,
                         isSelected: true,
@@ -149,11 +163,11 @@ struct DragOverlayView: View {
                         cardTilts: .constant([:]),
                         isAccessibilityElement: false
                     )
-                    .rotationEffect(.degrees(overlayTilt))
+                    .rotationEffect(.degrees(drag.overlayTilt))
                     .position(x: frame.midX, y: frame.midY)
                     .offset(
-                        x: dragTranslation.width + additionalOffset.width,
-                        y: dragTranslation.height + additionalOffset.height
+                        x: drag.dragTranslation.width + additionalOffset.width,
+                        y: drag.dragTranslation.height + additionalOffset.height
                     )
                     .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 4)
                 }

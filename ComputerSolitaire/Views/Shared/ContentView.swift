@@ -86,20 +86,9 @@ struct ContentView: View {
     @State private var viewModel = SolitaireViewModel()
     @State private var hapticFeedback = HapticManager.shared
     @State private var dropFrames: [DropTarget: DropTargetGeometry] = [:]
-    @State private var activeTarget: DropTarget?
-    @State private var dragTranslation: CGSize = .zero
-    @State private var dragReturnOffset: CGSize = .zero
-    @State private var isReturningDrag = false
-    @State private var returningCards: [Card] = []
-    @State private var isDroppingCards = false
-    @State private var droppingSelection: Selection?
-    @State private var dropAnimationOffset: CGSize = .zero
-    @State private var pendingDropDestination: Destination?
+    @State private var drag = DragInteractionController()
     @State private var cardFrames: [UUID: CGRect] = [:]
-    @State private var wasteReturnAnchorCardID: UUID?
-    @State private var wasteReturnAnchorFrame: CGRect?
     @State private var cardTilts: [UUID: Double] = [:]
-    @State private var overlayTilt: Double = 0
 #if os(iOS)
     @State private var isShowingSettings = false
 #else
@@ -201,12 +190,10 @@ struct ContentView: View {
 
     var body: some View {
         sceneDecorations(
-            for: AnyView(
-                GeometryReader { geometry in
-                    boardRoot(for: geometry)
-                }
-                .environment(\.cardStyle, currentCardStyle)
-            )
+            for: GeometryReader { geometry in
+                boardRoot(for: geometry)
+            }
+            .environment(\.cardStyle, currentCardStyle)
         )
         .accessibilityHidden(isShowingGamePicker)
         .overlay {
@@ -233,15 +220,17 @@ struct ContentView: View {
         }
     }
 
-    private func sceneDecorations(for baseView: AnyView) -> some View {
+    // The decoration helpers are generic over their content — never AnyView.
+    // Type erasure here would strip the board's structural identity, forcing
+    // SwiftUI to diff the whole scene through an opaque box on every update.
+    private func sceneDecorations(for baseView: some View) -> some View {
         let toolbarView = applyToolbar(to: baseView)
         let sheetsView = applySheets(to: toolbarView)
         return applyObservers(to: sheetsView)
     }
 
-    private func applyToolbar(to view: AnyView) -> AnyView {
-        AnyView(
-            view
+    private func applyToolbar(to view: some View) -> some View {
+        view
             .toolbar {
 #if os(iOS)
                 ToolbarItem(placement: .bottomBar) {
@@ -381,7 +370,6 @@ struct ContentView: View {
                 }
 #endif
             }
-        )
     }
 
     private func gameModePickerEntries() -> [GameModePickerView.Entry] {
@@ -414,18 +402,16 @@ struct ContentView: View {
         switchGame(to: mode)
     }
 
-    private func applySheets(to view: AnyView) -> AnyView {
+    private func applySheets(to view: some View) -> some View {
 #if os(iOS)
-        let view = AnyView(
-            view.sheet(isPresented: $isShowingSettings) {
-                NavigationStack {
-                    SettingsView()
-                }
+        let view = view.sheet(isPresented: $isShowingSettings) {
+            NavigationStack {
+                SettingsView()
             }
-        )
+        }
 #endif
-        return AnyView(
-            view.sheet(isPresented: $isShowingRulesAndScoring) {
+        return view
+            .sheet(isPresented: $isShowingRulesAndScoring) {
                 NavigationStack {
                     RulesAndScoringView(initialSection: rulesAndScoringInitialSection)
                 }
@@ -435,26 +421,20 @@ struct ContentView: View {
                 // all-games overview into per-game detail on both platforms.
                 StatisticsView(viewModel: viewModel, initialMode: viewModel.gameMode)
             }
-        )
     }
 
-    private func applyObservers(to view: AnyView) -> AnyView {
+    private func applyObservers(to view: some View) -> some View {
 #if os(iOS)
-        let view = AnyView(
-            view.onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
-                isShowingSettings = true
-            }
-        )
+        let view = view.onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in
+            isShowingSettings = true
+        }
 #endif
-        let commandObservedView = AnyView(
-            view
+        let commandObservedView = view
             .onReceive(NotificationCenter.default.publisher(for: .openRulesAndScoring)) { _ in
                 presentRulesAndScoring(initialSection: .rules)
             }
-        )
 
-        let gameStateObservedView = AnyView(
-            commandObservedView
+        let gameStateObservedView = commandObservedView
             .onChange(of: gameVariantRawValue) { _, newValue in
                 guard hasLoadedGame, !isHydratingGame else { return }
                 let variant = GameVariant(rawValue: newValue) ?? .klondike
@@ -505,11 +485,11 @@ struct ContentView: View {
                 processPendingAutoMoveIfPossible()
                 queueAutoFinishStepIfPossible()
             }
-            .onChange(of: isDroppingCards) { _, _ in
+            .onChange(of: drag.isDroppingCards) { _, _ in
                 processPendingAutoMoveIfPossible()
                 queueAutoFinishStepIfPossible()
             }
-            .onChange(of: isReturningDrag) { _, _ in
+            .onChange(of: drag.isReturningDrag) { _, _ in
                 processPendingAutoMoveIfPossible()
                 queueAutoFinishStepIfPossible()
             }
@@ -517,10 +497,8 @@ struct ContentView: View {
                 processPendingAutoMoveIfPossible()
                 queueAutoFinishStepIfPossible()
             }
-        )
 
-        return AnyView(
-            gameStateObservedView
+        return gameStateObservedView
             .onChange(of: scenePhase) { _, _ in
                 syncLifecyclePauseState()
             }
@@ -540,7 +518,6 @@ struct ContentView: View {
             .focusedSceneValue(\.gameMenuActions, gameMenuActions)
             .focusedSceneValue(\.gameMenuState, gameMenuState)
 #endif
-        )
     }
 
     @ViewBuilder
@@ -607,7 +584,7 @@ struct ContentView: View {
                         cardSize: cardSize,
                         columnSpacing: metrics.columnSpacing,
                         wasteFanSpacing: metrics.wasteFanSpacing,
-                        activeTarget: activeTarget,
+                        activeTarget: drag.activeTarget,
                         hintedTarget: hintedTarget,
                         isStockHinted: viewModel.isStockHinted,
                         isWasteHinted: viewModel.isWasteHinted,
@@ -634,7 +611,7 @@ struct ContentView: View {
                             cardSize: cardSize,
                             columnSpacing: metrics.columnSpacing,
                             maxBoardHeight: metrics.tableauMaxHeight,
-                            activeTarget: activeTarget,
+                            activeTarget: drag.activeTarget,
                             hintedTarget: hintedTarget,
                             hintHighlightOpacity: hintHighlightOpacity,
                             isCardTiltEnabled: isCardTiltEnabled,
@@ -669,7 +646,7 @@ struct ContentView: View {
                             faceDownOffset: metrics.tableauFaceDownOffset,
                             faceUpOffset: metrics.tableauFaceUpOffset,
                             maxPileHeight: metrics.tableauMaxHeight,
-                            activeTarget: activeTarget,
+                            activeTarget: drag.activeTarget,
                             hintedTarget: hintedTarget,
                             hintHighlightOpacity: hintHighlightOpacity,
                             isCardTiltEnabled: isCardTiltEnabled,
@@ -691,7 +668,7 @@ struct ContentView: View {
                             faceDownOffset: metrics.tableauFaceDownOffset,
                             faceUpOffset: metrics.tableauFaceUpOffset,
                             maxPileHeight: metrics.tableauMaxHeight,
-                            activeTarget: activeTarget,
+                            activeTarget: drag.activeTarget,
                             hintedTarget: hintedTarget,
                             hintHighlightOpacity: hintHighlightOpacity,
                             isCardTiltEnabled: isCardTiltEnabled,
@@ -825,7 +802,7 @@ struct ContentView: View {
             guard !dealingCardIDs.isEmpty || !dealAnimationCards.isEmpty else { return }
             cancelDealAnimation()
         }
-        .animation(.easeInOut(duration: 0.12), value: activeTarget)
+        .animation(.easeInOut(duration: 0.12), value: drag.activeTarget)
         .overlay {
             GeometryReader { _ in
                 ZStack {
@@ -848,20 +825,12 @@ struct ContentView: View {
                         progress: undoAnimationProgress
                     )
                     .zIndex(75)
-                    WinCascadeOverlayView(cards: winCelebration.cards)
+                    WinCascadeOverlayView(winCelebration: winCelebration)
                         .zIndex(90)
                     DragOverlayView(
                         viewModel: viewModel,
-                        cardFrames: dragOverlayCardFrames,
-                        cardTilts: cardTilts,
-                        dragTranslation: dragTranslation,
-                        dragReturnOffset: dragReturnOffset,
-                        isReturningDrag: isReturningDrag,
-                        returningCards: returningCards,
-                        isDroppingCards: isDroppingCards,
-                        droppingCards: droppingSelection?.cards ?? [],
-                        dropAnimationOffset: dropAnimationOffset,
-                        overlayTilt: overlayTilt
+                        drag: drag,
+                        cardFrames: cardFrames
                     )
                     .zIndex(100)
                 }
@@ -957,8 +926,8 @@ struct ContentView: View {
     private var isUndoDisabled: Bool {
         !viewModel.canUndo
             || isUndoAnimating
-            || isDroppingCards
-            || isReturningDrag
+            || drag.isDroppingCards
+            || drag.isReturningDrag
             || viewModel.isDragging
             || isWinCascadeAnimating
     }
@@ -966,8 +935,8 @@ struct ContentView: View {
     private var isAutoFinishDisabled: Bool {
         !viewModel.isAutoFinishAvailable
             || isUndoAnimating
-            || isDroppingCards
-            || isReturningDrag
+            || drag.isDroppingCards
+            || drag.isReturningDrag
             || viewModel.isDragging
             || viewModel.pendingAutoMove != nil
             || isWinCascadeAnimating
@@ -976,8 +945,8 @@ struct ContentView: View {
     private var isHintDisabled: Bool {
         viewModel.isWin
             || isUndoAnimating
-            || isDroppingCards
-            || isReturningDrag
+            || drag.isDroppingCards
+            || drag.isReturningDrag
             || viewModel.isDragging
             || viewModel.pendingAutoMove != nil
             || !viewModel.isHintAvailable
@@ -1093,17 +1062,7 @@ struct ContentView: View {
     /// Clears in-flight drag/drop/undo/draw animation state so stale animation
     /// completions cannot mutate the game that replaces the current one.
     private func resetTransientBoardState() {
-        activeTarget = nil
-        dragTranslation = .zero
-        dragReturnOffset = .zero
-        isReturningDrag = false
-        returningCards = []
-        isDroppingCards = false
-        droppingSelection = nil
-        dropAnimationOffset = .zero
-        pendingDropDestination = nil
-        wasteReturnAnchorCardID = nil
-        wasteReturnAnchorFrame = nil
+        drag.reset()
         drawAnimationCards = []
         drawingCardIDs = []
         drawAnimationToken = UUID()
@@ -1139,7 +1098,7 @@ struct ContentView: View {
             stopAutoFinish()
             return
         }
-        guard !isDroppingCards, !isReturningDrag, !isUndoAnimating else { return }
+        guard !drag.isDroppingCards, !drag.isReturningDrag, !isUndoAnimating else { return }
         guard !viewModel.isDragging else { return }
         guard viewModel.pendingAutoMove == nil else { return }
 
@@ -1149,28 +1108,28 @@ struct ContentView: View {
     }
 
     private func handleEscape() {
-        guard viewModel.isDragging, !isReturningDrag, !isDroppingCards else { return }
-        activeTarget = nil
+        guard viewModel.isDragging, !drag.isReturningDrag, !drag.isDroppingCards else { return }
+        drag.setActiveTarget(nil)
         beginReturnAnimation()
     }
 
     private func processPendingAutoMoveIfPossible() {
         guard let request = viewModel.pendingAutoMove else { return }
-        guard !isDroppingCards, !isReturningDrag, !isUndoAnimating else { return }
+        guard !drag.isDroppingCards, !drag.isReturningDrag, !isUndoAnimating else { return }
         guard !viewModel.isDragging else { return }
 
         viewModel.clearPendingAutoMove()
-        dragTranslation = .zero
-        dragReturnOffset = .zero
-        activeTarget = nil
+        drag.dragTranslation = .zero
+        drag.dragReturnOffset = .zero
+        drag.setActiveTarget(nil)
         viewModel.selection = request.selection
         viewModel.isDragging = true
 
         if let firstCard = request.selection.cards.first {
-            overlayTilt = cardTilts[firstCard.id] ?? 0
+            drag.overlayTilt = cardTilts[firstCard.id] ?? 0
             let tiltSettleDuration = isAutoFinishing ? 0.1 : 0.15
             withAnimation(.easeOut(duration: tiltSettleDuration)) {
-                overlayTilt = 0
+                drag.overlayTilt = 0
             }
         }
 
@@ -1187,8 +1146,8 @@ struct ContentView: View {
                     let started = startDrag(from: origin)
                     if !started { return }
                 }
-                dragTranslation = value.translation
-                activeTarget = dropTarget(at: value.location)
+                drag.dragTranslation = value.translation
+                drag.setActiveTarget(dropTarget(at: value.location))
             }
             .onEnded { _ in
                 finishDrag()
@@ -1198,11 +1157,11 @@ struct ContentView: View {
 
     private func startDrag(from origin: DragOrigin) -> Bool {
         stopAutoFinish()
-        wasteReturnAnchorCardID = nil
-        wasteReturnAnchorFrame = nil
-        dragTranslation = .zero
-        dragReturnOffset = .zero
-        isReturningDrag = false
+        drag.wasteReturnAnchorCardID = nil
+        drag.wasteReturnAnchorFrame = nil
+        drag.dragTranslation = .zero
+        drag.dragReturnOffset = .zero
+        drag.isReturningDrag = false
         let started: Bool
         switch origin {
         case .waste:
@@ -1223,14 +1182,14 @@ struct ContentView: View {
 
         if started, let firstCard = viewModel.selection?.cards.first {
             if case .waste = origin {
-                wasteReturnAnchorCardID = firstCard.id
-                wasteReturnAnchorFrame = cardFrames[firstCard.id]
+                drag.wasteReturnAnchorCardID = firstCard.id
+                drag.wasteReturnAnchorFrame = cardFrames[firstCard.id]
             }
             HapticManager.shared.play(.cardPickUp)
             // Start with the card's current tilt, then animate to straight
-            overlayTilt = cardTilts[firstCard.id] ?? 0
+            drag.overlayTilt = cardTilts[firstCard.id] ?? 0
             withAnimation(.easeOut(duration: 0.15)) {
-                overlayTilt = 0
+                drag.overlayTilt = 0
             }
         }
         return started
@@ -1238,13 +1197,13 @@ struct ContentView: View {
 
     private func finishDrag() {
         guard viewModel.isDragging else {
-            dragTranslation = .zero
-            activeTarget = nil
+            drag.dragTranslation = .zero
+            drag.setActiveTarget(nil)
             return
         }
 
-        let target = activeTarget
-        activeTarget = nil
+        let target = drag.activeTarget
+        drag.setActiveTarget(nil)
         if let target {
             let dest = destination(for: target)
             if viewModel.canDrop(to: dest) {
@@ -1263,22 +1222,22 @@ struct ContentView: View {
               let cardFrame = cardFrames[firstCard.id],
               let targetFrame = dropFrames[target]?.snapFrame else {
             viewModel.handleDrop(to: dest)
-            wasteReturnAnchorCardID = nil
-            wasteReturnAnchorFrame = nil
-            dragTranslation = .zero
+            drag.wasteReturnAnchorCardID = nil
+            drag.wasteReturnAnchorFrame = nil
+            drag.dragTranslation = .zero
             return
         }
 
         // Calculate offset from current dragged position to destination
-        let currentX = cardFrame.midX + dragTranslation.width
-        let currentY = cardFrame.midY + dragTranslation.height
+        let currentX = cardFrame.midX + drag.dragTranslation.width
+        let currentY = cardFrame.midY + drag.dragTranslation.height
         let targetX = targetFrame.midX
         let targetY = targetFrame.midY
 
-        droppingSelection = selection
-        pendingDropDestination = dest
-        isDroppingCards = true
-        dropAnimationOffset = .zero
+        drag.droppingSelection = selection
+        drag.pendingDropDestination = dest
+        drag.isDroppingCards = true
+        drag.dropAnimationOffset = .zero
         // Keep viewModel.isDragging true to hide original card during animation
 
         let offsetToTarget = CGSize(
@@ -1288,12 +1247,12 @@ struct ContentView: View {
 
         let dropDuration = isAutoFinishing ? 0.18 : 0.25
         withAnimation(.spring(response: dropDuration, dampingFraction: 0.85)) {
-            dropAnimationOffset = offsetToTarget
+            drag.dropAnimationOffset = offsetToTarget
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + dropDuration) {
             // Clear old tilts so cards get fresh tilts at new position
-            if let cards = droppingSelection?.cards {
+            if let cards = drag.droppingSelection?.cards {
                 for card in cards {
                     cardTilts.removeValue(forKey: card.id)
                 }
@@ -1303,17 +1262,17 @@ struct ContentView: View {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                if let dest = pendingDropDestination {
+                if let dest = drag.pendingDropDestination {
                     viewModel.handleDrop(to: dest)
                 }
-                dragTranslation = .zero
-                dropAnimationOffset = .zero
-                isDroppingCards = false
-                droppingSelection = nil
-                pendingDropDestination = nil
+                drag.dragTranslation = .zero
+                drag.dropAnimationOffset = .zero
+                drag.isDroppingCards = false
+                drag.droppingSelection = nil
+                drag.pendingDropDestination = nil
             }
-            wasteReturnAnchorCardID = nil
-            wasteReturnAnchorFrame = nil
+            drag.wasteReturnAnchorCardID = nil
+            drag.wasteReturnAnchorFrame = nil
             if !isAutoFinishing {
                 DispatchQueue.main.async {
                     viewModel.refreshAutoFinishAvailability()
@@ -1324,14 +1283,14 @@ struct ContentView: View {
     }
 
     private func beginReturnAnimation() {
-        guard !isReturningDrag else { return }
+        guard !drag.isReturningDrag else { return }
         SoundManager.shared.play(.invalidDrop)
         HapticManager.shared.play(.invalidDrop)
         let isWasteReturn = viewModel.selection?.source == .waste
-        let currentTranslation = dragTranslation
-        returningCards = viewModel.selection?.cards ?? []
+        let currentTranslation = drag.dragTranslation
+        drag.returningCards = viewModel.selection?.cards ?? []
         let targetTilt: Double = {
-            guard let firstCard = returningCards.first else { return 0 }
+            guard let firstCard = drag.returningCards.first else { return 0 }
             guard isWasteReturn, isCardTiltEnabled else {
                 return cardTilts[firstCard.id] ?? 0
             }
@@ -1340,35 +1299,23 @@ struct ContentView: View {
             return rerolledTilt
         }()
         // Keep viewModel.isDragging true to hide original card during animation
-        isReturningDrag = true
-        dragReturnOffset = .zero
+        drag.isReturningDrag = true
+        drag.dragReturnOffset = .zero
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-            dragReturnOffset = CGSize(width: -currentTranslation.width, height: -currentTranslation.height)
-            overlayTilt = targetTilt
+            drag.dragReturnOffset = CGSize(width: -currentTranslation.width, height: -currentTranslation.height)
+            drag.overlayTilt = targetTilt
         }
         let returnDuration = 0.32
         DispatchQueue.main.asyncAfter(deadline: .now() + returnDuration) {
             viewModel.cancelDrag()
-            wasteReturnAnchorCardID = nil
-            wasteReturnAnchorFrame = nil
-            dragTranslation = .zero
-            dragReturnOffset = .zero
-            isReturningDrag = false
-            returningCards = []
+            drag.wasteReturnAnchorCardID = nil
+            drag.wasteReturnAnchorFrame = nil
+            drag.dragTranslation = .zero
+            drag.dragReturnOffset = .zero
+            drag.isReturningDrag = false
+            drag.returningCards = []
             processPendingAutoMoveIfPossible()
         }
-    }
-
-    private var dragOverlayCardFrames: [UUID: CGRect] {
-        guard isReturningDrag,
-              let returningCard = returningCards.first,
-              returningCard.id == wasteReturnAnchorCardID,
-              let anchorFrame = wasteReturnAnchorFrame else {
-            return cardFrames
-        }
-        var frames = cardFrames
-        frames[returningCard.id] = anchorFrame
-        return frames
     }
 
     private func syncFanProgress(with waste: [Card], excluding excluded: Set<UUID>) {
@@ -1515,7 +1462,7 @@ struct ContentView: View {
 
     private func beginUndoAnimationIfNeeded() {
         guard !isUndoAnimating else { return }
-        guard !viewModel.isDragging, !isDroppingCards, !isReturningDrag else { return }
+        guard !viewModel.isDragging, !drag.isDroppingCards, !drag.isReturningDrag else { return }
         guard !viewModel.isWin else { return }
         guard let snapshot = viewModel.peekUndoSnapshot() else { return }
         HapticManager.shared.play(.undoMove)
