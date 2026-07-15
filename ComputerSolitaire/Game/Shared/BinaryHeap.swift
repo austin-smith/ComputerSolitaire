@@ -1,6 +1,6 @@
 import Foundation
 
-protocol HeapPrioritizable {
+nonisolated protocol HeapPrioritizable {
     /// Whether this element should be popped before `other`. Implementations decide
     /// the ordering (max- or min-first) and must break ties deterministically when
     /// the search relies on reproducible expansion order.
@@ -9,7 +9,7 @@ protocol HeapPrioritizable {
 
 /// Array-backed binary heap shared by the search planners; pops the element that
 /// `takesPriority(over:)` every other element.
-struct BinaryHeap<Element: HeapPrioritizable> {
+nonisolated struct BinaryHeap<Element: HeapPrioritizable> {
     private var entries: [Element] = []
 
     mutating func push(_ entry: Element) {

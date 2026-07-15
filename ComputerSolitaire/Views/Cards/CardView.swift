@@ -167,6 +167,9 @@ struct CardView: View {
     let flipOnAppear: Bool
     let flipDelay: Double
     let isAccessibilityElement: Bool
+    /// This card's tilt captured at init, so the `Equatable` check below can
+    /// compare it without touching the binding (the binding stays for writes).
+    private let currentTilt: Double?
     @State private var flipRotation: Double
     @State private var tiltAngle: Double = 0
     @Environment(\.cardStyle) private var cardStyle
@@ -191,6 +194,7 @@ struct CardView: View {
         self.flipOnAppear = flipOnAppear
         self.flipDelay = flipDelay
         self.isAccessibilityElement = isAccessibilityElement
+        self.currentTilt = cardTilts.wrappedValue[card.id]
         let startFaceDown = flipOnAppear && card.isFaceUp
         _flipRotation = State(initialValue: startFaceDown ? 180 : (card.isFaceUp ? 0 : 180))
     }
@@ -284,6 +288,25 @@ struct CardView: View {
         case .pixel:
             PixelCardBackView(cardSize: cardSize, isSelected: isSelected)
         }
+    }
+}
+
+/// SwiftUI can't diff CardView automatically (the tilt binding defeats the
+/// memberwise check), so without this every card on the board re-evaluates on
+/// every move. The comparison covers everything the rendered card depends on;
+/// the binding is deliberately omitted — this card's tilt participates as the
+/// `currentTilt` value captured at init.
+extension CardView: Equatable {
+    nonisolated static func == (lhs: CardView, rhs: CardView) -> Bool {
+        lhs.card == rhs.card
+            && lhs.isSelected == rhs.isSelected
+            && lhs.cardSize == rhs.cardSize
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
+            && lhs.flipOnAppear == rhs.flipOnAppear
+            && lhs.flipDelay == rhs.flipDelay
+            && lhs.isAccessibilityElement == rhs.isAccessibilityElement
+            && lhs.currentTilt == rhs.currentTilt
     }
 }
 

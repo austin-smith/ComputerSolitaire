@@ -1,6 +1,6 @@
 import Foundation
 
-extension GameState {
+nonisolated extension GameState {
     /// The Golf deal: seven columns of five face-up cards dealt column-major
     /// (column 0 bottom-to-top first, then column 1, and so on), one face-up
     /// card starting the waste, and the remaining 16 cards face down in the

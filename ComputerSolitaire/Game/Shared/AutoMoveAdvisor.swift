@@ -3,7 +3,7 @@ import Foundation
 /// Move generation shared by the tap policy, hint planners, and solver plumbing:
 /// which selections a player could pick up, where each can legally go, and what the
 /// state looks like after a move.
-enum AutoMoveAdvisor {
+nonisolated enum AutoMoveAdvisor {
     static func legalDestinations(for selection: Selection, in state: GameState) -> [Destination] {
         // Pyramid, TriPeaks, and Golf remove cards instead of building piles,
         // so their move sets are generated wholesale rather than through the
@@ -287,7 +287,7 @@ enum AutoMoveAdvisor {
     }
 }
 
-private extension AutoMoveAdvisor {
+nonisolated private extension AutoMoveAdvisor {
     static func variantAllowsTableauPickup(of cards: [Card], in state: GameState) -> Bool {
         switch state.variant {
         case .klondike:

@@ -13,7 +13,7 @@ struct SystemDateProvider: DateProviding {
 
 @Observable
 final class SolitaireViewModel {
-    static let maxUndoHistoryCount = 200
+    nonisolated static let maxUndoHistoryCount = 200
     private static let hintVisibilityDuration: TimeInterval = 1.5
 
     var state: GameState

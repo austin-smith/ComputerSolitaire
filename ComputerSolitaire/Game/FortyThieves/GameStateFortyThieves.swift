@@ -1,6 +1,6 @@
 import Foundation
 
-extension GameState {
+nonisolated extension GameState {
     /// The Forty Thieves deal: two full decks shuffled together, ten columns
     /// of four face-up cards dealt column-major (column 0 bottom-to-top first,
     /// then column 1, and so on), and the remaining 64 cards face down in the

@@ -1,6 +1,6 @@
 import Foundation
 
-enum SpiderGameRules {
+nonisolated enum SpiderGameRules {
     /// Spider's landing rule: an empty pile takes any card, and a face-up top
     /// takes a card one rank lower regardless of suit.
     static func canMoveToTableau(card: Card, destinationPile: [Card]) -> Bool {

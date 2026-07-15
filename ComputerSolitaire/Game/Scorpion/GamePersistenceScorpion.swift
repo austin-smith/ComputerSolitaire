@@ -1,6 +1,6 @@
 import Foundation
 
-enum ScorpionPersistenceRules {
+nonisolated enum ScorpionPersistenceRules {
     static func hasValidLayout(state: GameState) -> Bool {
         guard state.tableau.count == 7 else { return false }
         // The stock deals exactly once, wholesale: three cards or none.

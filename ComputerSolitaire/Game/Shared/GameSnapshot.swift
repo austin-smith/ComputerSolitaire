@@ -1,6 +1,6 @@
 import Foundation
 
-struct GameSnapshot: Codable {
+nonisolated struct GameSnapshot: Codable {
     let state: GameState
     let movesCount: Int
     let score: Int
@@ -39,7 +39,7 @@ struct GameSnapshot: Codable {
     }
 }
 
-struct UndoAnimationContext: Codable {
+nonisolated struct UndoAnimationContext: Codable {
     enum Action: String, Codable {
         case moveSelection
         case drawFromStock

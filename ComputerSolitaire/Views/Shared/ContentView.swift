@@ -150,6 +150,9 @@ struct ContentView: View {
     @AppStorage(SettingsKey.tableBackgroundColor)
     private var tableBackgroundColorRawValue = TableBackgroundColor.defaultValue.rawValue
 
+    /// The one move spring, applied per board region in `boardRoot`.
+    private static let boardSpring = Animation.spring(response: 0.35, dampingFraction: 0.86)
+
     private var gameVariant: GameVariant {
         GameVariant(rawValue: gameVariantRawValue) ?? .klondike
     }
@@ -596,6 +599,7 @@ struct ContentView: View {
                             guard abs(newHeight - headerHeight) >= 0.5 else { return }
                             headerHeight = newHeight
                         }
+                        .animation(Self.boardSpring, value: viewModel.state)
                     }
                     TopRowView(
                         viewModel: viewModel,
@@ -618,6 +622,12 @@ struct ContentView: View {
                         dragGesture: dragGesture(for:)
                     )
                     .frame(width: boardContentWidth, alignment: .leading)
+                    // The move spring is scoped per board region and keyed on
+                    // the state slice that region renders, so one region's
+                    // change never opens an animation transaction over the
+                    // whole board. The top row (stock, waste, foundations,
+                    // free cells) is small enough to key on the whole state.
+                    .animation(Self.boardSpring, value: viewModel.state)
                     if viewModel.gameVariant == .pyramid {
                         PyramidBoardView(
                             viewModel: viewModel,
@@ -635,6 +645,7 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
+                        .animation(Self.boardSpring, value: viewModel.state.pyramid)
                     } else if viewModel.gameVariant == .tripeaks {
                         TriPeaksBoardView(
                             viewModel: viewModel,
@@ -649,6 +660,7 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
+                        .animation(Self.boardSpring, value: viewModel.state.triPeaks)
                     } else if viewModel.gameVariant == .canfield {
                         CanfieldBoardRowView(
                             viewModel: viewModel,
@@ -668,6 +680,9 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
+                        // Canfield's row renders the tableau and the reserve,
+                        // so it keys on the whole state like the top row.
+                        .animation(Self.boardSpring, value: viewModel.state)
                     } else {
                         TableauRowView(
                             viewModel: viewModel,
@@ -687,6 +702,7 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
+                        .animation(Self.boardSpring, value: viewModel.state.tableau)
                     }
                     Spacer(minLength: 0)
                 }
@@ -809,7 +825,6 @@ struct ContentView: View {
             guard !dealingCardIDs.isEmpty || !dealAnimationCards.isEmpty else { return }
             cancelDealAnimation()
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: viewModel.state)
         .animation(.easeInOut(duration: 0.12), value: activeTarget)
         .overlay {
             GeometryReader { _ in
@@ -1900,7 +1915,31 @@ struct ContentView: View {
         autosaveTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
-            persistGameNow()
+            await autosaveOffMainThread()
+        }
+    }
+
+    /// The debounced autosave's save path. Sanitizing and JSON-encoding the
+    /// payload scales with the undo history (up to 200 board snapshots), so it
+    /// runs off the main thread instead of stalling gameplay; only the final
+    /// SwiftData write comes back to the main actor. Runs inside
+    /// `autosaveTask`, so `persistGameNow()` and newer autosaves cancel any
+    /// in-flight encode before their own write — a stale payload can never
+    /// overwrite a newer save.
+    private func autosaveOffMainThread() async {
+        guard hasLoadedGame, !isScreenshotSession else { return }
+        let payload = viewModel.persistencePayload()
+        let now = Date.now
+        guard let encoded = try? await Task.detached(priority: .utility, operation: {
+            try GamePersistence.encodeForSave(payload, now: now)
+        }).value else { return }
+        guard !Task.isCancelled else { return }
+        do {
+            try GamePersistence.write(encoded, in: modelContext, now: now)
+        } catch {
+#if DEBUG
+            print("Failed to persist game state: \(error)")
+#endif
         }
     }
 

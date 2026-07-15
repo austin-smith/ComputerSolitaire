@@ -1,6 +1,6 @@
 import Foundation
 
-enum SpiderPersistenceRules {
+nonisolated enum SpiderPersistenceRules {
     static func hasValidLayout(state: GameState) -> Bool {
         guard state.tableau.count == 10 else { return false }
         // The stock only ever shrinks by full ten-card rows.

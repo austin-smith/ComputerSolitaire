@@ -4,7 +4,7 @@ import Foundation
 /// variants — its only move is exposed column card onto the waste — so
 /// `AutoMoveAdvisor` dispatches to it wholesale instead of threading its moves
 /// through the pile-oriented hooks.
-enum GolfAutoMoveAdvisor {
+nonisolated enum GolfAutoMoveAdvisor {
     /// The exposed (last) card of every non-empty column, each as a
     /// single-card selection. The waste top is never a selection: in Golf it
     /// is the match target, not a mover.

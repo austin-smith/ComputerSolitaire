@@ -1,6 +1,6 @@
 import Foundation
 
-enum Suit: CaseIterable, Codable {
+nonisolated enum Suit: CaseIterable, Codable {
     case spades
     case hearts
     case diamonds
@@ -38,7 +38,7 @@ enum Suit: CaseIterable, Codable {
     }
 }
 
-enum Rank: Int, CaseIterable, Comparable, Codable {
+nonisolated enum Rank: Int, CaseIterable, Comparable, Codable {
     case ace = 1
     case two = 2
     case three = 3
@@ -91,7 +91,7 @@ enum Rank: Int, CaseIterable, Comparable, Codable {
     }
 }
 
-struct Card: Identifiable, Equatable, Codable {
+nonisolated struct Card: Identifiable, Equatable, Codable {
     let id: UUID
     let suit: Suit
     let rank: Rank
@@ -107,12 +107,12 @@ struct Card: Identifiable, Equatable, Codable {
 
 /// A card's face — suit and rank without instance identity. Deck-composition
 /// checks count these; Spider's two decks carry each identity more than once.
-struct CardIdentity: Hashable {
+nonisolated struct CardIdentity: Hashable {
     let suit: Suit
     let rank: Rank
 }
 
-extension Card {
+nonisolated extension Card {
     var accessibilityName: String {
         guard isFaceUp else { return "Face-down card" }
         return "\(rank.accessibilityName) of \(suit.accessibilityName)"

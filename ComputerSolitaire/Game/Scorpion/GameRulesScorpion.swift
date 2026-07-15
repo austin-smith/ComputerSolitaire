@@ -1,6 +1,6 @@
 import Foundation
 
-enum ScorpionGameRules {
+nonisolated enum ScorpionGameRules {
     /// Scorpion's landing rule: an empty pile takes only a king, and a face-up
     /// top takes the card one rank lower of the same suit.
     static func canMoveToTableau(card: Card, destinationPile: [Card]) -> Bool {

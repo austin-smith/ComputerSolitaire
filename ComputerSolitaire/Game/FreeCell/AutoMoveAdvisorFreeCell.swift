@@ -1,6 +1,6 @@
 import Foundation
 
-enum FreeCellAutoMoveAdvisor {
+nonisolated enum FreeCellAutoMoveAdvisor {
     static func allowsTableauPickup(of cards: [Card], in state: GameState) -> Bool {
         AutoMoveAdvisor.isValidTableauSequence(cards)
     }

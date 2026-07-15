@@ -9,7 +9,7 @@ import Foundation
 /// waste top. Canfield qualifies once its stock and waste are both spent, playing
 /// tableau tops and the reserve top (with the compulsory reserve fill mirrored in
 /// simulation).
-enum AutoFinishPlanner {
+nonisolated enum AutoFinishPlanner {
     struct AutoFinishMove {
         let selection: Selection
         let destination: Destination
@@ -42,7 +42,7 @@ enum AutoFinishPlanner {
     }
 }
 
-private extension AutoFinishPlanner {
+nonisolated private extension AutoFinishPlanner {
     static func isAutoFinishCandidateState(_ state: GameState) -> Bool {
         guard !state.isWon else { return false }
         switch state.variant {
@@ -50,7 +50,10 @@ private extension AutoFinishPlanner {
             guard state.stock.isEmpty, state.waste.isEmpty else { return false }
             return !state.tableau.joined().contains(where: { !$0.isFaceUp })
         case .freecell:
-            return true
+            // Every FreeCell card is face up, so eligibility rests entirely on
+            // whether the cascades can drain; the ordering check below rejects
+            // nearly every mid-game position without running the simulation.
+            return freeCellCascadesAllowFoundationRun(state)
         case .yukon:
             return !state.tableau.joined().contains(where: { !$0.isFaceUp })
         case .spider, .scorpion:

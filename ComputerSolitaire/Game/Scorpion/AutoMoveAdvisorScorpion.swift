@@ -1,6 +1,6 @@
 import Foundation
 
-enum ScorpionAutoMoveAdvisor {
+nonisolated enum ScorpionAutoMoveAdvisor {
     static func allowsTableauPickup(of cards: [Card], in state: GameState) -> Bool {
         // Scorpion moves groups Yukon-style: any face-up card can be picked up
         // together with every card above it, regardless of whether they form a

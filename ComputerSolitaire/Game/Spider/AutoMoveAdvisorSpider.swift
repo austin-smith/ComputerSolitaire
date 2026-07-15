@@ -1,6 +1,6 @@
 import Foundation
 
-enum SpiderAutoMoveAdvisor {
+nonisolated enum SpiderAutoMoveAdvisor {
     static func allowsTableauPickup(of cards: [Card], in state: GameState) -> Bool {
         // Spider's defining rule: a group moves only as a face-up
         // single-suit descending run.

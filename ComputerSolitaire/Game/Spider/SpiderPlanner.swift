@@ -19,7 +19,7 @@ import Foundation
 /// stock term), so deal-crossing lines only win when the flips and joins they
 /// enable pay for them. Spider banks completed runs automatically and they
 /// never return, so there is no rollback stage.
-enum SpiderPlanner {
+nonisolated enum SpiderPlanner {
     struct Limits {
         var maxNodes: Int
         var maxDepth: Int
@@ -141,7 +141,7 @@ enum SpiderPlanner {
 
 // MARK: - Search internals
 
-private extension SpiderPlanner {
+nonisolated private extension SpiderPlanner {
     static func search(in state: GameState, limits: Limits) -> SearchOutcome {
         let rootScore = score(state)
         var nodes: [Node] = [Node(state: state, parent: -1, action: nil, depth: 0, score: rootScore)]

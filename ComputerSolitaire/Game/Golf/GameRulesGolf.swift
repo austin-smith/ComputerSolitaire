@@ -1,6 +1,6 @@
 import Foundation
 
-enum GolfGameRules {
+nonisolated enum GolfGameRules {
     static let columnCount = 7
     static let columnDepth = 5
     static let dealTableauCardCount = 35

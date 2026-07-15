@@ -5,7 +5,7 @@ import Foundation
 /// Slots are row-major: row `r` (0-based, apex first) occupies indices
 /// `r(r+1)/2 ..< (r+1)(r+2)/2`, so row 0 is slot 0 and row 6 is slots 21...27.
 /// Each slot except the bottom row is covered by two slots in the row below.
-enum PyramidGeometry {
+nonisolated enum PyramidGeometry {
     static let rowCount = 7
     static let cardCount = 28
 

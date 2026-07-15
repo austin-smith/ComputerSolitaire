@@ -1,4 +1,4 @@
-enum FreeCellGameRules {
+nonisolated enum FreeCellGameRules {
     static func canMoveToTableau(card: Card, destinationPile: [Card]) -> Bool {
         if destinationPile.isEmpty {
             return true

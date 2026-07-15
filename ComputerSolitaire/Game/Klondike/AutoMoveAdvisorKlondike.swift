@@ -1,6 +1,6 @@
 import Foundation
 
-enum KlondikeAutoMoveAdvisor {
+nonisolated enum KlondikeAutoMoveAdvisor {
     static func allowsTableauPickup(of cards: [Card], in state: GameState) -> Bool {
         AutoMoveAdvisor.isValidTableauSequence(cards)
     }

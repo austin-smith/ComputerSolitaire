@@ -25,7 +25,7 @@ import Foundation
 /// best-effort lines); `bestLine` median 0.5ms. Hint-quality baselines live in
 /// the `tools/hint-probe` ledger: 80.2% of 500 deals won by following every
 /// hint against a 15.2% random-control floor, zero loops.
-enum PyramidPlanner {
+nonisolated enum PyramidPlanner {
     struct Limits {
         var maxNodes: Int
         var deadline: Date?
@@ -196,7 +196,7 @@ enum PyramidPlanner {
 
 // MARK: - Session move mapping
 
-private extension PyramidPlanner {
+nonisolated private extension PyramidPlanner {
     static func sessionMove(
         for move: Move,
         in state: GameState
@@ -228,7 +228,7 @@ private extension PyramidPlanner {
 
 // MARK: - Compact position
 
-private extension PyramidPlanner {
+nonisolated private extension PyramidPlanner {
     /// The deal's immutable rank tables plus the packed dynamic board. Stock cards
     /// are indexed in draw order: the root's waste bottom-to-top (already drawn),
     /// then the remaining stock in draw order. Cards already discarded at the root
@@ -342,7 +342,7 @@ private extension PyramidPlanner {
 
 // MARK: - Move generation and transitions
 
-private extension PyramidPlanner {
+nonisolated private extension PyramidPlanner {
     /// Legal moves in a fixed, deterministic order: pyramid pairs by ascending
     /// slots (cover-pairs included), waste pairs by ascending slot, Kings, then
     /// draw and reset — removals first so equal-priority ties favor action.
@@ -442,7 +442,7 @@ private extension PyramidPlanner {
 
 // MARK: - Heuristic and dead-position proof
 
-private extension PyramidPlanner {
+nonisolated private extension PyramidPlanner {
     /// Admissible lower bound on moves left to clear the pyramid: every King costs
     /// one removal, and each pair move lowers exactly one `max(count(r),
     /// count(13−r))` term by at most 1; draws and resets clear nothing.
@@ -489,7 +489,7 @@ private extension PyramidPlanner {
 
 // MARK: - Search
 
-private extension PyramidPlanner {
+nonisolated private extension PyramidPlanner {
     struct Node {
         let board: Board
         let parent: Int

@@ -1,6 +1,6 @@
 import Foundation
 
-enum PyramidGameRules {
+nonisolated enum PyramidGameRules {
     /// Two cards pair when their ranks sum to this; a King reaches it alone.
     static let pairSum = 13
     /// The waste may be recycled into the stock this many times (three total passes).

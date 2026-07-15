@@ -1,6 +1,6 @@
 import Foundation
 
-enum GolfPersistenceRules {
+nonisolated enum GolfPersistenceRules {
     static func hasValidLayout(state: GameState) -> Bool {
         guard state.tableau.count == GolfGameRules.columnCount else { return false }
         // Columns deal five cards and only ever shrink; every board card is

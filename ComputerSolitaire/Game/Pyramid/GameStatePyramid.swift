@@ -1,6 +1,6 @@
 import Foundation
 
-extension GameState {
+nonisolated extension GameState {
     static func newPyramidGame() -> GameState {
         var deck = Card.fullDeck().shuffled()
         var pyramid: [Card?] = []

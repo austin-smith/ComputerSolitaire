@@ -1,6 +1,6 @@
 import Foundation
 
-extension GameState {
+nonisolated extension GameState {
     /// The TriPeaks deal: 28 peak cards (rows of 3/6/9 face down, the 10-card
     /// base face up), one face-up card starting the waste, and the remaining
     /// 23 cards face down in the stock. The hint probe and test fixtures copy

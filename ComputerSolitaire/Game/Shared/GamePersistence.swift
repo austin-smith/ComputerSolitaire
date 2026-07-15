@@ -6,7 +6,7 @@ final class SavedGameRecord {
     /// Single-slot key used before saved games became per-mode.
     static let legacyRecordKey = "current"
 
-    static func key(for mode: GameMode) -> String {
+    nonisolated static func key(for mode: GameMode) -> String {
         mode.rawValue
     }
 
@@ -25,7 +25,7 @@ final class SavedGameRecord {
     }
 }
 
-struct SavedGamePayload: Codable {
+nonisolated struct SavedGamePayload: Codable {
     static let currentSchemaVersion = 1
 
     let schemaVersion: Int
@@ -352,17 +352,39 @@ enum GamePersistence {
     }
 
     static func save(_ payload: SavedGamePayload, in modelContext: ModelContext, now: Date = .now) throws {
+        let encoded = try encodeForSave(payload, now: now)
+        try write(encoded, in: modelContext, now: now)
+    }
+
+    /// The CPU-heavy half of a save — sanitizing and JSON-encoding the payload
+    /// (undo history included) — with no SwiftData dependency, so the debounced
+    /// autosave can run it off the main thread.
+    nonisolated static func encodeForSave(
+        _ payload: SavedGamePayload,
+        now: Date = .now
+    ) throws -> EncodedSave {
         guard let sanitizedPayload = payload.sanitizedForRestore(at: now) else {
             throw GamePersistenceError.invalidPayload
         }
+        return EncodedSave(
+            key: SavedGameRecord.key(for: sanitizedPayload.gameMode),
+            data: try JSONEncoder().encode(sanitizedPayload)
+        )
+    }
 
-        let data = try JSONEncoder().encode(sanitizedPayload)
-        let key = SavedGameRecord.key(for: sanitizedPayload.gameMode)
-        if let record = try fetchRecord(forKey: key, in: modelContext) {
-            record.snapshotData = data
+    nonisolated struct EncodedSave {
+        let key: String
+        let data: Data
+    }
+
+    /// The store half of a save: hands an already-encoded payload to SwiftData
+    /// on the context's actor.
+    static func write(_ encoded: EncodedSave, in modelContext: ModelContext, now: Date = .now) throws {
+        if let record = try fetchRecord(forKey: encoded.key, in: modelContext) {
+            record.snapshotData = encoded.data
             record.updatedAt = now
         } else {
-            modelContext.insert(SavedGameRecord(key: key, snapshotData: data, updatedAt: now))
+            modelContext.insert(SavedGameRecord(key: encoded.key, snapshotData: encoded.data, updatedAt: now))
         }
         try modelContext.save()
     }
@@ -885,7 +907,7 @@ enum GameStatisticsStore {
     }
 }
 
-private extension GameState {
+nonisolated private extension GameState {
     var allCards: [Card] {
         stock + waste + freeCells.compactMap { $0 } + foundations.flatMap { $0 }
             + tableau.flatMap { $0 } + pyramid.compactMap { $0 } + discard
