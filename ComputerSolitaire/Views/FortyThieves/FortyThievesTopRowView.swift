@@ -1,8 +1,10 @@
 import SwiftUI
-import Observation
 
 struct FortyThievesTopRowView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let board: TopRowSnapshot
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let wasteFanSpacing: CGFloat
@@ -25,7 +27,10 @@ struct FortyThievesTopRowView: View {
             // Stock and waste on the left like Klondike's, then the eight
             // foundations — two per suit — aligned over tableau columns 3-10.
             StockView(
-                viewModel: viewModel,
+                session: session,
+                stockCount: board.stockCount,
+                canInteract: board.canInteractWithStock,
+                recyclesRemaining: board.stockRecyclesRemaining,
                 cardSize: cardSize,
                 isHintTargeted: isStockHinted,
                 hintHighlightOpacity: hintHighlightOpacity,
@@ -34,7 +39,9 @@ struct FortyThievesTopRowView: View {
             .frame(width: cardSize.width, alignment: .leading)
 
             WasteView(
-                viewModel: viewModel,
+                session: session,
+                cards: board.visibleWasteCards,
+                selection: selection,
                 cardSize: cardSize,
                 fanSpacing: wasteFanSpacing,
                 isHintTargeted: isWasteHinted,
@@ -53,10 +60,13 @@ struct FortyThievesTopRowView: View {
             // during a game switch this row can re-evaluate against the
             // incoming variant's four-foundation state before the board
             // replaces it.
-            ForEach(viewModel.state.foundations.indices, id: \.self) { index in
+            ForEach(board.foundations.indices, id: \.self) { index in
                 FoundationView(
-                    viewModel: viewModel,
+                    session: session,
+                    pile: board.foundations.indices.contains(index) ? board.foundations[index] : nil,
                     index: index,
+                    placeholder: board.foundationPlaceholder,
+                    selection: selection,
                     cardSize: cardSize,
                     isTargeted: activeTarget == .foundation(index),
                     isHintTargeted: hintedTarget == .foundation(index),

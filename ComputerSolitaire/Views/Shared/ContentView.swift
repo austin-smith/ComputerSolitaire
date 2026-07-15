@@ -549,6 +549,11 @@ struct ContentView: View {
             height: cardSize.height * boardScaleFactor
         )
         let isBoardReady = hasLoadedGame && !isHydratingGame
+        // One value capture per body pass; the board views render from these
+        // slices (and prune when they're unchanged) instead of reading the
+        // observable session.
+        let selection = viewModel.selectionSnapshot
+        let topRow = viewModel.topRowSnapshot
         let hintedTarget: DropTarget? = {
             guard let destination = viewModel.hintedDestination else { return nil }
             return dropTarget(for: destination)
@@ -579,8 +584,9 @@ struct ContentView: View {
                         .animation(Self.boardSpring, value: viewModel.state)
                     }
                     TopRowView(
-                        viewModel: viewModel,
-                        variant: viewModel.gameVariant,
+                        session: viewModel,
+                        board: topRow,
+                        selection: selection,
                         cardSize: cardSize,
                         columnSpacing: metrics.columnSpacing,
                         wasteFanSpacing: metrics.wasteFanSpacing,
@@ -607,7 +613,9 @@ struct ContentView: View {
                     .animation(Self.boardSpring, value: viewModel.state)
                     if viewModel.gameVariant == .pyramid {
                         PyramidBoardView(
-                            viewModel: viewModel,
+                            session: viewModel,
+                            pyramid: viewModel.state.pyramid,
+                            selection: selection,
                             cardSize: cardSize,
                             columnSpacing: metrics.columnSpacing,
                             maxBoardHeight: metrics.tableauMaxHeight,
@@ -625,7 +633,9 @@ struct ContentView: View {
                         .animation(Self.boardSpring, value: viewModel.state.pyramid)
                     } else if viewModel.gameVariant == .tripeaks {
                         TriPeaksBoardView(
-                            viewModel: viewModel,
+                            session: viewModel,
+                            triPeaks: viewModel.state.triPeaks,
+                            selection: selection,
                             cardSize: cardSize,
                             columnSpacing: metrics.columnSpacing,
                             maxBoardHeight: metrics.tableauMaxHeight,
@@ -640,7 +650,10 @@ struct ContentView: View {
                         .animation(Self.boardSpring, value: viewModel.state.triPeaks)
                     } else if viewModel.gameVariant == .canfield {
                         CanfieldBoardRowView(
-                            viewModel: viewModel,
+                            session: viewModel,
+                            reserve: viewModel.state.reserve,
+                            tableau: viewModel.state.tableau,
+                            selection: selection,
                             cardSize: cardSize,
                             columnSpacing: metrics.columnSpacing,
                             faceDownOffset: metrics.tableauFaceDownOffset,
@@ -662,7 +675,10 @@ struct ContentView: View {
                         .animation(Self.boardSpring, value: viewModel.state)
                     } else {
                         TableauRowView(
-                            viewModel: viewModel,
+                            session: viewModel,
+                            tableau: viewModel.state.tableau,
+                            variant: viewModel.gameVariant,
+                            selection: selection,
                             cardSize: cardSize,
                             columnSpacing: metrics.columnSpacing,
                             faceDownOffset: metrics.tableauFaceDownOffset,

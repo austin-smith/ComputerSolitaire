@@ -1,10 +1,11 @@
 import SwiftUI
-import Observation
 
 /// The stock for the variants that deal it directly onto the tableau (Spider,
 /// Scorpion): a tap deals, there is no waste, and an empty stock is inert.
 struct TableauStockView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let stockCount: Int
     let cardSize: CGSize
     let isHintTargeted: Bool
     let hintHighlightOpacity: Double
@@ -16,15 +17,15 @@ struct TableauStockView: View {
 
     var body: some View {
         Button {
-            viewModel.handleStockTap()
+            session.handleStockTap()
         } label: {
             ZStack {
                 PilePlaceholderView(cardSize: cardSize)
                     .allowsHitTesting(false)
-                if !viewModel.state.stock.isEmpty {
+                if stockCount > 0 {
                     CardBackView(cardSize: cardSize)
                     if isStockCountVisible {
-                        Text("\(viewModel.state.stock.count)")
+                        Text("\(stockCount)")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.8))
                             .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
@@ -49,13 +50,26 @@ struct TableauStockView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(viewModel.state.stock.isEmpty)
+        .disabled(stockCount == 0)
         .accessibilityLabel("Stock")
         .accessibilityValue(stockAccessibilityValue)
     }
 
     private var stockAccessibilityValue: String {
-        guard !viewModel.state.stock.isEmpty else { return "Empty" }
-        return "\(viewModel.state.stock.count) cards. \(dealDescription)"
+        guard stockCount > 0 else { return "Empty" }
+        return "\(stockCount) cards. \(dealDescription)"
+    }
+}
+
+/// See StockView's Equatable note; the `@AppStorage` toggle self-invalidates.
+extension TableauStockView: Equatable {
+    nonisolated static func == (lhs: TableauStockView, rhs: TableauStockView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.stockCount == rhs.stockCount
+            && lhs.cardSize == rhs.cardSize
+            && lhs.isHintTargeted == rhs.isHintTargeted
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
+            && lhs.dealDescription == rhs.dealDescription
     }
 }

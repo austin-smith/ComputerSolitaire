@@ -1,5 +1,4 @@
 import SwiftUI
-import Observation
 
 enum Layout {
     struct Metrics {
@@ -368,8 +367,10 @@ struct StatTileView: View {
 }
 
 struct TopRowView: View {
-    @Bindable var viewModel: SolitaireViewModel
-    let variant: GameVariant
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let board: TopRowSnapshot
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let wasteFanSpacing: CGFloat
@@ -389,10 +390,12 @@ struct TopRowView: View {
 
     var body: some View {
         Group {
-            switch variant {
+            switch board.variant {
             case .klondike:
                 KlondikeTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     wasteFanSpacing: wasteFanSpacing,
@@ -412,7 +415,9 @@ struct TopRowView: View {
                 )
             case .freecell:
                 FreeCellTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     activeTarget: activeTarget,
@@ -427,7 +432,9 @@ struct TopRowView: View {
                 )
             case .yukon:
                 YukonTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     activeTarget: activeTarget,
@@ -442,7 +449,9 @@ struct TopRowView: View {
                 )
             case .spider:
                 SpiderTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     isStockHinted: isStockHinted,
@@ -454,7 +463,9 @@ struct TopRowView: View {
                 )
             case .scorpion:
                 ScorpionTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     isStockHinted: isStockHinted,
@@ -466,7 +477,9 @@ struct TopRowView: View {
                 )
             case .pyramid:
                 PyramidTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     activeTarget: activeTarget,
@@ -485,7 +498,9 @@ struct TopRowView: View {
                 )
             case .tripeaks:
                 TriPeaksTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     activeTarget: activeTarget,
@@ -504,7 +519,9 @@ struct TopRowView: View {
                 )
             case .golf:
                 GolfTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     activeTarget: activeTarget,
@@ -523,7 +540,9 @@ struct TopRowView: View {
                 )
             case .fortyThieves:
                 FortyThievesTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     wasteFanSpacing: wasteFanSpacing,
@@ -543,7 +562,9 @@ struct TopRowView: View {
                 )
             case .canfield:
                 CanfieldTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     wasteFanSpacing: wasteFanSpacing,
@@ -566,8 +587,42 @@ struct TopRowView: View {
     }
 }
 
+/// Prunes the whole top row when nothing it renders changed; see
+/// TableauPileView's Equatable note for the exclusion contract.
+///
+/// Tilt writes deliberately have no place here: `cardTilts` reaches each
+/// CardView as a binding it reads in its own body, so a tilt write (the
+/// waste-return reroll included) invalidates the affected CardView directly —
+/// pruning any ancestor, this row included, cannot stale it. That direct
+/// dependency is the contract a CardView refactor must preserve.
+extension TopRowView: Equatable {
+    nonisolated static func == (lhs: TopRowView, rhs: TopRowView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.board == rhs.board
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.columnSpacing == rhs.columnSpacing
+            && lhs.wasteFanSpacing == rhs.wasteFanSpacing
+            && lhs.activeTarget == rhs.activeTarget
+            && lhs.hintedTarget == rhs.hintedTarget
+            && lhs.isStockHinted == rhs.isStockHinted
+            && lhs.isWasteHinted == rhs.isWasteHinted
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
+            && lhs.drawingCardIDs == rhs.drawingCardIDs
+            && lhs.fanProgress == rhs.fanProgress
+    }
+}
+
 struct TableauRowView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let tableau: [[Card]]
+    let variant: GameVariant
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let faceDownOffset: CGFloat
@@ -585,10 +640,13 @@ struct TableauRowView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: columnSpacing) {
-            ForEach(Array(viewModel.state.tableau.indices), id: \.self) { index in
+            ForEach(Array(tableau.indices), id: \.self) { index in
                 TableauPileView(
-                    viewModel: viewModel,
+                    session: session,
+                    pile: tableau[index],
                     pileIndex: index,
+                    variant: variant,
+                    selection: selection,
                     cardSize: cardSize,
                     faceDownOffset: faceDownOffset,
                     faceUpOffset: faceUpOffset,
@@ -611,9 +669,39 @@ struct TableauRowView: View {
     }
 }
 
+/// Prunes the whole tableau subtree between drop-target crossings; see
+/// TableauPileView's Equatable note for the exclusion contract.
+extension TableauRowView: Equatable {
+    nonisolated static func == (lhs: TableauRowView, rhs: TableauRowView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.tableau == rhs.tableau
+            && lhs.variant == rhs.variant
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.columnSpacing == rhs.columnSpacing
+            && lhs.faceDownOffset == rhs.faceDownOffset
+            && lhs.faceUpOffset == rhs.faceUpOffset
+            && lhs.maxPileHeight == rhs.maxPileHeight
+            && lhs.activeTarget == rhs.activeTarget
+            && lhs.hintedTarget == rhs.hintedTarget
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
+    }
+}
+
 struct FoundationView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    /// nil when a variant switch left this index without a pile — the view
+    /// stays mounted rendering nothing, exactly like the old in-body guard,
+    /// so the row's layout holds through the transient.
+    let pile: [Card]?
     let index: Int
+    let placeholder: FoundationPlaceholder
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let isTargeted: Bool
     let isHintTargeted: Bool
@@ -626,43 +714,40 @@ struct FoundationView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        // Variant switches can shrink the foundations array while this view
-        // is still mounted; render nothing until the parent row rebuilds.
-        if viewModel.state.foundations.indices.contains(index) {
-            let foundation = viewModel.state.foundations[index]
+        if let foundation = pile {
             let visibleDepth = min(foundation.count, 4)
             let startIndex = foundation.count - visibleDepth
             let isDragSource: Bool = {
-                guard viewModel.isDragging, let selection = viewModel.selection else { return false }
-                if case .foundation(let pile) = selection.source {
-                    return pile == index
+                if case .foundation(let sourcePile) = selection.dragSource {
+                    return sourcePile == index
                 }
                 return false
             }()
             let accessibleTopCard: Card? = foundation.last.flatMap { card in
-                let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+                let isDragged = selection.isDragging && selection.isSelected(card)
                 return isDragged || hiddenCardIDs.contains(card.id) ? nil : card
             }
             let isAccessibleTopCardSelected = accessibleTopCard.map {
-                viewModel.isSelected(card: $0)
+                selection.isSelected($0)
             } ?? false
             let highlightZ: Double = 1
             ZStack {
                 PilePlaceholderView(cardSize: cardSize)
                 if foundation.isEmpty {
-                    // Canfield foundations start at the dealt base rank, not the Ace.
-                    if viewModel.gameVariant == .canfield {
-                        if let baseRank = CanfieldGameRules.baseRank(in: viewModel.state) {
-                            Text(baseRank.label)
-                                .font(.system(size: cardSize.width * 0.22, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.28))
-                                .allowsHitTesting(false)
-                        }
-                    } else {
+                    switch placeholder {
+                    case .ace:
                         Image(systemName: "a")
                             .font(.system(size: cardSize.width * 0.22, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.28))
                             .allowsHitTesting(false)
+                    case .baseRank(let rank):
+                        // Canfield foundations start at the dealt base rank.
+                        Text(rank.label)
+                            .font(.system(size: cardSize.width * 0.22, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.28))
+                            .allowsHitTesting(false)
+                    case .blank:
+                        EmptyView()
                     }
                 }
                 DropHighlightView(
@@ -674,11 +759,11 @@ struct FoundationView: View {
                     .zIndex(highlightZ)
                 ForEach(Array(foundation.enumerated().dropFirst(startIndex)), id: \.element.id) { cardIndex, card in
                     let isTopCard = cardIndex == foundation.count - 1
-                    let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
+                    let isDragged = isTopCard && selection.isDragging && selection.isSelected(card)
                     let isHidden = hiddenCardIDs.contains(card.id)
                     let cardView = CardView(
                         card: card,
-                        isSelected: isTopCard && viewModel.isSelected(card: card),
+                        isSelected: isTopCard && selection.isSelected(card),
                         cardSize: cardSize,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
@@ -700,7 +785,7 @@ struct FoundationView: View {
                 }
             }
             .onTapGesture {
-                viewModel.handleFoundationTap(index: index)
+                session.handleFoundationTap(index: index)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityAddTraits(.isButton)
@@ -732,9 +817,34 @@ struct FoundationView: View {
     }
 }
 
+/// See TableauPileView's Equatable note for the exclusion contract.
+extension FoundationView: Equatable {
+    nonisolated static func == (lhs: FoundationView, rhs: FoundationView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.pile == rhs.pile
+            && lhs.index == rhs.index
+            && lhs.placeholder == rhs.placeholder
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.isTargeted == rhs.isTargeted
+            && lhs.isHintTargeted == rhs.isHintTargeted
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
+    }
+}
+
 struct TableauPileView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only (taps route through it); never read in body —
+    /// reading the observable session while rendering would re-couple this
+    /// pile to whole-board invalidation.
+    let session: SolitaireViewModel
+    let pile: [Card]
     let pileIndex: Int
+    let variant: GameVariant
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let faceDownOffset: CGFloat
     let faceUpOffset: CGFloat
@@ -750,145 +860,132 @@ struct TableauPileView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        if viewModel.state.tableau.indices.contains(pileIndex) {
-            let isDragSource: Bool = {
-                guard viewModel.isDragging, let selection = viewModel.selection else { return false }
-                if case .tableau(let pile, _) = selection.source {
-                    return pile == pileIndex
-                }
-                return false
-            }()
-
-            let pile = viewModel.state.tableau[pileIndex]
-            let yOffsets = tableauYOffsets(for: pile)
-            let topCardYOffset = yOffsets.last ?? 0
-            let stackDropYOffset = dropYOffset(for: pile, yOffsets: yOffsets)
-            let height = max(cardSize.height, cardSize.height + topCardYOffset)
-            let highlightYOffset: CGFloat = {
-                guard viewModel.isDragging, let selection = viewModel.selection else {
-                    return stackDropYOffset
-                }
-                if case .tableau(let sourcePile, let sourceIndex) = selection.source,
-                   sourcePile == pileIndex,
-                   sourceIndex < yOffsets.count {
-                    return yOffsets[sourceIndex]
-                }
-                return stackDropYOffset
-            }()
-            let highlightZ: Double = Double(pile.count) + 0.5
-
-            ZStack(alignment: .top) {
-                Color.clear
-                    .frame(width: cardSize.width, height: height)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: nil)
-                    }
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel("Tableau \(pileIndex + 1)")
-                    .accessibilityValue("Empty")
-                    .accessibilityHidden(!pile.isEmpty)
-
-                PilePlaceholderView(cardSize: cardSize)
-                DropHighlightView(
-                    cardSize: cardSize,
-                    isTargeted: isTargeted,
-                    isHintTargeted: isHintTargeted,
-                    hintOpacity: hintHighlightOpacity
-                )
-                    .offset(y: highlightYOffset)
-                    .zIndex(highlightZ)
-
-                ForEach(Array(pile.enumerated()), id: \.element.id) { index, card in
-                    let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
-                    let isHidden = hiddenCardIDs.contains(card.id)
-                    let isSelected = viewModel.isSelected(card: card)
-                    let selectableCards = Array(pile[index...])
-                    let isValidRunOrigin = card.isFaceUp
-                        && viewModel.canSelectTableauCards(selectableCards)
-                    let isExposedFaceDownCard = viewModel.state.variant.dealsFaceDownTableauCards
-                        && !card.isFaceUp
-                        && index == pile.indices.last
-                    let isAccessibilityElement = (isValidRunOrigin || isExposedFaceDownCard)
-                        && !isDragged
-                        && !isHidden
-                    // Yukon and Scorpion groups need not be ordered; every
-                    // other multi-card pickup is a run.
-                    let isGroupMoveVariant = viewModel.state.variant == .yukon
-                        || viewModel.state.variant == .scorpion
-                    let multiCardNoun = isGroupMoveVariant ? "group" : "run"
-                    let accessibilityHint = isExposedFaceDownCard
-                        ? "Flip card"
-                        : selectableCards.count > 1
-                            ? "Selects a \(selectableCards.count)-card \(multiCardNoun)"
-                            : "Selects this card"
-                    let yOffset = yOffsets[index]
-                    let cardView = CardView(
-                        card: card,
-                        isSelected: isSelected,
-                        cardSize: cardSize,
-                        isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts,
-                        hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
-                        isAccessibilityElement: isAccessibilityElement
-                    )
-                    .opacity(isDragged || isHidden ? 0 : 1)
-                    .offset(x: 0, y: yOffset)
-                    .zIndex(isDragged ? 20 + Double(index) : Double(index))
-                    .allowsHitTesting(!isHidden)
-                    .onTapGesture {
-                        viewModel.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
-                    }
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityAddTraits(isSelected ? .isSelected : [])
-                    .accessibilityHint(accessibilityHint)
-                    .cardFramePreference(card.id, yOffset: yOffset)
-
-                    cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
-                }
+        let isDragSource: Bool = {
+            if case .tableau(let sourcePile, _) = selection.dragSource {
+                return sourcePile == pileIndex
             }
-            .frame(width: cardSize.width, height: height, alignment: .top)
-            .background(
-                GeometryReader { proxy in
-                    let boardFrame = proxy.frame(in: .named("board"))
-                    let snapFrame = CGRect(
-                        x: boardFrame.minX,
-                        y: boardFrame.minY + highlightYOffset,
-                        width: cardSize.width,
-                        height: cardSize.height
-                    )
-                    let topCardFrame = CGRect(
-                        x: boardFrame.minX,
-                        y: boardFrame.minY + topCardYOffset,
-                        width: cardSize.width,
-                        height: cardSize.height
-                    )
-                    let hitFrame = snapFrame
-                        .union(topCardFrame)
-                        .expanded(
-                            horizontal: DropTargetHitArea.tableauHorizontalGrace,
-                            top: DropTargetHitArea.tableauTopGrace,
-                            bottom: DropTargetHitArea.tableauBottomGrace
-                        )
-                    Color.clear
-                        .preference(
-                            key: DropTargetFrameKey.self,
-                            value: [
-                                .tableau(pileIndex): DropTargetGeometry(
-                                    snapFrame: snapFrame,
-                                    hitFrame: hitFrame
-                                )
-                            ]
-                        )
-                }
-            )
-            .zIndex(isDragSource ? 10 : 0)
-        } else {
+            return false
+        }()
+
+        let yOffsets = tableauYOffsets(for: pile)
+        let topCardYOffset = yOffsets.last ?? 0
+        let stackDropYOffset = dropYOffset(for: pile, yOffsets: yOffsets)
+        let height = max(cardSize.height, cardSize.height + topCardYOffset)
+        let highlightYOffset: CGFloat = {
+            if case .tableau(let sourcePile, let sourceIndex) = selection.dragSource,
+               sourcePile == pileIndex,
+               sourceIndex < yOffsets.count {
+                return yOffsets[sourceIndex]
+            }
+            return stackDropYOffset
+        }()
+        let highlightZ: Double = Double(pile.count) + 0.5
+
+        ZStack(alignment: .top) {
             Color.clear
-                .frame(width: cardSize.width, height: cardSize.height)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+                .frame(width: cardSize.width, height: height)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    session.handleTableauTap(pileIndex: pileIndex, cardIndex: nil)
+                }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Tableau \(pileIndex + 1)")
+                .accessibilityValue("Empty")
+                .accessibilityHidden(!pile.isEmpty)
+
+            PilePlaceholderView(cardSize: cardSize)
+            DropHighlightView(
+                cardSize: cardSize,
+                isTargeted: isTargeted,
+                isHintTargeted: isHintTargeted,
+                hintOpacity: hintHighlightOpacity
+            )
+                .offset(y: highlightYOffset)
+                .zIndex(highlightZ)
+
+            ForEach(Array(pile.enumerated()), id: \.element.id) { index, card in
+                let isDragged = selection.isDragging && selection.isSelected(card)
+                let isHidden = hiddenCardIDs.contains(card.id)
+                let isSelected = selection.isSelected(card)
+                let selectableCards = Array(pile[index...])
+                let isValidRunOrigin = card.isFaceUp
+                    && GameRules.canSelectTableauCards(selectableCards, within: pile, variant: variant)
+                let isExposedFaceDownCard = variant.dealsFaceDownTableauCards
+                    && !card.isFaceUp
+                    && index == pile.indices.last
+                let isAccessibilityElement = (isValidRunOrigin || isExposedFaceDownCard)
+                    && !isDragged
+                    && !isHidden
+                // Yukon and Scorpion groups need not be ordered; every
+                // other multi-card pickup is a run.
+                let isGroupMoveVariant = variant == .yukon || variant == .scorpion
+                let multiCardNoun = isGroupMoveVariant ? "group" : "run"
+                let accessibilityHint = isExposedFaceDownCard
+                    ? "Flip card"
+                    : selectableCards.count > 1
+                        ? "Selects a \(selectableCards.count)-card \(multiCardNoun)"
+                        : "Selects this card"
+                let yOffset = yOffsets[index]
+                let cardView = CardView(
+                    card: card,
+                    isSelected: isSelected,
+                    cardSize: cardSize,
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
+                    hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
+                    isAccessibilityElement: isAccessibilityElement
+                )
+                .opacity(isDragged || isHidden ? 0 : 1)
+                .offset(x: 0, y: yOffset)
+                .zIndex(isDragged ? 20 + Double(index) : Double(index))
+                .allowsHitTesting(!isHidden)
+                .onTapGesture {
+                    session.handleTableauTap(pileIndex: pileIndex, cardIndex: index)
+                }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityHint(accessibilityHint)
+                .cardFramePreference(card.id, yOffset: yOffset)
+
+                cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
+            }
         }
+        .frame(width: cardSize.width, height: height, alignment: .top)
+        .background(
+            GeometryReader { proxy in
+                let boardFrame = proxy.frame(in: .named("board"))
+                let snapFrame = CGRect(
+                    x: boardFrame.minX,
+                    y: boardFrame.minY + highlightYOffset,
+                    width: cardSize.width,
+                    height: cardSize.height
+                )
+                let topCardFrame = CGRect(
+                    x: boardFrame.minX,
+                    y: boardFrame.minY + topCardYOffset,
+                    width: cardSize.width,
+                    height: cardSize.height
+                )
+                let hitFrame = snapFrame
+                    .union(topCardFrame)
+                    .expanded(
+                        horizontal: DropTargetHitArea.tableauHorizontalGrace,
+                        top: DropTargetHitArea.tableauTopGrace,
+                        bottom: DropTargetHitArea.tableauBottomGrace
+                    )
+                Color.clear
+                    .preference(
+                        key: DropTargetFrameKey.self,
+                        value: [
+                            .tableau(pileIndex): DropTargetGeometry(
+                                snapFrame: snapFrame,
+                                hitFrame: hitFrame
+                            )
+                        ]
+                    )
+            }
+        )
+        .zIndex(isDragSource ? 10 : 0)
     }
 
     private func tableauYOffsets(for pile: [Card]) -> [CGFloat] {
@@ -919,6 +1016,33 @@ struct TableauPileView: View {
         let natural = lastYOffset + (lastCard.isFaceUp ? faceUpOffset : faceDownOffset)
         let maxTopOffset = maxPileHeight - cardSize.height
         return maxTopOffset > 0 ? min(natural, maxTopOffset) : natural
+    }
+}
+
+/// Covers every rendered input so an unrelated move prunes this pile. The
+/// session participates by identity only (event wiring); the tilt binding and
+/// gesture closure are excluded — both act purely through identity-stable
+/// storage, the contract CardView's Equatable documents. Card-level tilt
+/// changes always accompany a pile-content change here (only the waste
+/// rerolls a tilt in place), so no per-card tilt capture is needed.
+extension TableauPileView: Equatable {
+    nonisolated static func == (lhs: TableauPileView, rhs: TableauPileView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.pile == rhs.pile
+            && lhs.pileIndex == rhs.pileIndex
+            && lhs.variant == rhs.variant
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.faceDownOffset == rhs.faceDownOffset
+            && lhs.faceUpOffset == rhs.faceUpOffset
+            && lhs.maxPileHeight == rhs.maxPileHeight
+            && lhs.isTargeted == rhs.isTargeted
+            && lhs.isHintTargeted == rhs.isHintTargeted
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
     }
 }
 

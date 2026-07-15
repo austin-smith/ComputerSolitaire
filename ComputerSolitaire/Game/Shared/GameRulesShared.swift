@@ -73,6 +73,35 @@ nonisolated enum GameRules {
         SharedGameRules.isValidDescendingAlternatingSequence(cards)
     }
 
+    /// Pure, pile-scoped equivalent of the session's `canSelectTableauCards`
+    /// for a run that is a suffix of `pile`; board views call this so
+    /// rendering never reads the observable session. Canfield's whole-pile
+    /// transfer check reduces to a count comparison here: a suffix can only
+    /// be "some entire pile" when it is this entire pile, because card
+    /// identities are unique across the board. `TableauPickupParityTests`
+    /// pins this equivalence against the session method.
+    static func canSelectTableauCards(
+        _ cards: [Card],
+        within pile: [Card],
+        variant: GameVariant
+    ) -> Bool {
+        switch variant {
+        case .klondike, .yukon, .scorpion:
+            return true
+        case .freecell:
+            return isValidDescendingAlternatingSequence(cards)
+        case .spider:
+            return SharedGameRules.isDescendingSameSuitRun(cards)
+        case .golf, .fortyThieves:
+            return cards.count == 1
+        case .canfield:
+            return cards.count == 1
+                || (CanfieldGameRules.isPackedSequence(cards) && cards.count == pile.count)
+        case .pyramid, .tripeaks:
+            return false
+        }
+    }
+
     static func maxFreeCellTransferCount(
         freeCellSlots: [Card?],
         tableau: [[Card]],

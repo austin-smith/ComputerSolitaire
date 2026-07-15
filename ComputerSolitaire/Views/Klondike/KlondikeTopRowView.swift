@@ -1,8 +1,10 @@
 import SwiftUI
-import Observation
 
 struct KlondikeTopRowView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let board: TopRowSnapshot
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let wasteFanSpacing: CGFloat
@@ -23,7 +25,10 @@ struct KlondikeTopRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: columnSpacing) {
             StockView(
-                viewModel: viewModel,
+                session: session,
+                stockCount: board.stockCount,
+                canInteract: board.canInteractWithStock,
+                recyclesRemaining: board.stockRecyclesRemaining,
                 cardSize: cardSize,
                 isHintTargeted: isStockHinted,
                 hintHighlightOpacity: hintHighlightOpacity,
@@ -32,7 +37,9 @@ struct KlondikeTopRowView: View {
             .frame(width: cardSize.width, alignment: .leading)
 
             WasteView(
-                viewModel: viewModel,
+                session: session,
+                cards: board.visibleWasteCards,
+                selection: selection,
                 cardSize: cardSize,
                 fanSpacing: wasteFanSpacing,
                 isHintTargeted: isWasteHinted,
@@ -55,8 +62,11 @@ struct KlondikeTopRowView: View {
 
             ForEach(0..<4, id: \.self) { index in
                 FoundationView(
-                    viewModel: viewModel,
+                    session: session,
+                    pile: board.foundations.indices.contains(index) ? board.foundations[index] : nil,
                     index: index,
+                    placeholder: board.foundationPlaceholder,
+                    selection: selection,
                     cardSize: cardSize,
                     isTargeted: activeTarget == .foundation(index),
                     isHintTargeted: hintedTarget == .foundation(index),

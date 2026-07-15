@@ -1,8 +1,10 @@
 import SwiftUI
-import Observation
 
 struct YukonTopRowView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let board: TopRowSnapshot
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let activeTarget: DropTarget?
@@ -27,8 +29,11 @@ struct YukonTopRowView: View {
 
             ForEach(0..<4, id: \.self) { index in
                 FoundationView(
-                    viewModel: viewModel,
+                    session: session,
+                    pile: board.foundations.indices.contains(index) ? board.foundations[index] : nil,
                     index: index,
+                    placeholder: board.foundationPlaceholder,
+                    selection: selection,
                     cardSize: cardSize,
                     isTargeted: activeTarget == .foundation(index),
                     isHintTargeted: hintedTarget == .foundation(index),

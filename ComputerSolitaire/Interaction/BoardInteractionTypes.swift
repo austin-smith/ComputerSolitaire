@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum DropTarget: Hashable {
+nonisolated enum DropTarget: Hashable {
     case foundation(Int)
     case tableau(Int)
     case freeCell(Int)
@@ -9,7 +9,7 @@ enum DropTarget: Hashable {
     case discard
 }
 
-enum DragOrigin: Hashable {
+nonisolated enum DragOrigin: Hashable {
     case waste
     case foundation(Int)
     case freeCell(Int)
@@ -19,12 +19,12 @@ enum DragOrigin: Hashable {
     case reserve
 }
 
-struct DropTargetGeometry: Equatable {
+nonisolated struct DropTargetGeometry: Equatable {
     let snapFrame: CGRect
     let hitFrame: CGRect
 }
 
-enum DropTargetHitArea {
+nonisolated enum DropTargetHitArea {
     static let freeCellHorizontalGrace: CGFloat = 16
     static let freeCellTopGrace: CGFloat = 14
     static let freeCellBottomGrace: CGFloat = 18
@@ -44,7 +44,7 @@ enum DropTargetHitArea {
     static let pyramidBottomGrace: CGFloat = 8
 }
 
-extension CGRect {
+nonisolated extension CGRect {
     func expanded(horizontal: CGFloat, top: CGFloat, bottom: CGFloat) -> CGRect {
         CGRect(
             x: minX - horizontal,
@@ -55,7 +55,7 @@ extension CGRect {
     }
 }
 
-enum UndoAnimationEndTarget {
+nonisolated enum UndoAnimationEndTarget {
     case card(UUID)
     case stock(Int)
 }
