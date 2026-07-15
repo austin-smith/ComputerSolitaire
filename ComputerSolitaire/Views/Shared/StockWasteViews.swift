@@ -121,8 +121,11 @@ struct WasteView: View {
     /// The top card's tilt captured at init for the `Equatable` check: an
     /// invalid waste drag rerolls the hidden top card's tilt while the pile's
     /// contents and selection are unchanged (`beginReturnAnimation`), and
-    /// nothing else in `==` would see that write — a pruned waste would then
-    /// visibly re-tilt on reveal.
+    /// nothing else in `==` would see that write. Live propagation of the
+    /// reroll is carried by CardView's own body read of the tilt binding — a
+    /// direct dependency that survives ancestor pruning — so this capture is
+    /// defense in depth: it keeps a re-created waste honest about what its
+    /// cards were built with.
     private let topCardTilt: Double?
 
     init(

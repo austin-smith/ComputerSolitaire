@@ -589,6 +589,12 @@ struct TopRowView: View {
 
 /// Prunes the whole top row when nothing it renders changed; see
 /// TableauPileView's Equatable note for the exclusion contract.
+///
+/// Tilt writes deliberately have no place here: `cardTilts` reaches each
+/// CardView as a binding it reads in its own body, so a tilt write (the
+/// waste-return reroll included) invalidates the affected CardView directly —
+/// pruning any ancestor, this row included, cannot stale it. That direct
+/// dependency is the contract a CardView refactor must preserve.
 extension TopRowView: Equatable {
     nonisolated static func == (lhs: TopRowView, rhs: TopRowView) -> Bool {
         lhs.session === rhs.session
