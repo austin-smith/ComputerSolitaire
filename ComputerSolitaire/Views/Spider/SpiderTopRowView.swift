@@ -1,8 +1,10 @@
 import SwiftUI
-import Observation
 
 struct SpiderTopRowView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let board: TopRowSnapshot
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let isStockHinted: Bool
@@ -17,7 +19,8 @@ struct SpiderTopRowView: View {
             // Stock on the left like Klondike's, one clear column, then the
             // eight banked-run piles aligned over tableau columns 3-10.
             TableauStockView(
-                viewModel: viewModel,
+                session: session,
+                stockCount: board.stockCount,
                 cardSize: cardSize,
                 isHintTargeted: isStockHinted,
                 hintHighlightOpacity: hintHighlightOpacity,
@@ -34,7 +37,7 @@ struct SpiderTopRowView: View {
             // during a game switch this row can re-evaluate against the
             // incoming variant's four-foundation state before the board
             // replaces it.
-            ForEach(Array(viewModel.state.foundations.enumerated()), id: \.offset) { index, pile in
+            ForEach(Array(board.foundations.enumerated()), id: \.offset) { index, pile in
                 CompletedRunPileView(
                     pile: pile,
                     index: index,

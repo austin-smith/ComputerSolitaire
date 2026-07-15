@@ -1,8 +1,10 @@
 import SwiftUI
-import Observation
 
 struct GolfTopRowView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let board: TopRowSnapshot
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let activeTarget: DropTarget?
@@ -22,7 +24,10 @@ struct GolfTopRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: columnSpacing) {
             StockView(
-                viewModel: viewModel,
+                session: session,
+                stockCount: board.stockCount,
+                canInteract: board.canInteractWithStock,
+                recyclesRemaining: board.stockRecyclesRemaining,
                 cardSize: cardSize,
                 isHintTargeted: isStockHinted,
                 hintHighlightOpacity: hintHighlightOpacity,
@@ -31,7 +36,9 @@ struct GolfTopRowView: View {
             .frame(width: cardSize.width, alignment: .leading)
 
             WasteView(
-                viewModel: viewModel,
+                session: session,
+                cards: board.visibleWasteCards,
+                selection: selection,
                 cardSize: cardSize,
                 fanSpacing: 0,
                 isTargeted: activeTarget == .waste,

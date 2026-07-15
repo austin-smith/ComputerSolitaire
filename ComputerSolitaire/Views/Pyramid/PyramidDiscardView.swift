@@ -1,11 +1,10 @@
 import SwiftUI
-import Observation
 
 /// Where removed pairs and Kings land. Inert by design: cards here are out of
 /// play, so the pile takes drops (via the shared drop targeting) but offers no
-/// taps or drags of its own.
+/// taps or drags of its own — it needs no session reference at all.
 struct PyramidDiscardView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    let discard: [Card]
     let cardSize: CGSize
     let isTargeted: Bool
     let isHintTargeted: Bool
@@ -15,7 +14,6 @@ struct PyramidDiscardView: View {
     let hiddenCardIDs: Set<UUID>
 
     var body: some View {
-        let discard = viewModel.state.discard
         let visibleDepth = min(discard.count, 4)
         let startIndex = discard.count - visibleDepth
 
@@ -72,5 +70,18 @@ struct PyramidDiscardView: View {
                     )
             }
         )
+    }
+}
+
+/// See TableauPileView's Equatable note for the exclusion contract.
+extension PyramidDiscardView: Equatable {
+    nonisolated static func == (lhs: PyramidDiscardView, rhs: PyramidDiscardView) -> Bool {
+        lhs.discard == rhs.discard
+            && lhs.cardSize == rhs.cardSize
+            && lhs.isTargeted == rhs.isTargeted
+            && lhs.isHintTargeted == rhs.isHintTargeted
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
     }
 }

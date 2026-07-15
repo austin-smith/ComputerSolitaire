@@ -45,6 +45,7 @@ nonisolated struct TopRowSnapshot: Equatable {
     let variant: GameVariant
     let foundations: [[Card]]
     let foundationPlaceholder: FoundationPlaceholder
+    let freeCells: [Card?]
     let stockCount: Int
     let canInteractWithStock: Bool
     /// Pyramid's remaining waste recycles; nil for every other variant.
@@ -64,6 +65,7 @@ extension SolitaireViewModel {
             variant: state.variant,
             foundations: state.foundations,
             foundationPlaceholder: foundationPlaceholder,
+            freeCells: state.freeCells,
             stockCount: state.stock.count,
             canInteractWithStock: canInteractWithStock,
             stockRecyclesRemaining: state.variant == .pyramid ? pyramidWasteRecyclesRemaining : nil,

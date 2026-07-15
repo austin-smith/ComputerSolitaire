@@ -88,4 +88,90 @@ final class BoardViewEquatableTests: XCTestCase {
             makeTableauPileView(session: otherSession, pile: pile, selection: selection, hintWiggleToken: token)
         )
     }
+
+    func testWasteViewPrunesOnEqualInputsButSeesTopCardTiltRerolls() {
+        let session = SolitaireViewModel(variant: .klondike)
+        let cards = [TestCards.make(.clubs, .four), TestCards.make(.diamonds, .nine)]
+        let topID = cards[1].id
+        let hintToken = UUID()
+        // Fresh closures/bindings per call; only `tilts` varies.
+        func makeWasteView(tilts: [UUID: Double]) -> WasteView {
+            WasteView(
+                session: session,
+                cards: cards,
+                selection: session.selectionSnapshot,
+                cardSize: CGSize(width: 50, height: 70),
+                fanSpacing: 14,
+                isHintTargeted: false,
+                isCardTiltEnabled: true,
+                cardTilts: .constant(tilts),
+                hiddenCardIDs: [],
+                hintedCardIDs: [],
+                hintWiggleToken: hintToken,
+                drawingCardIDs: [],
+                fanProgress: [:],
+                dragGesture: anyDragGesture()
+            )
+        }
+
+        let base = makeWasteView(tilts: [topID: 1.2])
+        XCTAssertEqual(base, makeWasteView(tilts: [topID: 1.2]))
+
+        // The waste-return tilt reroll mutates only the tilt dictionary; the
+        // captured topCardTilt must surface it or the pile would prune past
+        // the write and visibly re-tilt on reveal.
+        XCTAssertNotEqual(base, makeWasteView(tilts: [topID: -1.7]))
+
+        // A tilt write for a non-top card cannot affect rendering here and
+        // must not defeat pruning.
+        XCTAssertEqual(base, makeWasteView(tilts: [topID: 1.2, cards[0].id: 0.4]))
+    }
+
+    private func makeFoundationView(
+        session: SolitaireViewModel,
+        pile: [Card]?,
+        placeholder: FoundationPlaceholder,
+        hintWiggleToken: UUID
+    ) -> FoundationView {
+        FoundationView(
+            session: session,
+            pile: pile,
+            index: 0,
+            placeholder: placeholder,
+            selection: session.selectionSnapshot,
+            cardSize: CGSize(width: 50, height: 70),
+            isTargeted: false,
+            isHintTargeted: false,
+            hintHighlightOpacity: 0,
+            isCardTiltEnabled: true,
+            cardTilts: .constant([:]),
+            hiddenCardIDs: [],
+            hintedCardIDs: [],
+            hintWiggleToken: hintWiggleToken,
+            dragGesture: anyDragGesture()
+        )
+    }
+
+    func testFoundationViewEquatableCoversPileAndPlaceholder() {
+        let session = SolitaireViewModel(variant: .klondike)
+        let pile = [TestCards.make(.spades, .ace)]
+        let token = UUID()
+        let base = makeFoundationView(session: session, pile: pile, placeholder: .ace, hintWiggleToken: token)
+        XCTAssertEqual(
+            base,
+            makeFoundationView(session: session, pile: pile, placeholder: .ace, hintWiggleToken: token)
+        )
+        XCTAssertNotEqual(
+            base,
+            makeFoundationView(session: session, pile: pile + [TestCards.make(.spades, .two)], placeholder: .ace, hintWiggleToken: token)
+        )
+        XCTAssertNotEqual(
+            base,
+            makeFoundationView(session: session, pile: nil, placeholder: .ace, hintWiggleToken: token)
+        )
+        XCTAssertNotEqual(
+            base,
+            makeFoundationView(session: session, pile: pile, placeholder: .baseRank(.five), hintWiggleToken: token)
+        )
+    }
 }

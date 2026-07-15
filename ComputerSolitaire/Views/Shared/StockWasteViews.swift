@@ -1,13 +1,16 @@
 import SwiftUI
-import Observation
 
 /// The stock and waste piles shared by every variant that deals from a stock:
 /// Klondike, Spider (stock only), Pyramid, and TriPeaks compose these into
-/// their top rows. Variant behavior stays in the view model (`handleStockTap`,
-/// `handleWasteTap`, `canInteractWithStock`, `visibleWasteCards`); these views
-/// only render and forward interaction.
+/// their top rows. Variant behavior stays in the session (`handleStockTap`,
+/// `handleWasteTap`); these views render value slices and forward interaction.
 struct StockView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let stockCount: Int
+    let canInteract: Bool
+    /// Pyramid's remaining waste recycles; nil for every other variant.
+    let recyclesRemaining: Int?
     let cardSize: CGSize
     let isHintTargeted: Bool
     let hintHighlightOpacity: Double
@@ -17,13 +20,13 @@ struct StockView: View {
 
     var body: some View {
         Button {
-            viewModel.handleStockTap()
+            session.handleStockTap()
         } label: {
             ZStack {
                 PilePlaceholderView(cardSize: cardSize)
                     .allowsHitTesting(false)
-                if viewModel.state.stock.isEmpty {
-                    if viewModel.canInteractWithStock {
+                if stockCount == 0 {
+                    if canInteract {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.7))
@@ -33,7 +36,7 @@ struct StockView: View {
                     CardBackView(cardSize: cardSize)
                 }
                 if isStockCountVisible {
-                    Text("\(viewModel.state.stock.count)")
+                    Text("\(stockCount)")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.8))
                         .offset(x: cardSize.width * 0.28, y: cardSize.height * 0.38)
@@ -57,34 +60,54 @@ struct StockView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!viewModel.canInteractWithStock)
+        .disabled(!canInteract)
         .accessibilityLabel("Stock")
         .accessibilityValue(stockAccessibilityValue)
     }
 
     private var stockAccessibilityValue: String {
-        if !viewModel.state.stock.isEmpty {
-            if viewModel.gameVariant == .pyramid {
-                let recycles = viewModel.pyramidWasteRecyclesRemaining
-                return "\(viewModel.state.stock.count) cards. \(recycles) recycles left"
+        if stockCount > 0 {
+            if let recyclesRemaining {
+                return "\(stockCount) cards. \(recyclesRemaining) recycles left"
             }
-            return "\(viewModel.state.stock.count) cards"
+            return "\(stockCount) cards"
         }
-        if viewModel.canInteractWithStock {
+        if canInteract {
             return "Empty. Activate to recycle the waste pile"
         }
         return "Empty"
     }
 }
 
+/// Covers every rendered input so unrelated moves prune the stock; the
+/// session participates by identity only and the `@AppStorage` count toggle
+/// self-invalidates as a DynamicProperty, so it needs no place in `==`.
+extension StockView: Equatable {
+    nonisolated static func == (lhs: StockView, rhs: StockView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.stockCount == rhs.stockCount
+            && lhs.canInteract == rhs.canInteract
+            && lhs.recyclesRemaining == rhs.recyclesRemaining
+            && lhs.cardSize == rhs.cardSize
+            && lhs.isHintTargeted == rhs.isHintTargeted
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
+    }
+}
+
 struct WasteView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    /// The fanned cards — the session's `visibleWasteCards()`, precomputed
+    /// into the top-row snapshot.
+    let cards: [Card]
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let fanSpacing: CGFloat
     var isTargeted: Bool = false
-    /// Whether tapping the waste does anything. TriPeaks turns this off — its
-    /// waste top is the match target, never a mover — so the pile neither
-    /// handles taps nor advertises itself to VoiceOver as a button.
+    /// Whether tapping the waste does anything. TriPeaks and Golf turn this
+    /// off — their waste top is the match target, never a mover — so the pile
+    /// neither handles taps nor advertises itself to VoiceOver as a button.
     var isTapEnabled: Bool = true
     let isHintTargeted: Bool
     let isCardTiltEnabled: Bool
@@ -95,26 +118,67 @@ struct WasteView: View {
     let drawingCardIDs: Set<UUID>
     let fanProgress: [UUID: Double]
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
+    /// The top card's tilt captured at init for the `Equatable` check: an
+    /// invalid waste drag rerolls the hidden top card's tilt while the pile's
+    /// contents and selection are unchanged (`beginReturnAnimation`), and
+    /// nothing else in `==` would see that write — a pruned waste would then
+    /// visibly re-tilt on reveal.
+    private let topCardTilt: Double?
+
+    init(
+        session: SolitaireViewModel,
+        cards: [Card],
+        selection: SelectionSnapshot,
+        cardSize: CGSize,
+        fanSpacing: CGFloat,
+        isTargeted: Bool = false,
+        isTapEnabled: Bool = true,
+        isHintTargeted: Bool,
+        isCardTiltEnabled: Bool,
+        cardTilts: Binding<[UUID: Double]>,
+        hiddenCardIDs: Set<UUID>,
+        hintedCardIDs: Set<UUID>,
+        hintWiggleToken: UUID,
+        drawingCardIDs: Set<UUID>,
+        fanProgress: [UUID: Double],
+        dragGesture: @escaping (DragOrigin) -> AnyGesture<DragGesture.Value>
+    ) {
+        self.session = session
+        self.cards = cards
+        self.selection = selection
+        self.cardSize = cardSize
+        self.fanSpacing = fanSpacing
+        self.isTargeted = isTargeted
+        self.isTapEnabled = isTapEnabled
+        self.isHintTargeted = isHintTargeted
+        self.isCardTiltEnabled = isCardTiltEnabled
+        self._cardTilts = cardTilts
+        self.hiddenCardIDs = hiddenCardIDs
+        self.hintedCardIDs = hintedCardIDs
+        self.hintWiggleToken = hintWiggleToken
+        self.drawingCardIDs = drawingCardIDs
+        self.fanProgress = fanProgress
+        self.dragGesture = dragGesture
+        self.topCardTilt = cards.last.flatMap { cardTilts.wrappedValue[$0.id] }
+    }
 
     var body: some View {
         let isDragSource: Bool = {
-            guard viewModel.isDragging, let selection = viewModel.selection else { return false }
-            if case .waste = selection.source {
+            if case .waste = selection.dragSource {
                 return true
             }
             return false
         }()
-        let visibleWaste = viewModel.visibleWasteCards()
-        let accessibleTopCard: Card? = visibleWaste.last.flatMap { card in
-            let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+        let accessibleTopCard: Card? = cards.last.flatMap { card in
+            let isDragged = selection.isDragging && selection.isSelected(card)
             let isUnavailable = isDragged || drawingCardIDs.contains(card.id) || hiddenCardIDs.contains(card.id)
             return isUnavailable ? nil : card
         }
         let isAccessibleTopCardSelected = accessibleTopCard.map {
-            viewModel.isSelected(card: $0)
+            selection.isSelected($0)
         } ?? false
-        let isSelected = visibleWaste.contains(where: { viewModel.isSelected(card: $0) })
-        let fanWidth = fanSpacing * CGFloat(max(0, visibleWaste.count - 1))
+        let isSelected = cards.contains(where: { selection.isSelected($0) })
+        let fanWidth = fanSpacing * CGFloat(max(0, cards.count - 1))
 
         ZStack(alignment: .topLeading) {
             PilePlaceholderView(cardSize: cardSize)
@@ -127,16 +191,16 @@ struct WasteView: View {
             )
             .zIndex(3)
             .allowsHitTesting(false)
-            ForEach(Array(visibleWaste.enumerated()), id: \.element.id) { index, card in
-                let isTopCard = index == visibleWaste.count - 1
-                let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
+            ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
+                let isTopCard = index == cards.count - 1
+                let isDragged = isTopCard && selection.isDragging && selection.isSelected(card)
                 let isDrawing = drawingCardIDs.contains(card.id)
                 let isHidden = hiddenCardIDs.contains(card.id)
                 let progress = fanProgress[card.id] ?? 1
                 let xOffset = CGFloat(index) * fanSpacing * progress
                 let cardView = CardView(
                     card: card,
-                    isSelected: viewModel.isSelected(card: card),
+                    isSelected: selection.isSelected(card),
                     cardSize: cardSize,
                     isCardTiltEnabled: isCardTiltEnabled,
                     cardTilts: $cardTilts,
@@ -165,7 +229,7 @@ struct WasteView: View {
         )
         .onTapGesture {
             guard isTapEnabled else { return }
-            viewModel.handleWasteTap()
+            session.handleWasteTap()
         }
         .zIndex(isDragSource || isSelected ? 10 : 0)
         .accessibilityElement(children: .ignore)
@@ -177,5 +241,29 @@ struct WasteView: View {
         // let assistive technologies infer interactivity even when disabled.
         .accessibilityRespondsToUserInteraction(isTapEnabled)
         .accessibilityHidden(accessibleTopCard == nil)
+    }
+}
+
+/// Covers every rendered input — including the fan-driving `drawingCardIDs`
+/// and `fanProgress`, and the captured `topCardTilt` — so unrelated moves
+/// prune the waste. The session participates by identity only; the tilt
+/// binding and gesture closure are excluded per CardView's contract.
+extension WasteView: Equatable {
+    nonisolated static func == (lhs: WasteView, rhs: WasteView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.cards == rhs.cards
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.fanSpacing == rhs.fanSpacing
+            && lhs.isTargeted == rhs.isTargeted
+            && lhs.isTapEnabled == rhs.isTapEnabled
+            && lhs.isHintTargeted == rhs.isHintTargeted
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
+            && lhs.drawingCardIDs == rhs.drawingCardIDs
+            && lhs.fanProgress == rhs.fanProgress
+            && lhs.topCardTilt == rhs.topCardTilt
     }
 }

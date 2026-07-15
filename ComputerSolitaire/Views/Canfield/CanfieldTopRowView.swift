@@ -1,12 +1,14 @@
 import SwiftUI
-import Observation
 
 /// Canfield's top row matches Klondike's shape — stock, fanned waste, a
 /// spacer column the fan can overflow into, and four foundations. The
 /// reserve renders in the tableau band (see `CanfieldBoardRowView`), beside
 /// the piles it feeds, as on a physical table.
 struct CanfieldTopRowView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let board: TopRowSnapshot
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let wasteFanSpacing: CGFloat
@@ -27,7 +29,10 @@ struct CanfieldTopRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: columnSpacing) {
             StockView(
-                viewModel: viewModel,
+                session: session,
+                stockCount: board.stockCount,
+                canInteract: board.canInteractWithStock,
+                recyclesRemaining: board.stockRecyclesRemaining,
                 cardSize: cardSize,
                 isHintTargeted: isStockHinted,
                 hintHighlightOpacity: hintHighlightOpacity,
@@ -36,7 +41,9 @@ struct CanfieldTopRowView: View {
             .frame(width: cardSize.width, alignment: .leading)
 
             WasteView(
-                viewModel: viewModel,
+                session: session,
+                cards: board.visibleWasteCards,
+                selection: selection,
                 cardSize: cardSize,
                 fanSpacing: wasteFanSpacing,
                 isHintTargeted: isWasteHinted,
@@ -59,8 +66,11 @@ struct CanfieldTopRowView: View {
 
             ForEach(0..<4, id: \.self) { index in
                 FoundationView(
-                    viewModel: viewModel,
+                    session: session,
+                    pile: board.foundations.indices.contains(index) ? board.foundations[index] : nil,
                     index: index,
+                    placeholder: board.foundationPlaceholder,
+                    selection: selection,
                     cardSize: cardSize,
                     isTargeted: activeTarget == .foundation(index),
                     isHintTargeted: hintedTarget == .foundation(index),
@@ -85,7 +95,11 @@ struct CanfieldTopRowView: View {
 /// stock, as on a physical table — a spacer pair, then the four tableau
 /// piles aligned directly beneath the four foundations.
 struct CanfieldBoardRowView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let reserve: [Card]
+    let tableau: [[Card]]
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let faceDownOffset: CGFloat
@@ -104,7 +118,9 @@ struct CanfieldBoardRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: columnSpacing) {
             CanfieldReserveView(
-                viewModel: viewModel,
+                session: session,
+                reserve: reserve,
+                selection: selection,
                 cardSize: cardSize,
                 isCardTiltEnabled: isCardTiltEnabled,
                 cardTilts: $cardTilts,
@@ -122,10 +138,10 @@ struct CanfieldBoardRowView: View {
             }
 
             TableauRowView(
-                session: viewModel,
-                tableau: viewModel.state.tableau,
-                variant: viewModel.gameVariant,
-                selection: viewModel.selectionSnapshot,
+                session: session,
+                tableau: tableau,
+                variant: .canfield,
+                selection: selection,
                 cardSize: cardSize,
                 columnSpacing: columnSpacing,
                 faceDownOffset: faceDownOffset,
@@ -151,7 +167,10 @@ struct CanfieldBoardRowView: View {
 /// The reserve pile ("the demon"): a face-down packet whose exposed top card
 /// is always playable. It is never a drop target — cards only ever leave.
 struct CanfieldReserveView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let reserve: [Card]
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
@@ -161,22 +180,20 @@ struct CanfieldReserveView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        let reserve = viewModel.state.reserve
         let topCard = reserve.last
         let isDragSource: Bool = {
-            guard viewModel.isDragging, let selection = viewModel.selection else { return false }
-            if case .reserve = selection.source {
+            if case .reserve = selection.dragSource {
                 return true
             }
             return false
         }()
         let accessibleTopCard: Card? = topCard.flatMap { card in
             guard card.isFaceUp else { return nil }
-            let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+            let isDragged = selection.isDragging && selection.isSelected(card)
             return isDragged || hiddenCardIDs.contains(card.id) ? nil : card
         }
         let isAccessibleTopCardSelected = accessibleTopCard.map {
-            viewModel.isSelected(card: $0)
+            selection.isSelected($0)
         } ?? false
 
         VStack(spacing: 4) {
@@ -186,11 +203,11 @@ struct CanfieldReserveView: View {
                     CardBackView(cardSize: cardSize)
                 }
                 if let topCard, topCard.isFaceUp {
-                    let isDragged = viewModel.isDragging && viewModel.isSelected(card: topCard)
+                    let isDragged = selection.isDragging && selection.isSelected(topCard)
                     let isHidden = hiddenCardIDs.contains(topCard.id)
                     CardView(
                         card: topCard,
-                        isSelected: viewModel.isSelected(card: topCard),
+                        isSelected: selection.isSelected(topCard),
                         cardSize: cardSize,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
@@ -212,7 +229,7 @@ struct CanfieldReserveView: View {
                 .allowsHitTesting(false)
         }
         .onTapGesture {
-            viewModel.handleReserveTap()
+            session.handleReserveTap()
         }
         .zIndex(isDragSource ? 10 : 0)
         .accessibilityElement(children: .ignore)
@@ -227,5 +244,41 @@ struct CanfieldReserveView: View {
         guard count > 0 else { return "Empty" }
         guard let topCard else { return "\(count) cards" }
         return "\(topCard.accessibilityName). \(count) cards"
+    }
+}
+
+/// See TableauPileView's Equatable note for the exclusion contract.
+extension CanfieldReserveView: Equatable {
+    nonisolated static func == (lhs: CanfieldReserveView, rhs: CanfieldReserveView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.reserve == rhs.reserve
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
+    }
+}
+
+/// See TableauPileView's Equatable note for the exclusion contract.
+extension CanfieldBoardRowView: Equatable {
+    nonisolated static func == (lhs: CanfieldBoardRowView, rhs: CanfieldBoardRowView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.reserve == rhs.reserve
+            && lhs.tableau == rhs.tableau
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.columnSpacing == rhs.columnSpacing
+            && lhs.faceDownOffset == rhs.faceDownOffset
+            && lhs.faceUpOffset == rhs.faceUpOffset
+            && lhs.maxPileHeight == rhs.maxPileHeight
+            && lhs.activeTarget == rhs.activeTarget
+            && lhs.hintedTarget == rhs.hintedTarget
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
     }
 }

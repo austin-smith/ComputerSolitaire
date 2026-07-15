@@ -1,12 +1,14 @@
 import SwiftUI
-import Observation
 
 /// The 28-slot three-peak layout replaces the shared tableau row for the
 /// TriPeaks variant: three face-down rows overlapping down to the face-up
 /// ten-card base row. Slots are never drop targets — cards play from here onto
 /// the waste — so the board registers no drop frames.
 struct TriPeaksBoardView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let triPeaks: [Card?]
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let maxBoardHeight: CGFloat
@@ -28,7 +30,7 @@ struct TriPeaksBoardView: View {
             // 0..<28: during a game switch this view can re-evaluate against
             // the incoming variant's empty triPeaks array before the board
             // replaces it.
-            ForEach(Array(viewModel.state.triPeaks.enumerated()), id: \.offset) { index, slot in
+            ForEach(Array(triPeaks.enumerated()), id: \.offset) { index, slot in
                 if let card = slot {
                     peakCard(card, at: index, rowOverlap: rowOverlap)
                 }
@@ -60,10 +62,10 @@ struct TriPeaksBoardView: View {
     private func peakCard(_ card: Card, at index: Int, rowOverlap: CGFloat) -> some View {
         let row = TriPeaksGeometry.row(of: index)
         let offset = slotOffset(for: index, rowOverlap: rowOverlap)
-        let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+        let isDragged = selection.isDragging && selection.isSelected(card)
         let isHidden = hiddenCardIDs.contains(card.id)
-        let isSelected = viewModel.isSelected(card: card)
-        let isUncovered = TriPeaksGeometry.isUncovered(index, in: viewModel.state.triPeaks)
+        let isSelected = selection.isSelected(card)
+        let isUncovered = TriPeaksGeometry.isUncovered(index, in: triPeaks)
         let isAccessibilityElement = card.isFaceUp && isUncovered && !isDragged && !isHidden
 
         CardView(
@@ -80,7 +82,7 @@ struct TriPeaksBoardView: View {
         .zIndex(isDragged ? 40 + Double(row) : Double(row))
         .allowsHitTesting(!isHidden)
         .onTapGesture {
-            viewModel.handleTriPeaksTap(index: index)
+            session.handleTriPeaksTap(index: index)
         }
         .gesture(dragGesture(.triPeaks(index)))
         .accessibilityHidden(!isAccessibilityElement)
@@ -88,5 +90,21 @@ struct TriPeaksBoardView: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityHint("Plays onto the waste")
         .cardFramePreference(card.id, xOffset: offset.width, yOffset: offset.height)
+    }
+}
+
+/// See TableauPileView's Equatable note for the exclusion contract.
+extension TriPeaksBoardView: Equatable {
+    nonisolated static func == (lhs: TriPeaksBoardView, rhs: TriPeaksBoardView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.triPeaks == rhs.triPeaks
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.columnSpacing == rhs.columnSpacing
+            && lhs.maxBoardHeight == rhs.maxBoardHeight
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
     }
 }

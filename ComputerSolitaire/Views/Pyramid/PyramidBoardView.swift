@@ -1,10 +1,12 @@
 import SwiftUI
-import Observation
 
 /// The 28-slot pyramid replaces the shared tableau row for the Pyramid variant:
 /// seven centered rows where each card half-overlaps the two cards above it.
 struct PyramidBoardView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let pyramid: [Card?]
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let maxBoardHeight: CGFloat
@@ -29,7 +31,7 @@ struct PyramidBoardView: View {
             // 0..<28: during a game switch this view can re-evaluate against
             // the incoming variant's empty pyramid before the board replaces
             // it.
-            ForEach(Array(viewModel.state.pyramid.enumerated()), id: \.offset) { index, slot in
+            ForEach(Array(pyramid.enumerated()), id: \.offset) { index, slot in
                 if let card = slot {
                     pyramidCard(card, at: index, rowOverlap: rowOverlap)
                 }
@@ -63,10 +65,10 @@ struct PyramidBoardView: View {
     private func pyramidCard(_ card: Card, at index: Int, rowOverlap: CGFloat) -> some View {
         let row = PyramidGeometry.row(of: index)
         let offset = slotOffset(for: index, rowOverlap: rowOverlap)
-        let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+        let isDragged = selection.isDragging && selection.isSelected(card)
         let isHidden = hiddenCardIDs.contains(card.id)
-        let isSelected = viewModel.isSelected(card: card)
-        let isSelectable = PyramidGameRules.isSelectable(index: index, in: viewModel.state.pyramid)
+        let isSelected = selection.isSelected(card)
+        let isSelectable = PyramidGameRules.isSelectable(index: index, in: pyramid)
         let isAccessibilityElement = isSelectable && !isDragged && !isHidden
         let isTargeted = activeTarget == .pyramid(index)
         let isHintTargeted = hintedTarget == .pyramid(index)
@@ -97,7 +99,7 @@ struct PyramidBoardView: View {
         .zIndex(isDragged ? 40 + Double(row) : Double(row))
         .allowsHitTesting(!isHidden)
         .onTapGesture {
-            viewModel.handlePyramidTap(index: index)
+            session.handlePyramidTap(index: index)
         }
         .gesture(dragGesture(.pyramid(index)))
         .accessibilityHidden(!isAccessibilityElement)
@@ -126,5 +128,24 @@ struct PyramidBoardView: View {
                     )
             }
         )
+    }
+}
+
+/// See TableauPileView's Equatable note for the exclusion contract.
+extension PyramidBoardView: Equatable {
+    nonisolated static func == (lhs: PyramidBoardView, rhs: PyramidBoardView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.pyramid == rhs.pyramid
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.columnSpacing == rhs.columnSpacing
+            && lhs.maxBoardHeight == rhs.maxBoardHeight
+            && lhs.activeTarget == rhs.activeTarget
+            && lhs.hintedTarget == rhs.hintedTarget
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
     }
 }

@@ -1,5 +1,4 @@
 import SwiftUI
-import Observation
 
 enum Layout {
     struct Metrics {
@@ -368,8 +367,10 @@ struct StatTileView: View {
 }
 
 struct TopRowView: View {
-    @Bindable var viewModel: SolitaireViewModel
-    let variant: GameVariant
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    let board: TopRowSnapshot
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let columnSpacing: CGFloat
     let wasteFanSpacing: CGFloat
@@ -389,10 +390,12 @@ struct TopRowView: View {
 
     var body: some View {
         Group {
-            switch variant {
+            switch board.variant {
             case .klondike:
                 KlondikeTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     wasteFanSpacing: wasteFanSpacing,
@@ -412,7 +415,9 @@ struct TopRowView: View {
                 )
             case .freecell:
                 FreeCellTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     activeTarget: activeTarget,
@@ -427,7 +432,9 @@ struct TopRowView: View {
                 )
             case .yukon:
                 YukonTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     activeTarget: activeTarget,
@@ -442,7 +449,9 @@ struct TopRowView: View {
                 )
             case .spider:
                 SpiderTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     isStockHinted: isStockHinted,
@@ -454,7 +463,9 @@ struct TopRowView: View {
                 )
             case .scorpion:
                 ScorpionTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     isStockHinted: isStockHinted,
@@ -466,7 +477,9 @@ struct TopRowView: View {
                 )
             case .pyramid:
                 PyramidTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     activeTarget: activeTarget,
@@ -485,7 +498,9 @@ struct TopRowView: View {
                 )
             case .tripeaks:
                 TriPeaksTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     activeTarget: activeTarget,
@@ -504,7 +519,9 @@ struct TopRowView: View {
                 )
             case .golf:
                 GolfTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     activeTarget: activeTarget,
@@ -523,7 +540,9 @@ struct TopRowView: View {
                 )
             case .fortyThieves:
                 FortyThievesTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     wasteFanSpacing: wasteFanSpacing,
@@ -543,7 +562,9 @@ struct TopRowView: View {
                 )
             case .canfield:
                 CanfieldTopRowView(
-                    viewModel: viewModel,
+                    session: session,
+                    board: board,
+                    selection: selection,
                     cardSize: cardSize,
                     columnSpacing: columnSpacing,
                     wasteFanSpacing: wasteFanSpacing,
@@ -563,6 +584,30 @@ struct TopRowView: View {
                 )
             }
         }
+    }
+}
+
+/// Prunes the whole top row when nothing it renders changed; see
+/// TableauPileView's Equatable note for the exclusion contract.
+extension TopRowView: Equatable {
+    nonisolated static func == (lhs: TopRowView, rhs: TopRowView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.board == rhs.board
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.columnSpacing == rhs.columnSpacing
+            && lhs.wasteFanSpacing == rhs.wasteFanSpacing
+            && lhs.activeTarget == rhs.activeTarget
+            && lhs.hintedTarget == rhs.hintedTarget
+            && lhs.isStockHinted == rhs.isStockHinted
+            && lhs.isWasteHinted == rhs.isWasteHinted
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
+            && lhs.drawingCardIDs == rhs.drawingCardIDs
+            && lhs.fanProgress == rhs.fanProgress
     }
 }
 
@@ -642,8 +687,15 @@ extension TableauRowView: Equatable {
 }
 
 struct FoundationView: View {
-    @Bindable var viewModel: SolitaireViewModel
+    /// Event wiring only; never read in body.
+    let session: SolitaireViewModel
+    /// nil when a variant switch left this index without a pile — the view
+    /// stays mounted rendering nothing, exactly like the old in-body guard,
+    /// so the row's layout holds through the transient.
+    let pile: [Card]?
     let index: Int
+    let placeholder: FoundationPlaceholder
+    let selection: SelectionSnapshot
     let cardSize: CGSize
     let isTargeted: Bool
     let isHintTargeted: Bool
@@ -656,43 +708,40 @@ struct FoundationView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        // Variant switches can shrink the foundations array while this view
-        // is still mounted; render nothing until the parent row rebuilds.
-        if viewModel.state.foundations.indices.contains(index) {
-            let foundation = viewModel.state.foundations[index]
+        if let foundation = pile {
             let visibleDepth = min(foundation.count, 4)
             let startIndex = foundation.count - visibleDepth
             let isDragSource: Bool = {
-                guard viewModel.isDragging, let selection = viewModel.selection else { return false }
-                if case .foundation(let pile) = selection.source {
-                    return pile == index
+                if case .foundation(let sourcePile) = selection.dragSource {
+                    return sourcePile == index
                 }
                 return false
             }()
             let accessibleTopCard: Card? = foundation.last.flatMap { card in
-                let isDragged = viewModel.isDragging && viewModel.isSelected(card: card)
+                let isDragged = selection.isDragging && selection.isSelected(card)
                 return isDragged || hiddenCardIDs.contains(card.id) ? nil : card
             }
             let isAccessibleTopCardSelected = accessibleTopCard.map {
-                viewModel.isSelected(card: $0)
+                selection.isSelected($0)
             } ?? false
             let highlightZ: Double = 1
             ZStack {
                 PilePlaceholderView(cardSize: cardSize)
                 if foundation.isEmpty {
-                    // Canfield foundations start at the dealt base rank, not the Ace.
-                    if viewModel.gameVariant == .canfield {
-                        if let baseRank = CanfieldGameRules.baseRank(in: viewModel.state) {
-                            Text(baseRank.label)
-                                .font(.system(size: cardSize.width * 0.22, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.28))
-                                .allowsHitTesting(false)
-                        }
-                    } else {
+                    switch placeholder {
+                    case .ace:
                         Image(systemName: "a")
                             .font(.system(size: cardSize.width * 0.22, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.28))
                             .allowsHitTesting(false)
+                    case .baseRank(let rank):
+                        // Canfield foundations start at the dealt base rank.
+                        Text(rank.label)
+                            .font(.system(size: cardSize.width * 0.22, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.28))
+                            .allowsHitTesting(false)
+                    case .blank:
+                        EmptyView()
                     }
                 }
                 DropHighlightView(
@@ -704,11 +753,11 @@ struct FoundationView: View {
                     .zIndex(highlightZ)
                 ForEach(Array(foundation.enumerated().dropFirst(startIndex)), id: \.element.id) { cardIndex, card in
                     let isTopCard = cardIndex == foundation.count - 1
-                    let isDragged = isTopCard && viewModel.isDragging && viewModel.isSelected(card: card)
+                    let isDragged = isTopCard && selection.isDragging && selection.isSelected(card)
                     let isHidden = hiddenCardIDs.contains(card.id)
                     let cardView = CardView(
                         card: card,
-                        isSelected: isTopCard && viewModel.isSelected(card: card),
+                        isSelected: isTopCard && selection.isSelected(card),
                         cardSize: cardSize,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
@@ -730,7 +779,7 @@ struct FoundationView: View {
                 }
             }
             .onTapGesture {
-                viewModel.handleFoundationTap(index: index)
+                session.handleFoundationTap(index: index)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityAddTraits(.isButton)
@@ -759,6 +808,25 @@ struct FoundationView: View {
             .accessibilityLabel("Foundation \(index + 1)")
             .accessibilityValue(accessibleTopCard?.accessibilityName ?? "Empty")
         }
+    }
+}
+
+/// See TableauPileView's Equatable note for the exclusion contract.
+extension FoundationView: Equatable {
+    nonisolated static func == (lhs: FoundationView, rhs: FoundationView) -> Bool {
+        lhs.session === rhs.session
+            && lhs.pile == rhs.pile
+            && lhs.index == rhs.index
+            && lhs.placeholder == rhs.placeholder
+            && lhs.selection == rhs.selection
+            && lhs.cardSize == rhs.cardSize
+            && lhs.isTargeted == rhs.isTargeted
+            && lhs.isHintTargeted == rhs.isHintTargeted
+            && lhs.hintHighlightOpacity == rhs.hintHighlightOpacity
+            && lhs.isCardTiltEnabled == rhs.isCardTiltEnabled
+            && lhs.hiddenCardIDs == rhs.hiddenCardIDs
+            && lhs.hintedCardIDs == rhs.hintedCardIDs
+            && lhs.hintWiggleToken == rhs.hintWiggleToken
     }
 }
 
