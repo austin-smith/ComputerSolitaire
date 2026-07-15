@@ -122,7 +122,10 @@ struct CanfieldBoardRowView: View {
             }
 
             TableauRowView(
-                viewModel: viewModel,
+                session: viewModel,
+                tableau: viewModel.state.tableau,
+                variant: viewModel.gameVariant,
+                selection: viewModel.selectionSnapshot,
                 cardSize: cardSize,
                 columnSpacing: columnSpacing,
                 faceDownOffset: faceDownOffset,
