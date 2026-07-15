@@ -88,6 +88,40 @@ final class FreeCellAutoFinishTests: XCTestCase {
         }
     }
 
+    func testCascadeGateRejectsSameSuitPairBuriedLowestFirst() {
+        // The 5♠ under the 9♠ must reach the foundation before the 9♠ can,
+        // but only the 9♠'s removal exposes it — impossible, so the position
+        // must be rejected (and cheaply, without the win simulation).
+        let state = freeCellEndgame(
+            freeCells: [nil, nil, nil, nil],
+            highestFoundationRank: .two,
+            tableau: [
+                [TestCards.make(.spades, .five), TestCards.make(.spades, .nine)],
+                [TestCards.make(.hearts, .four), TestCards.make(.hearts, .three)],
+                [], [], [], [], [], []
+            ]
+        )
+        XCTAssertFalse(AutoFinishPlanner.freeCellCascadesAllowFoundationRun(state))
+        XCTAssertFalse(AutoFinishPlanner.canAutoFinish(in: state))
+    }
+
+    func testCascadeGatePassesCrossSuitBurialsForTheSimulationToJudge() {
+        // A♠ under K♥ violates no same-suit ordering, so the cheap gate must
+        // pass it — and the simulation must still reject it, because the K♥
+        // cannot reach the hearts foundation before the buried ace plays.
+        let state = freeCellEndgame(
+            freeCells: [nil, nil, nil, nil],
+            highestFoundationRank: .ace,
+            tableau: [
+                [TestCards.make(.spades, .two), TestCards.make(.hearts, .king)],
+                [TestCards.make(.hearts, .two)],
+                [], [], [], [], [], []
+            ]
+        )
+        XCTAssertTrue(AutoFinishPlanner.freeCellCascadesAllowFoundationRun(state))
+        XCTAssertFalse(AutoFinishPlanner.canAutoFinish(in: state))
+    }
+
     /// Builds a FreeCell endgame where every suit's foundation is filled up to
     /// `highestFoundationRank` and the remaining cards sit in the given layout.
     private func freeCellEndgame(

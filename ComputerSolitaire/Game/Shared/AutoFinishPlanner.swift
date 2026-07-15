@@ -50,7 +50,10 @@ nonisolated private extension AutoFinishPlanner {
             guard state.stock.isEmpty, state.waste.isEmpty else { return false }
             return !state.tableau.joined().contains(where: { !$0.isFaceUp })
         case .freecell:
-            return true
+            // Every FreeCell card is face up, so eligibility rests entirely on
+            // whether the cascades can drain; the ordering check below rejects
+            // nearly every mid-game position without running the simulation.
+            return freeCellCascadesAllowFoundationRun(state)
         case .yukon:
             return !state.tableau.joined().contains(where: { !$0.isFaceUp })
         case .spider, .scorpion:
