@@ -87,6 +87,11 @@ struct ComputerSolitaireApp: App {
                 }
             )
         }
+#if canImport(Sparkle)
+        CommandGroup(after: .appInfo) {
+            CheckForUpdatesButton()
+        }
+#endif
         CommandGroup(replacing: .help) {
             Button {
                 NotificationCenter.default.post(name: .openRulesAndScoring, object: nil)
