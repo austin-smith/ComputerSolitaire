@@ -44,15 +44,6 @@ jobs:
             exit 1
           fi
 
-          # The direct-download macOS build derives its CFBundleVersion from
-          # MARKETING_VERSION (the [sdk=macosx*] override on the target), which
-          # is what the Sparkle feed compares. Verify the wiring is intact.
-          BUILD_VERSIONS="$(printf '%s\n' "$BUILD_SETTINGS" | awk '$1 == "CURRENT_PROJECT_VERSION" && $2 == "=" { print $3 }' | sort -u)"
-          if [[ "$BUILD_VERSIONS" != "$MARKETING_VERSIONS" ]]; then
-            echo "The macOS build's CURRENT_PROJECT_VERSION should derive from MARKETING_VERSION ($MARKETING_VERSIONS), but found: $BUILD_VERSIONS"
-            echo "Sparkle keys updates on the marketing version; check the CURRENT_PROJECT_VERSION[sdk=macosx*] setting on the ComputerSolitaire target."
-            exit 1
-          fi
 
       - name: Import Apple signing certificate
         env:
@@ -87,7 +78,12 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
 
       - name: Build macOS app archive
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
+          # CURRENT_PROJECT_VERSION override: the Sparkle feed compares
+          # CFBundleVersion, so released builds stamp the marketing version
+          # there. The project file itself keeps a plain build number.
           xcodebuild archive \
             -project ComputerSolitaire.xcodeproj \
             -scheme ComputerSolitaire \
@@ -98,6 +94,7 @@ jobs:
             CODE_SIGN_IDENTITY="Developer ID Application" \
             DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            CURRENT_PROJECT_VERSION="${RELEASE_TAG#v}" \
             ARCHS=arm64
 
       # Exporting re-signs all nested code (Sparkle's Autoupdate, Updater.app,
