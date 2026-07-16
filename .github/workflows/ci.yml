@@ -59,3 +59,24 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
+
+  mas-build:
+    name: Mac App Store Build
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Keeps the Sparkle-free target compiling: this build has no Sparkle
+      # package linked, so every canImport(Sparkle) guard must hold.
+      - name: Build app (Mac App Store target)
+        run: |
+          xcodebuild build \
+            -project ComputerSolitaire.xcodeproj \
+            -scheme ComputerSolitaireAppStore \
+            -configuration Debug \
+            -destination "platform=macOS" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO

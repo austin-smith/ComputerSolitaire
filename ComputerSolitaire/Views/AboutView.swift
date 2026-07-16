@@ -32,7 +32,7 @@ struct AboutView: View {
 
                 Text(
                     "Computer Solitaire is a low-frills, ad-free solitaire game for your computer. "
-                        + "Includes Klondike, Spider, FreeCell, and other things you enjoy."
+                        + "It includes Klondike, Spider, FreeCell, and other things you enjoy."
                 )
                     .font(.system(size: 14))
                     .foregroundStyle(.primary)
@@ -121,7 +121,7 @@ struct AboutView: View {
 
             Text(
                 "Computer Solitaire is a low-frills, ad-free solitaire game for your computer. "
-                    + "Includes Klondike, Spider, FreeCell, and other things you enjoy."
+                    + "It includes Klondike, Spider, FreeCell, and other things you enjoy."
             )
                 .font(.system(size: 11))
                 .foregroundStyle(.primary)

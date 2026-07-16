@@ -20,16 +20,15 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          MARKETING_VERSIONS="$(
+          BUILD_SETTINGS="$(
             xcodebuild \
               -project ComputerSolitaire.xcodeproj \
               -scheme ComputerSolitaire \
               -configuration Release \
               -destination "generic/platform=macOS" \
-              -showBuildSettings |
-              awk '$1 == "MARKETING_VERSION" && $2 == "=" { print $3 }' |
-              sort -u
+              -showBuildSettings
           )"
+          MARKETING_VERSIONS="$(printf '%s\n' "$BUILD_SETTINGS" | awk '$1 == "MARKETING_VERSION" && $2 == "=" { print $3 }' | sort -u)"
           VERSION_COUNT="$(printf '%s\n' "$MARKETING_VERSIONS" | awk 'NF { count++ } END { print count + 0 }')"
 
           if [[ "$VERSION_COUNT" -ne 1 ]]; then
@@ -42,6 +41,13 @@ jobs:
           if [[ "$RELEASE_TAG" != "$EXPECTED_TAG" ]]; then
             echo "Release tag $RELEASE_TAG does not match MARKETING_VERSION $MARKETING_VERSIONS."
             echo "Expected tag: $EXPECTED_TAG"
+            exit 1
+          fi
+
+          BUILD_VERSIONS="$(printf '%s\n' "$BUILD_SETTINGS" | awk '$1 == "CURRENT_PROJECT_VERSION" && $2 == "=" { print $3 }' | sort -u)"
+          if [[ "$BUILD_VERSIONS" != "$MARKETING_VERSIONS" ]]; then
+            echo "CURRENT_PROJECT_VERSION must equal MARKETING_VERSION ($MARKETING_VERSIONS), but found: $BUILD_VERSIONS"
+            echo "Sparkle compares CFBundleVersion to decide whether an update is newer, so the build version must advance with every release."
             exit 1
           fi
 
@@ -169,13 +175,33 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          DMG_PATH="ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
-          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
-            gh release upload "${{ github.ref_name }}" "$DMG_PATH" --clobber
+          DMG_PATH="ComputerSolitaire-$RELEASE_TAG-arm64.dmg"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$DMG_PATH" --clobber
+            exit 0
+          fi
+
+          # Release notes come from this version's CHANGELOG.md section — the
+          # same text the Sparkle update dialog shows. Fall back to GitHub's
+          # PR-based notes if the section is missing.
+          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
+          awk -v version="${RELEASE_TAG#v}" '
+            $1 == "##" && $2 == version { in_section = 1; next }
+            $1 == "##" { in_section = 0 }
+            in_section { print }
+          ' CHANGELOG.md > "$NOTES_FILE"
+
+          if [[ -s "$NOTES_FILE" ]]; then
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TAG" \
+              --notes-file "$NOTES_FILE" \
+              "$DMG_PATH"
           else
-            gh release create "${{ github.ref_name }}" \
-              --title "${{ github.ref_name }}" \
+            echo "::warning::CHANGELOG.md has no section for ${RELEASE_TAG#v}; using GitHub-generated notes."
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TAG" \
               --generate-notes \
               "$DMG_PATH"
           fi
@@ -189,3 +215,104 @@ jobs:
           if [[ -n "${NOTARY_API_KEY_PATH:-}" ]]; then
             rm -f "$NOTARY_API_KEY_PATH"
           fi
+
+  appcast:
+    needs: release
+    runs-on: macos-26
+    permissions:
+      contents: read
+
+    env:
+      # Releases older than this predate Sparkle (their CFBundleVersion is
+      # stuck at 1), so they never appear in the appcast.
+      FIRST_SPARKLE_TAG: v0.8.3
+      SPARKLE_VERSION: 2.9.4
+      SPARKLE_TOOLS_SHA256: ce89daf967db1e1893ed3ebd67575ed82d3902563e3191ca92aaec9164fbdef9
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download release archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p archives
+          for TAG in $(gh release list --limit 100 --json tagName --jq '.[].tagName'); do
+            OLDEST="$(printf '%s\n%s\n' "$FIRST_SPARKLE_TAG" "$TAG" | sort -V | head -1)"
+            if [[ "$OLDEST" == "$FIRST_SPARKLE_TAG" ]]; then
+              gh release download "$TAG" --pattern '*.dmg' --dir archives
+            fi
+          done
+          ls archives
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          for DMG in archives/*.dmg; do
+            BASENAME="$(basename "$DMG" .dmg)"
+            VERSION="$(printf '%s' "$BASENAME" | sed -E 's/^ComputerSolitaire-v([0-9.]+)-arm64$/\1/')"
+            awk -v version="$VERSION" '
+              $1 == "##" && $2 == version { in_section = 1; next }
+              $1 == "##" { in_section = 0 }
+              in_section { print }
+            ' CHANGELOG.md > "archives/$BASENAME.md"
+            if [[ ! -s "archives/$BASENAME.md" ]]; then
+              echo "::warning::CHANGELOG.md has no section for $VERSION; its appcast entry will have no release notes."
+              rm "archives/$BASENAME.md"
+            fi
+          done
+
+      - name: Fetch Sparkle tools
+        run: |
+          curl -sL -o sparkle-tools.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
+          echo "$SPARKLE_TOOLS_SHA256  sparkle-tools.tar.xz" | shasum -a 256 -c -
+          mkdir -p sparkle-tools
+          tar -xf sparkle-tools.tar.xz -C sparkle-tools
+
+      - name: Generate appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          if [[ -z "${SPARKLE_ED_PRIVATE_KEY:-}" ]]; then
+            echo "Missing required secret: SPARKLE_ED_PRIVATE_KEY"
+            exit 1
+          fi
+
+          mkdir -p site
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | ./sparkle-tools/bin/generate_appcast archives \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/austin-smith/ComputerSolitaire/releases/download/" \
+            --link "https://github.com/austin-smith/ComputerSolitaire" \
+            --embed-release-notes \
+            --maximum-versions 5 \
+            --maximum-deltas 0 \
+            -o site/appcast.xml
+
+          # Each DMG lives under its release's download path, not a flat
+          # directory; the tag is recoverable from the filename.
+          sed -i '' -E \
+            's|(releases/download/)(ComputerSolitaire-(v[0-9.]+)-arm64\.dmg)|\1\3/\2|g' \
+            site/appcast.xml
+
+          cat site/appcast.xml
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy-appcast:
+    needs: appcast
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
