@@ -73,4 +73,36 @@ final class GameModePickerUITests: XCTestCase {
         XCTAssertTrue(yukonTitle.waitForExistence(timeout: 3), "Selecting the scrolled-to game should switch to it")
     }
 #endif
+#if os(iOS)
+    /// The bottom strip is where a thumb naturally taps to dismiss, and it is
+    /// also where the bottom toolbar's chrome used to swallow scrim taps.
+    /// Regression coverage: the toolbar must leave while the picker is open,
+    /// and a tap in that strip must dismiss the overlay.
+    @MainActor
+    func testTapOutsideDismissesGamePicker() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let titleButton = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS 'Switch game mode'")
+        ).firstMatch
+        XCTAssertTrue(titleButton.waitForExistence(timeout: 5), "Game title button should be on the board")
+        titleButton.tap()
+
+        let scrim = app.buttons["Dismiss game picker"]
+        XCTAssertTrue(scrim.waitForExistence(timeout: 3), "Picker overlay should open from the title button")
+        XCTAssertTrue(
+            app.buttons["Undo"].waitForNonExistence(timeout: 3),
+            "The bottom toolbar must leave while the picker is open — its chrome sits above the overlay and would swallow scrim taps"
+        )
+
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.97)).tap()
+
+        XCTAssertTrue(scrim.waitForNonExistence(timeout: 3), "Tapping the bottom strip outside the panel should dismiss the picker overlay")
+        XCTAssertTrue(
+            app.buttons["Undo"].waitForExistence(timeout: 3),
+            "The bottom toolbar should return once the picker closes"
+        )
+    }
+#endif
 }
