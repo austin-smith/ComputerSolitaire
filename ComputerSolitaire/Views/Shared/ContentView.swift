@@ -1133,6 +1133,12 @@ struct ContentView: View {
         // the finished board, and sweeping copies off a board that never
         // leaves would read as a ghost board peeling away.
         guard viewModel.latestBoardDealEvent != eventBeforeMutation else { return }
+        // Drop the outgoing layout's frames: Redeal reuses the outgoing
+        // game's card IDs, so stale entries would satisfy the deal flight's
+        // readiness check and land cards at their played-out positions.
+        // The wipe is unaffected — it plans from the snapshot captured
+        // above — and the fresh board republishes within a frame.
+        cardFrames = [:]
         startBoardWipe(for: wipedCards, frames: wipeFrames)
     }
 
@@ -1594,15 +1600,17 @@ struct ContentView: View {
                 attemptsRemaining: 75,
                 retryInterval: 0.02,
                 isReady: {
-                    // The fresh board mounts entirely new card views (every
-                    // deal mints new card IDs), so landing frames arrive a
-                    // beat after the state swap — and whole seconds later
-                    // when the deal rides a game switch or first launch,
-                    // where the board tree is still building. Patience here
-                    // is cheap: attempts burn only while frames are missing,
-                    // and any interaction lands the flight through the usual
-                    // cancel paths. The deal also waits for the wipe sweep
-                    // to finish clearing the old board off the felt — the
+                    // A fresh board's landing frames arrive a beat after the
+                    // state swap (dealFreshBoard drops the stale set first —
+                    // New Game mints new card IDs, but Redeal reuses the
+                    // outgoing game's, whose leftover frames would otherwise
+                    // pass this check) — and whole seconds later when the
+                    // deal rides a game switch or first launch, where the
+                    // board tree is still building. Patience here is cheap:
+                    // attempts burn only while frames are missing, and any
+                    // interaction lands the flight through the usual cancel
+                    // paths. The deal also waits for the wipe sweep to
+                    // finish clearing the old board off the felt — the
                     // dealer doesn't deal onto a messy table.
                     wipeAnimationCards.isEmpty
                         && dealtCards.allSatisfy { cardFrames[$0.id] != nil }
