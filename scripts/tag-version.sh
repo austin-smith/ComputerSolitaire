@@ -97,10 +97,13 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
+# The direct-download macOS build derives its CFBundleVersion from
+# MARKETING_VERSION (see the [sdk=macosx*] override in the project), which is
+# what the Sparkle feed compares. Verify that wiring is intact.
 build_versions="$(printf '%s\n' "$build_settings" | awk '$1 == "CURRENT_PROJECT_VERSION" && $2 == "=" { print $3 }' | sort -u)"
 if [[ "$build_versions" != "$version" ]]; then
-  echo "CURRENT_PROJECT_VERSION must equal MARKETING_VERSION ($version), but found: $build_versions" >&2
-  echo "Sparkle compares CFBundleVersion to decide whether an update is newer, so the build version must advance with every release." >&2
+  echo "The macOS build's CURRENT_PROJECT_VERSION should derive from MARKETING_VERSION ($version), but found: $build_versions" >&2
+  echo "Sparkle keys updates on the marketing version; check the CURRENT_PROJECT_VERSION[sdk=macosx*] setting on the ComputerSolitaire target." >&2
   exit 1
 fi
 

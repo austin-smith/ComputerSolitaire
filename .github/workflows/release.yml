@@ -44,10 +44,13 @@ jobs:
             exit 1
           fi
 
+          # The direct-download macOS build derives its CFBundleVersion from
+          # MARKETING_VERSION (the [sdk=macosx*] override on the target), which
+          # is what the Sparkle feed compares. Verify the wiring is intact.
           BUILD_VERSIONS="$(printf '%s\n' "$BUILD_SETTINGS" | awk '$1 == "CURRENT_PROJECT_VERSION" && $2 == "=" { print $3 }' | sort -u)"
           if [[ "$BUILD_VERSIONS" != "$MARKETING_VERSIONS" ]]; then
-            echo "CURRENT_PROJECT_VERSION must equal MARKETING_VERSION ($MARKETING_VERSIONS), but found: $BUILD_VERSIONS"
-            echo "Sparkle compares CFBundleVersion to decide whether an update is newer, so the build version must advance with every release."
+            echo "The macOS build's CURRENT_PROJECT_VERSION should derive from MARKETING_VERSION ($MARKETING_VERSIONS), but found: $BUILD_VERSIONS"
+            echo "Sparkle keys updates on the marketing version; check the CURRENT_PROJECT_VERSION[sdk=macosx*] setting on the ComputerSolitaire target."
             exit 1
           fi
 
@@ -97,13 +100,42 @@ jobs:
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
             ARCHS=arm64
 
+      # Exporting re-signs all nested code (Sparkle's Autoupdate, Updater.app,
+      # and XPC services ship ad-hoc signed) with the Developer ID identity and
+      # secure timestamps. Copying the app straight out of the archive leaves
+      # those ad-hoc signatures in place and notarization rejects them.
+      - name: Export Developer ID app
+        run: |
+          cat > build/ExportOptions.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>developer-id</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Developer ID Application</string>
+            <key>teamID</key>
+            <string>TEAM_ID_PLACEHOLDER</string>
+          </dict>
+          </plist>
+          EOF
+          sed -i '' "s/TEAM_ID_PLACEHOLDER/${{ secrets.APPLE_TEAM_ID }}/" build/ExportOptions.plist
+
+          xcodebuild -exportArchive \
+            -archivePath build/ComputerSolitaire.xcarchive \
+            -exportOptionsPlist build/ExportOptions.plist \
+            -exportPath build/export
+
       - name: Create DMG
         run: |
           mkdir -p dmg-contents
 
-          APP_PATH="$(find build/ComputerSolitaire.xcarchive/Products/Applications -maxdepth 1 -name '*.app' -print -quit)"
+          APP_PATH="$(find build/export -maxdepth 1 -name '*.app' -print -quit)"
           if [[ -z "${APP_PATH}" ]]; then
-            echo "No .app bundle found in archive output."
+            echo "No .app bundle found in export output."
             exit 1
           fi
 
@@ -146,11 +178,29 @@ jobs:
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
           DMG_PATH="ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
-          xcrun notarytool submit "$DMG_PATH" \
+
+          # notarytool's exit code reflects "submission completed", not the
+          # verdict — an Invalid result can still exit 0. Check the status
+          # explicitly and surface Apple's per-file log on failure.
+          SUBMIT_OUTPUT="$(xcrun notarytool submit "$DMG_PATH" \
             --key "$NOTARY_API_KEY_PATH" \
             --key-id "$APPLE_API_KEY_ID" \
             --issuer "$APPLE_API_ISSUER_ID" \
-            --wait
+            --wait | tee /dev/stderr)"
+
+          SUBMISSION_ID="$(printf '%s\n' "$SUBMIT_OUTPUT" | awk '$1 == "id:" { print $2; exit }')"
+          STATUS="$(printf '%s\n' "$SUBMIT_OUTPUT" | awk '$1 == "status:" { status = $2 } END { print status }')"
+
+          if [[ "$STATUS" != "Accepted" ]]; then
+            echo "Notarization verdict: ${STATUS:-unknown} — fetching Apple's log for submission ${SUBMISSION_ID:-unknown}"
+            if [[ -n "$SUBMISSION_ID" ]]; then
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --key "$NOTARY_API_KEY_PATH" \
+                --key-id "$APPLE_API_KEY_ID" \
+                --issuer "$APPLE_API_ISSUER_ID"
+            fi
+            exit 1
+          fi
 
       - name: Staple notarization ticket
         run: |
@@ -159,18 +209,35 @@ jobs:
           xcrun stapler validate "$DMG_PATH"
 
       - name: Verify signed artifact
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          APP_PATH="$(find build/ComputerSolitaire.xcarchive/Products/Applications -maxdepth 1 -name '*.app' -print -quit)"
+          APP_PATH="$(find build/export -maxdepth 1 -name '*.app' -print -quit)"
           if [[ -z "${APP_PATH}" ]]; then
-            echo "No .app bundle found in archive output."
+            echo "No .app bundle found in export output."
             exit 1
           fi
 
-          DMG_PATH="ComputerSolitaire-${{ github.ref_name }}-arm64.dmg"
+          DMG_PATH="ComputerSolitaire-$RELEASE_TAG-arm64.dmg"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           spctl --assess --type execute --verbose=4 "$APP_PATH"
           codesign --verify --verbose=2 "$DMG_PATH"
           xcrun stapler validate "$DMG_PATH"
+
+          # Sparkle's nested helpers must carry the Developer ID signature,
+          # not the ad-hoc one they ship with.
+          SPARKLE_BIN="$APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
+          if codesign -dvv "$SPARKLE_BIN" 2>&1 | grep -q "Signature=adhoc"; then
+            echo "Sparkle helper is still ad-hoc signed; export did not re-sign nested code."
+            exit 1
+          fi
+
+          # The Sparkle feed keys on the marketing version.
+          BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP_PATH/Contents/Info.plist")"
+          if [[ "v$BUNDLE_VERSION" != "$RELEASE_TAG" ]]; then
+            echo "CFBundleVersion ($BUNDLE_VERSION) does not match the release tag ($RELEASE_TAG)."
+            exit 1
+          fi
 
       - name: Create GitHub Release
         env:
