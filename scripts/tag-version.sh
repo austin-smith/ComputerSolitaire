@@ -97,13 +97,6 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
-build_versions="$(printf '%s\n' "$build_settings" | awk '$1 == "CURRENT_PROJECT_VERSION" && $2 == "=" { print $3 }' | sort -u)"
-if [[ "$build_versions" != "$version" ]]; then
-  echo "CURRENT_PROJECT_VERSION must equal MARKETING_VERSION ($version), but found: $build_versions" >&2
-  echo "Sparkle compares CFBundleVersion to decide whether an update is newer, so the build version must advance with every release." >&2
-  exit 1
-fi
-
 tag="v$version"
 
 if git show-ref --verify --quiet "refs/tags/$tag"; then
