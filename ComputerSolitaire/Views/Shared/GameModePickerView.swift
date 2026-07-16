@@ -271,13 +271,16 @@ struct GameModePickerOverlay: View {
     var body: some View {
         ZStack {
             // The scrim is the picker's cancel button: clicking outside the
-            // panel dismisses, matching a system presentation.
+            // panel dismisses, matching a system presentation. Safe areas must
+            // be ignored on the button itself — expanding only the label paints
+            // edge to edge but leaves the hit area inset, deadening taps in the
+            // top and bottom strips on iOS.
             Button(action: onDismiss) {
                 Color.black.opacity(0.35)
-                    .ignoresSafeArea()
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .ignoresSafeArea()
             .accessibilityLabel("Dismiss game picker")
 
             // Short windows (a ten-family gallery on a phone, macOS near its
