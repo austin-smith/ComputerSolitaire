@@ -324,7 +324,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 0.8.2;
+				MARKETING_VERSION = 0.8.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
 				PRODUCT_NAME = "Computer Solitaire";
 				REGISTER_APP_GROUPS = YES;
@@ -376,7 +376,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 0.8.2;
+				MARKETING_VERSION = 0.8.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
 				PRODUCT_NAME = "Computer Solitaire";
 				REGISTER_APP_GROUPS = YES;
