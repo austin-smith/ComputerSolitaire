@@ -10,7 +10,11 @@ import SwiftUI
 struct MacSettingsView: View {
     private enum PaneMetrics {
         static let width: CGFloat = 500
+#if canImport(Sparkle)
+        static let generalHeight: CGFloat = 460
+#else
         static let generalHeight: CGFloat = 355
+#endif
         static let appearanceHeight: CGFloat = 560
         static let rulesHeight: CGFloat = 500
         static let aboutHeight: CGFloat = 400
@@ -26,6 +30,11 @@ struct MacSettingsView: View {
                     Section("Gameplay") {
                         GameplaySettingsRows()
                     }
+#if canImport(Sparkle)
+                    Section("Updates") {
+                        UpdatesSettingsRows()
+                    }
+#endif
                 }
                 .formStyle(.grouped)
                 .frame(width: PaneMetrics.width, height: PaneMetrics.generalHeight)

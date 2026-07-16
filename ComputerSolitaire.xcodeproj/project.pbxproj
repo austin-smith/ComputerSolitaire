@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		4B75C2102F1A240000761A12 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = 4B75C20F2F1A240000761A12 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		4B75C1EA2F1A233500761A12 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -25,6 +29,7 @@
 
 /* Begin PBXFileReference section */
 		4B75C1D12F1A233400761A12 /* Computer Solitaire.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Computer Solitaire.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		4B75C2212F1A250000761A12 /* Computer Solitaire.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Computer Solitaire.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B75C1E42F1A233500761A12 /* ComputerSolitaireTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ComputerSolitaireTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4B75C1F12F1A233600761A12 /* ComputerSolitaireUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ComputerSolitaireUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -33,9 +38,18 @@
 		4B75C1DE2F1A233500761A12 /* Exceptions for "ComputerSolitaire" folder in "ComputerSolitaire" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"Info-AppStore.plist",
 				Info.plist,
 			);
 			target = 4B75C1D02F1A233400761A12 /* ComputerSolitaire */;
+		};
+		4B75C2282F1A250000761A12 /* Exceptions for "ComputerSolitaire" folder in "ComputerSolitaireAppStore" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Info-AppStore.plist",
+				Info.plist,
+			);
+			target = 4B75C2202F1A250000761A12 /* ComputerSolitaireAppStore */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -44,6 +58,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				4B75C1DE2F1A233500761A12 /* Exceptions for "ComputerSolitaire" folder in "ComputerSolitaire" target */,
+				4B75C2282F1A250000761A12 /* Exceptions for "ComputerSolitaire" folder in "ComputerSolitaireAppStore" target */,
 			);
 			path = ComputerSolitaire;
 			sourceTree = "<group>";
@@ -70,10 +85,18 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4B75C2102F1A240000761A12 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		4B75C1E62F1A233500761A12 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4B75C2232F1A250000761A12 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -105,6 +128,7 @@
 			isa = PBXGroup;
 			children = (
 				4B75C1D12F1A233400761A12 /* Computer Solitaire.app */,
+				4B75C2212F1A250000761A12 /* Computer Solitaire.app */,
 				4B75C1E42F1A233500761A12 /* ComputerSolitaireTests.xctest */,
 				4B75C1F12F1A233600761A12 /* ComputerSolitaireUITests.xctest */,
 			);
@@ -132,9 +156,33 @@
 			);
 			name = ComputerSolitaire;
 			packageProductDependencies = (
+				4B75C20F2F1A240000761A12 /* Sparkle */,
 			);
 			productName = ComputerSolitaire;
 			productReference = 4B75C1D12F1A233400761A12 /* Computer Solitaire.app */;
+			productType = "com.apple.product-type.application";
+		};
+		4B75C2202F1A250000761A12 /* ComputerSolitaireAppStore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4B75C2252F1A250000761A12 /* Build configuration list for PBXNativeTarget "ComputerSolitaireAppStore" */;
+			buildPhases = (
+				4B75C2222F1A250000761A12 /* Sources */,
+				4B75C2232F1A250000761A12 /* Frameworks */,
+				4B75C2242F1A250000761A12 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				4B75C1D32F1A233400761A12 /* ComputerSolitaire */,
+				4B75C2002F1A233600761A12 /* Shared */,
+			);
+			name = ComputerSolitaireAppStore;
+			packageProductDependencies = (
+			);
+			productName = ComputerSolitaireAppStore;
+			productReference = 4B75C2212F1A250000761A12 /* Computer Solitaire.app */;
 			productType = "com.apple.product-type.application";
 		};
 		4B75C1E92F1A233500761A12 /* ComputerSolitaireTests */ = {
@@ -197,6 +245,9 @@
 					4B75C1D02F1A233400761A12 = {
 						CreatedOnToolsVersion = 26.2;
 					};
+					4B75C2202F1A250000761A12 = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					4B75C1E92F1A233500761A12 = {
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = 4B75C1D02F1A233400761A12;
@@ -216,12 +267,16 @@
 			);
 			mainGroup = 4B75C1C82F1A233400761A12;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4B75C2122F1A240000761A12 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4B75C1D22F1A233400761A12 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				4B75C1D02F1A233400761A12 /* ComputerSolitaire */,
+				4B75C2202F1A250000761A12 /* ComputerSolitaireAppStore */,
 				4B75C1E92F1A233500761A12 /* ComputerSolitaireTests */,
 				4B75C1F62F1A233600761A12 /* ComputerSolitaireUITests */,
 			);
@@ -230,6 +285,13 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		4B75C1CF2F1A233400761A12 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4B75C2242F1A250000761A12 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -254,6 +316,13 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		4B75C1CD2F1A233400761A12 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4B75C2222F1A250000761A12 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -296,9 +365,9 @@
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "ComputerSolitaireBlueAppIcon ComputerSolitairePinkAppIcon QueenOfHeartsAppIcon";
 				ASSETCATALOG_COMPILER_APPICON_NAME = ComputerSolitaireAppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "ComputerSolitaire/ComputerSolitaire-macOS.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = T778QMSML9;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -324,7 +393,6 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 0.8.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
 				PRODUCT_NAME = "Computer Solitaire";
 				REGISTER_APP_GROUPS = YES;
@@ -348,9 +416,9 @@
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "ComputerSolitaireBlueAppIcon ComputerSolitairePinkAppIcon QueenOfHeartsAppIcon";
 				ASSETCATALOG_COMPILER_APPICON_NAME = ComputerSolitaireAppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "ComputerSolitaire/ComputerSolitaire-macOS.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = T778QMSML9;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -376,7 +444,6 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 0.8.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
 				PRODUCT_NAME = "Computer Solitaire";
 				REGISTER_APP_GROUPS = YES;
@@ -428,6 +495,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 0.8.3;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = T778QMSML9;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -448,6 +516,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.8.3;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -490,6 +559,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 0.8.3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = T778QMSML9;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -504,9 +574,78 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.8.3;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		4B75C2262F1A250000761A12 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "ComputerSolitaireBlueAppIcon ComputerSolitairePinkAppIcon QueenOfHeartsAppIcon";
+				ASSETCATALOG_COMPILER_APPICON_NAME = ComputerSolitaireAppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = T778QMSML9;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "ComputerSolitaire/Info-AppStore.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Computer Solitaire";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.card-games";
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
+				PRODUCT_NAME = "Computer Solitaire";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		4B75C2272F1A250000761A12 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "ComputerSolitaireBlueAppIcon ComputerSolitairePinkAppIcon QueenOfHeartsAppIcon";
+				ASSETCATALOG_COMPILER_APPICON_NAME = ComputerSolitaireAppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = T778QMSML9;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "ComputerSolitaire/Info-AppStore.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Computer Solitaire";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.card-games";
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
+				PRODUCT_NAME = "Computer Solitaire";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -605,6 +744,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		4B75C2252F1A250000761A12 /* Build configuration list for PBXNativeTarget "ComputerSolitaireAppStore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4B75C2262F1A250000761A12 /* Debug */,
+				4B75C2272F1A250000761A12 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		4B75C1EC2F1A233500761A12 /* Build configuration list for PBXNativeTarget "ComputerSolitaireTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -624,6 +772,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		4B75C2122F1A240000761A12 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4B75C20F2F1A240000761A12 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4B75C2122F1A240000761A12 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 4B75C1C92F1A233400761A12 /* Project object */;
 }

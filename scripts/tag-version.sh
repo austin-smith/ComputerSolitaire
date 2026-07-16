@@ -71,14 +71,16 @@ if [[ "$head_commit" != "$main_commit" ]]; then
   exit 1
 fi
 
-versions="$({
+build_settings="$(
   xcodebuild \
     -project ComputerSolitaire.xcodeproj \
     -scheme ComputerSolitaire \
     -configuration Release \
     -destination "generic/platform=macOS" \
     -showBuildSettings
-} | awk '$1 == "MARKETING_VERSION" && $2 == "=" { print $3 }' | sort -u)"
+)"
+
+versions="$(printf '%s\n' "$build_settings" | awk '$1 == "MARKETING_VERSION" && $2 == "=" { print $3 }' | sort -u)"
 
 version_count="$(printf '%s\n' "$versions" | awk 'NF { count++ } END { print count + 0 }')"
 if [[ "$version_count" -ne 1 ]]; then
@@ -92,6 +94,13 @@ fi
 version="$versions"
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "MARKETING_VERSION must use numeric major.minor.patch format: $version" >&2
+  exit 1
+fi
+
+build_versions="$(printf '%s\n' "$build_settings" | awk '$1 == "CURRENT_PROJECT_VERSION" && $2 == "=" { print $3 }' | sort -u)"
+if [[ "$build_versions" != "$version" ]]; then
+  echo "CURRENT_PROJECT_VERSION must equal MARKETING_VERSION ($version), but found: $build_versions" >&2
+  echo "Sparkle compares CFBundleVersion to decide whether an update is newer, so the build version must advance with every release." >&2
   exit 1
 fi
 
