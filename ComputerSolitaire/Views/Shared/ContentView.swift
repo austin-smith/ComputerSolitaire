@@ -268,67 +268,75 @@ struct ContentView: View {
         view
             .toolbar {
 #if os(iOS)
-                ToolbarItem(placement: .bottomBar) {
-                    Menu {
-                        Section {
-                            Button("New Game", systemImage: "plus") {
-                                startNewGameFromUI()
-                            }
-                            Button("Redeal", systemImage: "arrow.clockwise") {
-                                redealFromUI()
-                            }
-                            .disabled(!viewModel.canRedeal)
-                        }
-                        Section {
-                            Button("Statistics", systemImage: "chart.bar") {
-                                isShowingStats = true
-                            }
-                            Button("Rules & Scoring", systemImage: "book") {
-                                presentRulesAndScoring(initialSection: .rules)
-                            }
-                        }
-                        Section {
-                            Button("Settings", systemImage: "gear") {
-                                isShowingSettings = true
-                            }
-                        }
-                    } label: {
-                        Label("More", systemImage: "ellipsis")
-                    }
-                }
-                ToolbarSpacer(.flexible, placement: .bottomBar)
-                if viewModel.isAutoFinishAvailable {
+                // The bottom bar is UIKit chrome layered above the SwiftUI
+                // overlay: left in place while the picker is up it stays
+                // undimmed and fully tappable, and it swallows scrim taps in
+                // the bottom strip. Removing its items is what keeps the
+                // picker modal — `.toolbar(.hidden, for: .bottomBar)` is inert
+                // here because no NavigationStack hosts the bar.
+                if !isShowingGamePicker {
                     ToolbarItem(placement: .bottomBar) {
-                        Button {
-                            startAutoFinish()
-                        } label: {
-                            // The bottom bar renders Labels icon-only.
-                            HStack(spacing: 5) {
-                                Image(systemName: "bolt")
-                                Text("Auto")
+                        Menu {
+                            Section {
+                                Button("New Game", systemImage: "plus") {
+                                    startNewGameFromUI()
+                                }
+                                Button("Redeal", systemImage: "arrow.clockwise") {
+                                    redealFromUI()
+                                }
+                                .disabled(!viewModel.canRedeal)
                             }
-                        }
-                        .accessibilityLabel("Auto Finish")
-                        .disabled(isAutoFinishDisabled)
-                    }
-                    ToolbarSpacer(.fixed, placement: .bottomBar)
-                }
-                ToolbarItemGroup(placement: .bottomBar) {
-                    if isHintButtonVisible {
-                        Button {
-                            triggerHint()
+                            Section {
+                                Button("Statistics", systemImage: "chart.bar") {
+                                    isShowingStats = true
+                                }
+                                Button("Rules & Scoring", systemImage: "book") {
+                                    presentRulesAndScoring(initialSection: .rules)
+                                }
+                            }
+                            Section {
+                                Button("Settings", systemImage: "gear") {
+                                    isShowingSettings = true
+                                }
+                            }
                         } label: {
-                            Label("Hint", systemImage: "lightbulb")
+                            Label("More", systemImage: "ellipsis")
                         }
-                        .disabled(isHintDisabled)
                     }
-                    Button {
-                        stopAutoFinish()
-                        beginUndoAnimationIfNeeded()
-                    } label: {
-                        Label("Undo", systemImage: "arrow.uturn.backward")
+                    ToolbarSpacer(.flexible, placement: .bottomBar)
+                    if viewModel.isAutoFinishAvailable {
+                        ToolbarItem(placement: .bottomBar) {
+                            Button {
+                                startAutoFinish()
+                            } label: {
+                                // The bottom bar renders Labels icon-only.
+                                HStack(spacing: 5) {
+                                    Image(systemName: "bolt")
+                                    Text("Auto")
+                                }
+                            }
+                            .accessibilityLabel("Auto Finish")
+                            .disabled(isAutoFinishDisabled)
+                        }
+                        ToolbarSpacer(.fixed, placement: .bottomBar)
                     }
-                    .disabled(isUndoDisabled)
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        if isHintButtonVisible {
+                            Button {
+                                triggerHint()
+                            } label: {
+                                Label("Hint", systemImage: "lightbulb")
+                            }
+                            .disabled(isHintDisabled)
+                        }
+                        Button {
+                            stopAutoFinish()
+                            beginUndoAnimationIfNeeded()
+                        } label: {
+                            Label("Undo", systemImage: "arrow.uturn.backward")
+                        }
+                        .disabled(isUndoDisabled)
+                    }
                 }
 #endif
 #if os(macOS)
