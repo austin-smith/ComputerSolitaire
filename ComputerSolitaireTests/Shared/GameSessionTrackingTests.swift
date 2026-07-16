@@ -3,12 +3,11 @@ import XCTest
 
 @MainActor
 final class GameSessionTrackingTests: XCTestCase {
-    private static var retainedViewModels: [SolitaireViewModel] = []
 
     // Verifies app startup initializes tracking metadata without starting a trackable game.
     func testInitMarksTrackingStartWithoutActiveTrackedGame() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
 
             let stats = GameStatisticsStore.load(for: .klondikeDrawThree)
             XCTAssertNotNil(stats.trackedSince)
@@ -21,8 +20,8 @@ final class GameSessionTrackingTests: XCTestCase {
 
     // Verifies the first explicit New Game starts tracking and does not finalize bootstrap state.
     func testFirstNewGameStartsTrackingWithoutFinalizingBootstrapSession() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
 
             viewModel.newGame()
 
@@ -36,8 +35,8 @@ final class GameSessionTrackingTests: XCTestCase {
 
     // Verifies starting a second game finalizes exactly one previously tracked session.
     func testSecondNewGameFinalizesExactlyOneTrackedGame() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
 
             viewModel.newGame()
             viewModel.newGame()
@@ -49,8 +48,8 @@ final class GameSessionTrackingTests: XCTestCase {
 
     // Verifies redeal finalizes the current tracked session once and starts a fresh one.
     func testRedealFinalizesCurrentTrackedGameExactlyOnce() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
 
             viewModel.newGame()
             viewModel.redeal()
@@ -65,8 +64,8 @@ final class GameSessionTrackingTests: XCTestCase {
 
     // Verifies restore resumes live elapsed reporting when payload is active and unfinalized.
     func testRestoreWithActiveTrackedGameReportsLiveElapsed() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             let payload = makePayload(
                 hasStartedTrackedGame: true,
                 isCurrentGameFinalized: false
@@ -79,8 +78,8 @@ final class GameSessionTrackingTests: XCTestCase {
 
     // Verifies finalized restored sessions are not finalized again when starting a new game.
     func testRestoreWithFinalizedGameDoesNotFinalizeAgainOnNewGame() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             let payload = makePayload(
                 hasStartedTrackedGame: true,
                 isCurrentGameFinalized: true
@@ -98,8 +97,8 @@ final class GameSessionTrackingTests: XCTestCase {
 
     // Verifies untracked restored sessions stay untracked until an explicit New Game starts tracking.
     func testRestoreWithUntrackedPayloadRemainsUntrackedUntilNewGameStarts() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             let payload = makePayload(
                 hasStartedTrackedGame: false,
                 isCurrentGameFinalized: true
@@ -120,8 +119,8 @@ final class GameSessionTrackingTests: XCTestCase {
 
     // Verifies resetting statistics untracks the active session so pre-reset progress is not counted.
     func testResetStatisticsUntracksCurrentSessionUntilNextNewGame() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
 
             viewModel.newGame()
             let activeProbeDate = viewModel.gameStartedAt.addingTimeInterval(120)
@@ -148,8 +147,8 @@ final class GameSessionTrackingTests: XCTestCase {
     // own stats bucket. (The game picker goes through `activateGame` instead, which
     // never finalizes — see GameSessionActivationTests.)
     func testNewGameAcrossModesFinalizesIntoPriorBucket() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
 
             viewModel.newGame(mode: .klondikeDrawThree)
             viewModel.newGame(mode: .freecell)
@@ -177,34 +176,6 @@ final class GameSessionTrackingTests: XCTestCase {
         }
     }
 
-    private func withIsolatedStatsStore(_ body: () -> Void) {
-        let defaults = UserDefaults.standard
-        let statsKeys = GameMode.allCases.map { GameStatisticsStore.defaultsKey(for: $0) }
-        let previousStatsData = statsKeys.reduce(into: [String: Data]()) { result, key in
-            if let data = defaults.data(forKey: key) {
-                result[key] = data
-            }
-        }
-        for key in statsKeys {
-            defaults.removeObject(forKey: key)
-        }
-        defer {
-            for key in statsKeys {
-                if let value = previousStatsData[key] {
-                    defaults.set(value, forKey: key)
-                } else {
-                    defaults.removeObject(forKey: key)
-                }
-            }
-        }
-        body()
-    }
-
-    private func makeViewModel() -> SolitaireViewModel {
-        let viewModel = SolitaireViewModel()
-        Self.retainedViewModels.append(viewModel)
-        return viewModel
-    }
 
     private func makePayload(
         hasStartedTrackedGame: Bool,

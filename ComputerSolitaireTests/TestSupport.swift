@@ -712,3 +712,48 @@ final class TestDateProvider: DateProviding {
         self.now = now
     }
 }
+
+/// Shared harness for suites that spin up live view models and touch the
+/// persisted statistics store.
+@MainActor
+enum SessionTestHarness {
+    /// Keeps live sessions alive for the process so no view model tears
+    /// down mid-test.
+    private static var retainedViewModels: [SolitaireViewModel] = []
+
+    static func makeViewModel() -> SolitaireViewModel {
+        let viewModel = SolitaireViewModel()
+        retainedViewModels.append(viewModel)
+        return viewModel
+    }
+
+    static func retain(_ viewModel: SolitaireViewModel) {
+        retainedViewModels.append(viewModel)
+    }
+
+    /// Snapshots every mode's persisted statistics, clears them for the
+    /// test body, and restores them afterward — tests never read or leak
+    /// into the real statistics store.
+    static func withIsolatedStatsStore(_ body: () -> Void) {
+        let defaults = UserDefaults.standard
+        let statsKeys = GameMode.allCases.map { GameStatisticsStore.defaultsKey(for: $0) }
+        let previousStatsData = statsKeys.reduce(into: [String: Data]()) { result, key in
+            if let data = defaults.data(forKey: key) {
+                result[key] = data
+            }
+        }
+        for key in statsKeys {
+            defaults.removeObject(forKey: key)
+        }
+        defer {
+            for key in statsKeys {
+                if let value = previousStatsData[key] {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+        }
+        body()
+    }
+}
