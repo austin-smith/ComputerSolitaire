@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.2
+## 0.8.2 - 2026-07-15
 
 ### Added
 
@@ -17,7 +17,7 @@
 
 **Full Changelog**: https://github.com/austin-smith/ComputerSolitaire/compare/v0.8.1...v0.8.2
 
-## 0.8.1
+## 0.8.1 - 2026-07-14
 
 ### Fixed
 
@@ -30,7 +30,7 @@
 
 **Full Changelog**: https://github.com/austin-smith/ComputerSolitaire/compare/v0.8.0...v0.8.1
 
-## 0.8.0
+## 0.8.0 - 2026-07-14
 
 ### Added
 
@@ -77,7 +77,7 @@ Each variant includes its own solver-backed hints, persistence, rules and scorin
 
 **Full Changelog**: https://github.com/austin-smith/ComputerSolitaire/compare/v0.7.0...v0.8.0
 
-## 0.7.0
+## 0.7.0 - 2026-07-12
 
 ### Added
 
@@ -101,7 +101,7 @@ Each variant includes its own solver-backed hints, persistence, rules and scorin
 
 **Full Changelog**: https://github.com/austin-smith/ComputerSolitaire/compare/v0.6.0...v0.7.0
 
-## 0.6.0
+## 0.6.0 - 2026-02-23
 
 ### What's Changed
 
@@ -111,7 +111,7 @@ Each variant includes its own solver-backed hints, persistence, rules and scorin
 
 **Full Changelog**: https://github.com/austin-smith/ComputerSolitaire/compare/v0.5.0...v0.6.0
 
-## 0.5.0
+## 0.5.0 - 2026-02-21
 
 ### What's Changed
 
@@ -127,7 +127,7 @@ Each variant includes its own solver-backed hints, persistence, rules and scorin
 
 **Full Changelog**: https://github.com/austin-smith/ComputerSolitaire/compare/v0.4.1...v0.5.0
 
-## 0.4.1
+## 0.4.1 - 2026-02-16
 
 ### What's Changed
 
@@ -135,7 +135,7 @@ Each variant includes its own solver-backed hints, persistence, rules and scorin
 
 **Full Changelog**: https://github.com/austin-smith/ComputerSolitaire/compare/v0.4.0...v0.4.1
 
-## 0.4.0
+## 0.4.0 - 2026-02-16
 
 ### What's Changed
 
@@ -143,7 +143,7 @@ Each variant includes its own solver-backed hints, persistence, rules and scorin
 
 **Full Changelog**: https://github.com/austin-smith/ComputerSolitaire/compare/v0.3.0...v0.4.0
 
-## 0.3.0
+## 0.3.0 - 2026-02-16
 
 ### What's Changed
 
