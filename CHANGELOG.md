@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.3 - 2026-07-15
+
+### Added
+
+- Sparkle update checks for the direct-download macOS build, including a Check for Updates command and an automatic update-check setting. ([#78](https://github.com/austin-smith/ComputerSolitaire/pull/78))
+
+**Full Changelog**: https://github.com/austin-smith/ComputerSolitaire/compare/v0.8.2...v0.8.3
+
 ## 0.8.2 - 2026-07-15
 
 ### Added
