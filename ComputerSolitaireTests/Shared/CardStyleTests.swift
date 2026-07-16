@@ -34,4 +34,54 @@ final class CardStyleTests: XCTestCase {
     func testUnknownCardBackColorFallsBackToDefault() {
         XCTAssertEqual(CardBackColor.from(rawValue: "unknown"), .defaultValue)
     }
+
+    func testPixelGridSnapsEveryRectangleEdgeToTheDisplayScale() {
+        let displayScale: CGFloat = 2
+        let grid = PixelGrid(unit: 1.1, displayScale: displayScale)
+        let rect = grid.rect(x: 3, y: 7, width: 5, height: 2)
+
+        for edge in [rect.minX, rect.minY, rect.maxX, rect.maxY] {
+            XCTAssertEqual(edge * displayScale, (edge * displayScale).rounded())
+        }
+    }
+
+    func testPixelPipLayoutsStayOnWholeCells() {
+        for count in 2...10 {
+            let placements = PixelCardArt.pipPlacements(count: count)
+            XCTAssertEqual(placements.count, count)
+
+            for placement in placements {
+                XCTAssertEqual(placement.x, placement.x.rounded())
+                XCTAssertEqual(placement.dy, placement.dy.rounded())
+            }
+        }
+    }
+
+    func testPixelPipSpritesUseAnEvenFootprint() {
+        let sprites = [
+            PixelSprites.spadePip,
+            PixelSprites.heartPip,
+            PixelSprites.diamondPip,
+            PixelSprites.clubPip,
+        ]
+
+        for sprite in sprites {
+            XCTAssertEqual(sprite.width, 6)
+            XCTAssertEqual(sprite.height, 6)
+        }
+    }
+
+    func testPixelRoyalArtworkMapsOnlyFaceCards() {
+        XCTAssertEqual(PixelRoyalArtwork.assetName(for: .jack), "PixelJack")
+        XCTAssertEqual(PixelRoyalArtwork.assetName(for: .queen), "PixelQueen")
+        XCTAssertEqual(PixelRoyalArtwork.assetName(for: .king), "PixelKing")
+        XCTAssertNil(PixelRoyalArtwork.assetName(for: .ten))
+        XCTAssertEqual(PixelRoyalArtwork.logicalSize, CGSize(width: 26, height: 45))
+    }
+
+    func testPixelStyleReducesTiltWithoutDiscardingItsDirection() {
+        XCTAssertEqual(CardTilt.displayAngle(for: 2, style: .pixel), 0.5)
+        XCTAssertEqual(CardTilt.displayAngle(for: -2, style: .pixel), -0.5)
+        XCTAssertEqual(CardTilt.displayAngle(for: 2, style: .classic), 2)
+    }
 }

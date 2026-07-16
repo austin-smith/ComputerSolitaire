@@ -196,10 +196,13 @@ struct SettingsView: View {
                     // then scaled down; tiny layout sizes distort the art.
                     CardStylePreview(
                         style: selectedCardStyle,
-                        cardSize: CGSize(width: 44, height: 64)
+                        cardSize: CardStylePreview.recommendedCardSize
                     )
-                    .frame(width: 44, height: 64)
-                    .scaleEffect(24.0 / 64.0)
+                    .frame(
+                        width: CardStylePreview.recommendedCardSize.width,
+                        height: CardStylePreview.recommendedCardSize.height
+                    )
+                    .scaleEffect(24.0 / CardStylePreview.recommendedCardSize.height)
                     .frame(width: 17, height: 24)
                 }
             }

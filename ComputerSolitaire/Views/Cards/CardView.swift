@@ -81,6 +81,11 @@ extension EnvironmentValues {
 
 enum CardTilt {
     static let angleRange: ClosedRange<Double> = -2.0...2.0
+    static let pixelStyleScale = 0.25
+
+    static func displayAngle(for storedAngle: Double, style: CardStyle) -> Double {
+        style == .pixel ? storedAngle * pixelStyleScale : storedAngle
+    }
 }
 
 /// Selection-dependent corner, border, and shadow treatment for card styles
@@ -251,10 +256,13 @@ struct CardView: View {
         }
         .onChange(of: cardTilts[card.id]) { _, newTilt in
             guard isCardTiltEnabled, let newTilt else { return }
-            animateTilt(to: newTilt)
+            animateTilt(to: CardTilt.displayAngle(for: newTilt, style: cardStyle))
         }
         .onChange(of: isCardTiltEnabled) { _, enabled in
             animateTilt(to: enabled ? resolvedTilt() : 0)
+        }
+        .onChange(of: cardStyle) {
+            animateTilt(to: isCardTiltEnabled ? resolvedTilt() : 0)
         }
     }
 
@@ -262,11 +270,11 @@ struct CardView: View {
     // so a card keeps the same lean for as long as it stays in play.
     private func resolvedTilt() -> Double {
         if let existing = cardTilts[card.id] {
-            return existing
+            return CardTilt.displayAngle(for: existing, style: cardStyle)
         }
         let newTilt = Double.random(in: CardTilt.angleRange)
         cardTilts[card.id] = newTilt
-        return newTilt
+        return CardTilt.displayAngle(for: newTilt, style: cardStyle)
     }
 
     private func animateTilt(to target: Double) {

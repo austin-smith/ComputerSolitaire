@@ -4,6 +4,8 @@ import SwiftUI
 /// Front-face thumbnail of a card style, reused at chip size on the Cards
 /// page and at row-icon size on the settings top level.
 struct CardStylePreview: View {
+    static let recommendedCardSize = CGSize(width: 40, height: 58)
+
     let style: CardStyle
     let cardSize: CGSize
 
@@ -145,7 +147,7 @@ struct CardsSettingsRows: View {
             }
         } label: {
             VStack(spacing: 6) {
-                CardStylePreview(style: style, cardSize: CGSize(width: 44, height: 64))
+                CardStylePreview(style: style, cardSize: CardStylePreview.recommendedCardSize)
                     .frame(width: 44, height: 64)
 
                 VStack(spacing: 1) {
