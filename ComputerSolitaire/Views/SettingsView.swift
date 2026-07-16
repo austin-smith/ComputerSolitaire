@@ -58,6 +58,7 @@ enum SettingsKey {
     static let showStockCount = "settings.showStockCount"
     static let cardStyle = "settings.cardStyle"
     static let cardBackColor = "settings.cardBackColor"
+    static let animationSpeed = "settings.animationSpeed"
 }
 
 // MARK: - Shared rows
@@ -83,6 +84,8 @@ struct SoundSettingsRows: View {
 /// The in-play visibility toggles, shared by the iOS settings sheet and the
 /// macOS settings window.
 struct GameplaySettingsRows: View {
+    @AppStorage(SettingsKey.animationSpeed)
+    private var animationSpeedRawValue = AnimationSpeed.defaultValue.id
     @AppStorage(SettingsKey.showGameStats) private var isGameStatsVisible = true
     @AppStorage(SettingsKey.showStockCount) private var isStockCountVisible = true
     @AppStorage(SettingsKey.showHintButton) private var isHintButtonVisible = true
@@ -103,6 +106,14 @@ struct GameplaySettingsRows: View {
             Text("Turn off to avoid spoilers about hint availability.")
         }
         .toggleStyle(.switch)
+        Picker("Animation speed", selection: $animationSpeedRawValue) {
+            ForEach(AnimationSpeed.all) { speed in
+                Text(speed.title).tag(speed.id)
+            }
+        }
+#if os(iOS)
+        .pickerStyle(.navigationLink)
+#endif
     }
 }
 

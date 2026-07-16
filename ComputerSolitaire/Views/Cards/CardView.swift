@@ -111,6 +111,7 @@ enum HintWiggleStyle {
 
 struct HintWiggleModifier: ViewModifier {
     let token: UUID?
+    @Environment(\.motionPolicy) private var motion
     @State private var wiggleAngle: Double = 0
     @State private var wiggleTask: Task<Void, Never>?
 
@@ -137,6 +138,11 @@ struct HintWiggleModifier: ViewModifier {
     }
 
     private func startHintWiggle() {
+        // No wiggle without motion — the hint highlight alone marks the
+        // cards. Fast deliberately keeps the normal pace: the wiggle is an
+        // affordance that plays alongside the game, not a wait, and halving
+        // it just reads as twitchy.
+        guard !motion.isInstant else { return }
         wiggleTask?.cancel()
         wiggleTask = Task { @MainActor in
             for angle in HintWiggleStyle.angles {
@@ -173,6 +179,9 @@ struct CardView: View {
     @State private var flipRotation: Double
     @State private var tiltAngle: Double = 0
     @Environment(\.cardStyle) private var cardStyle
+    // Environment values self-invalidate as DynamicProperties, so neither
+    // needs a place in the Equatable check below.
+    @Environment(\.motionPolicy) private var motion
 
     init(
         card: Card,
@@ -222,7 +231,7 @@ struct CardView: View {
         .hintWiggle(token: hintWiggleToken)
         .scaleEffect(isSelected ? 1.03 : 1)
         .onChange(of: card.isFaceUp) { _, newValue in
-            withAnimation(.easeInOut(duration: 0.32)) {
+            withAnimation(motion.easeInOut(0.32)) {
                 flipRotation = newValue ? 0 : 180
             }
         }
@@ -231,7 +240,7 @@ struct CardView: View {
                 // easeOut so the rotation is front-loaded like the travel
                 // spring — the card visibly turns while it's moving fastest,
                 // not after it has mostly arrived.
-                withAnimation(.easeOut(duration: 0.3).delay(flipDelay)) {
+                withAnimation(motion.easeOut(0.3)?.delay(motion.duration(flipDelay))) {
                     flipRotation = 0
                 }
             }
@@ -261,7 +270,7 @@ struct CardView: View {
     }
 
     private func animateTilt(to target: Double) {
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(motion.easeOut(0.2)) {
             tiltAngle = target
         }
     }

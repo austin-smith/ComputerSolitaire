@@ -82,6 +82,7 @@ private struct DrawOverlayCardView: View {
     let delay: Double
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
+    @Environment(\.motionPolicy) private var motion
     @State private var progress: CGFloat = 0
 
     var body: some View {
@@ -102,7 +103,10 @@ private struct DrawOverlayCardView: View {
         )
         .position(x: currentX, y: currentY)
         .onAppear {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.86).delay(delay)) {
+            // Travel pace matches the coordinator plans' travelDuration; the
+            // completion in ContentView scales through the same policy, so
+            // the overlay always comes down after the cards have settled.
+            withAnimation(motion.spring(response: 0.32, dampingFraction: 0.86)?.delay(motion.duration(delay))) {
                 progress = 1
             }
         }
