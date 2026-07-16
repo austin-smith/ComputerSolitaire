@@ -10,7 +10,7 @@ import SwiftUI
 struct MacSettingsView: View {
     private enum PaneMetrics {
         static let width: CGFloat = 500
-        static let generalHeight: CGFloat = 410
+        static let generalHeight: CGFloat = 355
         static let appearanceHeight: CGFloat = 560
         static let rulesHeight: CGFloat = 500
         static let aboutHeight: CGFloat = 400
