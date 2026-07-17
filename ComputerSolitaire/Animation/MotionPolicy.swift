@@ -51,6 +51,10 @@ struct MotionPolicy: Equatable {
         isInstant ? nil : .spring(response: response * scale, dampingFraction: dampingFraction)
     }
 
+    func linear(_ baseDuration: Double) -> Animation? {
+        isInstant ? nil : .linear(duration: baseDuration * scale)
+    }
+
     func easeOut(_ baseDuration: Double) -> Animation? {
         isInstant ? nil : .easeOut(duration: baseDuration * scale)
     }

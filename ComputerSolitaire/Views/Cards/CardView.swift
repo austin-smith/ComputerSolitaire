@@ -206,6 +206,15 @@ struct CardView: View {
         self.currentTilt = cardTilts.wrappedValue[card.id]
         let startFaceDown = flipOnAppear && card.isFaceUp
         _flipRotation = State(initialValue: startFaceDown ? 180 : (card.isFaceUp ? 0 : 180))
+        // A card with a stored tilt must render leaning from its very first
+        // frame: `onAppear` lands after the first render, so seeding there
+        // leaves one straight frame — invisible for cards that mount hidden
+        // or in flight, but a visible whole-board twitch when an overlay
+        // (the wipe) replaces resting cards with copies in place. Cards
+        // without a stored tilt still get one in `onAppear`.
+        _tiltAngle = State(
+            initialValue: isCardTiltEnabled ? (cardTilts.wrappedValue[card.id] ?? 0) : 0
+        )
     }
 
     var body: some View {
