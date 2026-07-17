@@ -38,7 +38,7 @@ enum PixelPalette {
     static let royalSkin = Color(red: 242 / 255, green: 189 / 255, blue: 145 / 255)
     static let royalGold = Color(red: 245 / 255, green: 174 / 255, blue: 0)
     static let royalRed = Color(red: 184 / 255, green: 15 / 255, blue: 31 / 255)
-    static let royalBlue = Color(red: 23 / 255, green: 63 / 255, blue: 138 / 255)
+    static let royalBlue = Color(red: 31 / 255, green: 57 / 255, blue: 108 / 255)
     static let royalBlack = Color(red: 37 / 255, green: 39 / 255, blue: 46 / 255)
     static let royalSteel = Color(red: 180 / 255, green: 191 / 255, blue: 204 / 255)
     static let royalWhite = Color(red: 246 / 255, green: 231 / 255, blue: 215 / 255)
@@ -113,6 +113,10 @@ enum PixelRoyalColorway: Equatable {
         case .redSuit: PixelPalette.royalBlack
         case .blackSuit: PixelPalette.royalRed
         }
+    }
+
+    var sash: Color {
+        accent
     }
 }
 
@@ -225,6 +229,7 @@ enum PixelInk: UInt8 {
     case accent = 11    // "A"
     case altRobe = 12   // "B" — primary garment color for the suit colorway
     case steel = 13     // "T" — neutral metal that does not follow the suit palette
+    case secondaryRobe = 14 // "U" — blue garment accent shared by both colorways
 }
 
 struct PixelSprite {
@@ -235,7 +240,7 @@ struct PixelSprite {
     init(_ art: String) {
         let map: [Character: UInt8] = [
             ".": 0, "#": 1, "+": 2, "K": 3, "S": 4, "s": 5,
-            "G": 6, "R": 7, "D": 8, "H": 9, "W": 10, "A": 11, "B": 12, "T": 13
+            "G": 6, "R": 7, "D": 8, "H": 9, "W": 10, "A": 11, "B": 12, "T": 13, "U": 14
         ]
         let lines = art.split(separator: "\n").map(String.init)
         let w = lines.map(\.count).max() ?? 0
@@ -493,16 +498,16 @@ enum PixelSprites {
     .KKKK....KKKSSSKK.........
     ..GG......KSSSKKGKK.......
     ..KK....KGGKSKGGKGKKK.....
-    ..KK...KBBKBBBKKKKGRRGK...
-    ..KK..KRBBKKBKKKKBGRRGBK..
-    .KSSKKRRBBKKKKKBBGRRGBBK..
-    KSSSSKRRBBKKKKBBBGRRGBBBK.
-    KSSSSKRRBBBBKBBBGRRGRBBBK.
-    KSSSRRRBBBBKBBBBGRRGRBBBB.
-    KSKKRRRBBBBKBBBGRRGBRBBBBK
-    .KKKRRRBBBKBBBGRRGKBRRBBBK
-    KRRBRRBBBKBBGRRGKKBKRRBBBK
-    KRRBKRBBKBBGRRGBBKBBRKBRRK
+    ..KK...KBBKBBBKKKKGAAGK...
+    ..KK..KRBBKKBKKKKBGAAGBK..
+    .KSSKKRRUBKKKKKBBGAAGUUK..
+    KSSSSKRRUBKKKKBBBGAAGUUBK.
+    KSSSSKRRUBBBKBBBGAAGRBUUK.
+    KSSSRRRBUBBKBBBBGAAGRBUUB.
+    KSKKRRRUUBBKBBBGAAGBRBUUBK
+    .KKKRRRUUBKBBBGAAGKBRRBUBK
+    KRRBRRBUBKBBGAAGKKBKRRBUBK
+    KRRBKRBBKBBGAAGBBKBBRKBRRK
     """)
 
     static let twoWayQueenHalf = PixelSprite("""
@@ -519,16 +524,16 @@ enum PixelSprites {
     KKRKK....KKSSKKKKKKKK.....
     .KGGK...KKKSSKKKKKKBK.....
     KKGGK...KKWSKGGGKGKKKK....
-    KBB....KBKBBBKKKKBGRRG....
-    ..BK..KRBBBKBKKKBBGRRGK...
-    .KSSKRRRBBKBKKKBBGRRGBB...
-    KSSSSRRRBBKBKKBBBGRRGBBK..
-    KSSSSRRRBBKKKBBBGRRGRBBB..
-    KSKKKRRRBBKKBBBBGRRGRBBB..
-    KSKKRRRBBBKBBBBGRRGBRBBBK.
-    .KKBKRRBBKBBBBGRRGBBRRBBK.
-    KRRRKRBBKBBBGRRGKBBKRRBBK.
-    KKBBBKKKBBBGRRGBBBKKKBBBKK
+    KBB....KBKBBBKKKKBGAAG....
+    ..BK..KRBBBKBKKKBBGAAGK...
+    .KSSKRRRUBKBKKKBBGAAGUU...
+    KSSSSRRRUBKBKKBBBGAAGUUK..
+    KSSSSRRRUBKKKBBBGAAGRBUU..
+    KSKKKRRRUBKKBBBBGAAGRBUU..
+    KSKKRRRUUBKBBBBGAAGBRBUUK.
+    .KKBKRRUUKBBBBGAAGBBRRBUK.
+    KRRRKRBUKBBBGAAGKBBKRRBUK.
+    KKBBBKKKBBBGAAGBBBKKKBBBKK
     """)
 
     static let twoWayKingHalf = PixelSprite("""
@@ -545,16 +550,16 @@ enum PixelSprites {
     .KWTK...KSKKKKKKKKKK......
     .KWTK...KKKKKSSKKKKK......
     .KWTK..KKKKKRSKGGKKK......
-    .KWTK...KKKKKBBKKKGRRG....
-    KGGGGGKKKKKBBKKKKBGRRGB...
-    .KSS.KRBBKBKBKKKBGRRGBBK..
-    KSSSSRRBBKKKBKKBBGRRGBBB..
-    KSSSSRRBBKKKBKBBGRRGRRBBK.
-    KSSSRRRBBKKKBBBBGRRGRRBBK.
-    KSKKRRRBBKKBBBBGRRGBRRBBB.
-    .BKKKRRBBKBBBBGRRGBBRRRBBK
-    KRBBRKRBBBKBGRRGKBBBRRRBBK
-    KRRRRKRBBKKGRRGKKBBRKRRRRK
+    .KWTK...KKKKKBBKKKGAAG....
+    KGGGGGKKKKKBBKKKKBGAAGB...
+    .KSS.KRBUKBKBKKKBGAAGUUK..
+    KSSSSRRBUKKKBKKBBGAAGUUB..
+    KSSSSRRBUKKKBKBBGAAGRRUUK.
+    KSSSRRRBUKKKBBBBGAAGRRUUK.
+    KSKKRRRUUKKBBBBGAAGBRRUUB.
+    .BKKKRRUUKBBBBGAAGBBRRRUBK
+    KRBBRKRUBBKBGAAGKBBBRRRUBK
+    KRRRRKRBBKKGAAGKKBBRKRRRRK
     """)
 
     static func twoWayRoyalHalf(for rank: Rank) -> PixelSprite? {
@@ -806,12 +811,13 @@ enum PixelCardArt {
                 )
             }
         } else if let half = PixelSprites.twoWayRoyalHalf(for: card.rank) {
-            drawTwoWayRoyal(half, in: context, size: size, grid: grid)
+            drawTwoWayRoyal(half, suit: card.suit, in: context, size: size, grid: grid)
         }
     }
 
     private static func drawTwoWayRoyal(
         _ half: PixelSprite,
+        suit: Suit,
         in context: GraphicsContext,
         size: CGSize,
         grid: PixelGrid
@@ -821,13 +827,16 @@ enum PixelCardArt {
         let gridHeight = size.height / grid.unit
         let originX = (gridWidth - artworkWidth) / 2
         let originY = (gridHeight - artworkHeight) / 2
+        let colorway = PixelRoyalColorway.matching(suit)
         let royalInk: (PixelInk) -> Color? = { ink in
             switch ink {
             case .outlineDark: PixelPalette.royalOutline
             case .skin: PixelPalette.royalSkin
             case .gold: PixelPalette.royalGold
-            case .robe: PixelPalette.royalRed
-            case .altRobe: PixelPalette.royalBlue
+            case .robe: colorway.tunic
+            case .accent: colorway.sash
+            case .altRobe: colorway.tunic
+            case .secondaryRobe: PixelPalette.royalBlue
             case .steel: PixelPalette.royalSteel
             case .white: PixelPalette.royalWhite
             default: nil
@@ -902,6 +911,7 @@ enum PixelCardArt {
             case .accent: return PixelPalette.accent
             case .altRobe: return isRed ? PixelPalette.robeBlue : PixelPalette.robeRed
             case .steel: return PixelPalette.royalSteel
+            case .secondaryRobe: return PixelPalette.royalBlue
             case .ink, .inkHi, .none: return nil
             }
         }

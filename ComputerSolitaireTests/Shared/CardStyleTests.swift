@@ -83,6 +83,12 @@ final class CardStyleTests: XCTestCase {
         XCTAssertEqual(PixelRoyalColorway.matching(.diamonds), .redSuit)
         XCTAssertEqual(PixelRoyalColorway.matching(.spades), .blackSuit)
         XCTAssertEqual(PixelRoyalColorway.matching(.clubs), .blackSuit)
+        XCTAssertEqual(PixelRoyalColorway.redSuit.tunic, PixelPalette.royalRed)
+        XCTAssertEqual(PixelRoyalColorway.blackSuit.tunic, PixelPalette.royalBlack)
+        XCTAssertEqual(PixelRoyalColorway.redSuit.accent, PixelPalette.royalBlack)
+        XCTAssertEqual(PixelRoyalColorway.blackSuit.accent, PixelPalette.royalRed)
+        XCTAssertEqual(PixelRoyalColorway.redSuit.sash, PixelPalette.royalBlack)
+        XCTAssertEqual(PixelRoyalColorway.blackSuit.sash, PixelPalette.royalRed)
     }
 
     func testTwoWayPixelRoyalsShareOneSymmetricCenterRow() throws {
@@ -100,8 +106,8 @@ final class CardStyleTests: XCTestCase {
         let sashStarts = [18, 18, 17, 17, 16, 16, 15, 14, 12, 11]
         let sashBand = [
             PixelInk.gold.rawValue,
-            PixelInk.robe.rawValue,
-            PixelInk.robe.rawValue,
+            PixelInk.accent.rawValue,
+            PixelInk.accent.rawValue,
             PixelInk.gold.rawValue,
         ]
 
@@ -115,6 +121,50 @@ final class CardStyleTests: XCTestCase {
                     "\(rank) sash differs on row \(row + 13)"
                 )
             }
+        }
+    }
+
+    func testTwoWayPixelRoyalsReserveAccentInkForTheSash() throws {
+        let sashStarts = [18, 18, 17, 17, 16, 16, 15, 14, 12, 11]
+        var expectedCells: [Int] = []
+        for (row, start) in sashStarts.enumerated() {
+            let rowOffset = (row + 13) * 26
+            expectedCells.append(rowOffset + start + 1)
+            expectedCells.append(rowOffset + start + 2)
+        }
+
+        for rank in [Rank.jack, .queen, .king] {
+            let half = try XCTUnwrap(PixelSprites.twoWayRoyalHalf(for: rank))
+            let actualCells = half.cells.enumerated().flatMap { row, cells in
+                cells.enumerated().compactMap { column, ink in
+                    ink == PixelInk.accent.rawValue ? row * half.width + column : nil
+                }
+            }
+
+            XCTAssertEqual(actualCells, expectedCells, "\(rank) has sash ink outside the sash")
+        }
+    }
+
+    func testTwoWayPixelRoyalsUseTheSameBlueAccentMask() throws {
+        let expectedCells = [
+            15 * 26 + 8, 15 * 26 + 21, 15 * 26 + 22,
+            16 * 26 + 8, 16 * 26 + 21, 16 * 26 + 22,
+            17 * 26 + 8, 17 * 26 + 22, 17 * 26 + 23,
+            18 * 26 + 8, 18 * 26 + 22, 18 * 26 + 23,
+            19 * 26 + 7, 19 * 26 + 8, 19 * 26 + 22, 19 * 26 + 23,
+            20 * 26 + 7, 20 * 26 + 8, 20 * 26 + 23,
+            21 * 26 + 7, 21 * 26 + 23,
+        ]
+
+        for rank in [Rank.jack, .queen, .king] {
+            let half = try XCTUnwrap(PixelSprites.twoWayRoyalHalf(for: rank))
+            let actualCells = half.cells.enumerated().flatMap { row, cells in
+                cells.enumerated().compactMap { column, ink in
+                    ink == PixelInk.secondaryRobe.rawValue ? row * half.width + column : nil
+                }
+            }
+
+            XCTAssertEqual(actualCells, expectedCells, "\(rank) uses a different blue accent mask")
         }
     }
 
