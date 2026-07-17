@@ -33,6 +33,16 @@ enum PixelPalette {
     static let ermine = Color(red: 0.96, green: 0.95, blue: 0.92)
     static let accent = Color(red: 0.83, green: 0.22, blue: 0.25)
 
+    // Saturated inks used by the existing pixel royal artwork.
+    static let royalOutline = Color(red: 11 / 255, green: 11 / 255, blue: 15 / 255)
+    static let royalSkin = Color(red: 242 / 255, green: 189 / 255, blue: 145 / 255)
+    static let royalGold = Color(red: 245 / 255, green: 174 / 255, blue: 0)
+    static let royalRed = Color(red: 184 / 255, green: 15 / 255, blue: 31 / 255)
+    static let royalBlue = Color(red: 23 / 255, green: 63 / 255, blue: 138 / 255)
+    static let royalBlack = Color(red: 37 / 255, green: 39 / 255, blue: 46 / 255)
+    static let royalSteel = Color(red: 180 / 255, green: 191 / 255, blue: 204 / 255)
+    static let royalWhite = Color(red: 246 / 255, green: 231 / 255, blue: 215 / 255)
+
     static func suitColor(for suit: Suit) -> Color {
         suit.isRed ? red : black
     }
@@ -80,6 +90,29 @@ struct PixelBackColorway {
 
     static func matching(_ back: CardBackColor) -> PixelBackColorway {
         all.first { $0.backColorID == back.id } ?? navy
+    }
+}
+
+enum PixelRoyalColorway: Equatable {
+    case redSuit
+    case blackSuit
+
+    static func matching(_ suit: Suit) -> PixelRoyalColorway {
+        suit.isRed ? .redSuit : .blackSuit
+    }
+
+    var tunic: Color {
+        switch self {
+        case .redSuit: PixelPalette.royalRed
+        case .blackSuit: PixelPalette.royalBlack
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .redSuit: PixelPalette.royalBlack
+        case .blackSuit: PixelPalette.royalRed
+        }
     }
 }
 
@@ -190,7 +223,8 @@ enum PixelInk: UInt8 {
     case hair = 9       // "H"
     case white = 10     // "W"
     case accent = 11    // "A"
-    case altRobe = 12   // "B" — contrasting garment (blue on red suits, red on black)
+    case altRobe = 12   // "B" — primary garment color for the suit colorway
+    case steel = 13     // "T" — neutral metal that does not follow the suit palette
 }
 
 struct PixelSprite {
@@ -201,7 +235,7 @@ struct PixelSprite {
     init(_ art: String) {
         let map: [Character: UInt8] = [
             ".": 0, "#": 1, "+": 2, "K": 3, "S": 4, "s": 5,
-            "G": 6, "R": 7, "D": 8, "H": 9, "W": 10, "A": 11, "B": 12
+            "G": 6, "R": 7, "D": 8, "H": 9, "W": 10, "A": 11, "B": 12, "T": 13
         ]
         let lines = art.split(separator: "\n").map(String.init)
         let w = lines.map(\.count).max() ?? 0
@@ -443,7 +477,95 @@ enum PixelSprites {
         ranks[rank.label] ?? aceRank
     }
 
-    // Face card portraits — 28x35, outlined forms in the classic style.
+    // Two-way royal portraits. Each final row is horizontally symmetric so
+    // the upright and rotated copies can overlap without exposing a join.
+    static let twoWayJackHalf = PixelSprite("""
+    .........KKKKKK...........
+    .......KRRRRRRRRKK.KK.....
+    ........GKKKRRRRRKBBK.....
+    ........KKKKGGKRKBKGK.....
+    ..KK....KSSKKKKGGKKK......
+    ..GB....KKKWKKKKKKK.......
+    .KBBK..KSKSSKKKKKK........
+    .GBBB..KSSSSSKKKK.........
+    ..BB....KSSSSKKKK.........
+    .KRRK...KSSSSSKKKK........
+    .KKKK....KKKSSSKK.........
+    ..GG......KSSSKKGKK.......
+    ..KK....KGGKSKGGKGKKK.....
+    ..KK...KBBKBBBKKKKGRRGK...
+    ..KK..KRBBKKBKKKKBGRRGBK..
+    .KSSKKRRBBKKKKKBBGRRGBBK..
+    KSSSSKRRBBKKKKBBBGRRGBBBK.
+    KSSSSKRRBBBBKBBBGRRGRBBBK.
+    KSSSRRRBBBBKBBBBGRRGRBBBB.
+    KSKKRRRBBBBKBBBGRRGBRBBBBK
+    .KKKRRRBBBKBBBGRRGKBRRBBBK
+    KRRBRRBBBKBBGRRGKKBKRRBBBK
+    KRRBKRBBKBBGRRGBBKBBRKBRRK
+    """)
+
+    static let twoWayQueenHalf = PixelSprite("""
+    ........KK..K.............
+    ........KGKKGKKK..........
+    ........KGGGKGGK..........
+    ........KSKKKKGGK.........
+    ........SKSKKKKGKK........
+    .......KWKSWKKKGKKK.......
+    .......KSSSSKBKKKKK.......
+    .......SSSSSSKKKKKK.......
+    .KR.....KSSSSKKKGKKK......
+    KRGR....KSSKSKKKGKKK......
+    KKRKK....KKSSKKKKKKKK.....
+    .KGGK...KKKSSKKKKKKBK.....
+    KKGGK...KKWSKGGGKGKKKK....
+    KBB....KBKBBBKKKKBGRRG....
+    ..BK..KRBBBKBKKKBBGRRGK...
+    .KSSKRRRBBKBKKKBBGRRGBB...
+    KSSSSRRRBBKBKKBBBGRRGBBK..
+    KSSSSRRRBBKKKBBBGRRGRBBB..
+    KSKKKRRRBBKKBBBBGRRGRBBB..
+    KSKKRRRBBBKBBBBGRRGBRBBBK.
+    .KKBKRRBBKBBBBGRRGBBRRBBK.
+    KRRRKRBBKBBBGRRGKBBKRRBBK.
+    KKBBBKKKBBBGRRGBBBKKKBBBKK
+    """)
+
+    static let twoWayKingHalf = PixelSprite("""
+    ..........K.KK............
+    .......GK.G.KG..R.........
+    .......KGGKGGGGKGKKG......
+    ........GGGGRKGGKGGK......
+    ........KKKKKKGGGGK.......
+    ..K.....KWWSKKKKKKK.......
+    .KWK....KKSSRKKBKKKK......
+    .KWTK...SKSSSKKKKKK.......
+    .KWTK..KSSSSSKSKKKK.......
+    .KWTK...KKSSKKKKKKKK......
+    .KWTK...KSKKKKKKKKKK......
+    .KWTK...KKKKKSSKKKKK......
+    .KWTK..KKKKKRSKGGKKK......
+    .KWTK...KKKKKBBKKKGRRG....
+    KGGGGGKKKKKBBKKKKBGRRGB...
+    .KSS.KRBBKBKBKKKBGRRGBBK..
+    KSSSSRRBBKKKBKKBBGRRGBBB..
+    KSSSSRRBBKKKBKBBGRRGRRBBK.
+    KSSSRRRBBKKKBBBBGRRGRRBBK.
+    KSKKRRRBBKKBBBBGRRGBRRBBB.
+    .BKKKRRBBKBBBBGRRGBBRRRBBK
+    KRBBRKRBBBKBGRRGKBBBRRRBBK
+    KRRRRKRBBKKGRRGKKBBRKRRRRK
+    """)
+
+    static func twoWayRoyalHalf(for rank: Rank) -> PixelSprite? {
+        switch rank {
+        case .jack: twoWayJackHalf
+        case .queen: twoWayQueenHalf
+        case .king: twoWayKingHalf
+        default: nil
+        }
+    }
+
     static let king = PixelSprite("""
     ........G..G..G..G..G.......
     .......KGGGGGGGGGGGGGGK.....
@@ -568,19 +690,6 @@ enum PixelSprites {
     }
 }
 
-enum PixelRoyalArtwork {
-    static let logicalSize = CGSize(width: 26, height: 45)
-
-    static func assetName(for rank: Rank) -> String? {
-        switch rank {
-        case .jack: "PixelJack"
-        case .queen: "PixelQueen"
-        case .king: "PixelKing"
-        default: nil
-        }
-    }
-}
-
 // MARK: - Painter
 
 enum PixelCardArt {
@@ -598,6 +707,7 @@ enum PixelCardArt {
         grid: PixelGrid,
         scale: CGFloat = 1,
         flipped: Bool = false,
+        antialiased: Bool = true,
         color: (PixelInk) -> Color?
     ) {
         for row in 0..<sprite.height {
@@ -622,7 +732,11 @@ enum PixelCardArt {
                     width: CGFloat(run) * scale,
                     height: scale
                 )
-                context.fill(Path(rect), with: .color(fill))
+                context.fill(
+                    Path(rect),
+                    with: .color(fill),
+                    style: FillStyle(antialiased: antialiased)
+                )
                 col += run
             }
         }
@@ -691,7 +805,54 @@ enum PixelCardArt {
                     color: solid
                 )
             }
+        } else if let half = PixelSprites.twoWayRoyalHalf(for: card.rank) {
+            drawTwoWayRoyal(half, in: context, size: size, grid: grid)
         }
+    }
+
+    private static func drawTwoWayRoyal(
+        _ half: PixelSprite,
+        in context: GraphicsContext,
+        size: CGSize,
+        grid: PixelGrid
+    ) {
+        let artworkWidth = CGFloat(half.width)
+        let artworkHeight = CGFloat(half.height * 2 - 1)
+        let gridHeight = size.height / grid.unit
+        let originX = (gridWidth - artworkWidth) / 2
+        let originY = (gridHeight - artworkHeight) / 2
+        let royalInk: (PixelInk) -> Color? = { ink in
+            switch ink {
+            case .outlineDark: PixelPalette.royalOutline
+            case .skin: PixelPalette.royalSkin
+            case .gold: PixelPalette.royalGold
+            case .robe: PixelPalette.royalRed
+            case .altRobe: PixelPalette.royalBlue
+            case .steel: PixelPalette.royalSteel
+            case .white: PixelPalette.royalWhite
+            default: nil
+            }
+        }
+
+        draw(
+            half,
+            in: context,
+            x: originX,
+            y: originY,
+            grid: grid,
+            antialiased: false,
+            color: royalInk
+        )
+        draw(
+            half,
+            in: context,
+            x: originX,
+            y: originY + CGFloat(half.height - 1),
+            grid: grid,
+            flipped: true,
+            antialiased: false,
+            color: royalInk
+        )
     }
 
     private static func drawFaceBevel(
@@ -740,6 +901,7 @@ enum PixelCardArt {
             case .white: return PixelPalette.ermine
             case .accent: return PixelPalette.accent
             case .altRobe: return isRed ? PixelPalette.robeBlue : PixelPalette.robeRed
+            case .steel: return PixelPalette.royalSteel
             case .ink, .inkHi, .none: return nil
             }
         }
@@ -909,22 +1071,8 @@ struct PixelCardFrontView: View {
             fill: PixelPalette.cardFace,
             isSelected: isSelected
         ) {
-            ZStack {
-                Canvas { context, size in
-                    PixelCardArt.drawFront(card: card, in: context, size: size, grid: grid)
-                }
-
-                if let royalAssetName = PixelRoyalArtwork.assetName(for: card.rank) {
-                    Image(royalAssetName)
-                        .resizable()
-                        .interpolation(.none)
-                        .frame(
-                            width: PixelRoyalArtwork.logicalSize.width * unit,
-                            height: PixelRoyalArtwork.logicalSize.height * unit
-                        )
-                        .accessibilityHidden(true)
-                        .allowsHitTesting(false)
-                }
+            Canvas { context, size in
+                PixelCardArt.drawFront(card: card, in: context, size: size, grid: grid)
             }
         }
     }

@@ -71,12 +71,51 @@ final class CardStyleTests: XCTestCase {
         }
     }
 
-    func testPixelRoyalArtworkMapsOnlyFaceCards() {
-        XCTAssertEqual(PixelRoyalArtwork.assetName(for: .jack), "PixelJack")
-        XCTAssertEqual(PixelRoyalArtwork.assetName(for: .queen), "PixelQueen")
-        XCTAssertEqual(PixelRoyalArtwork.assetName(for: .king), "PixelKing")
-        XCTAssertNil(PixelRoyalArtwork.assetName(for: .ten))
-        XCTAssertEqual(PixelRoyalArtwork.logicalSize, CGSize(width: 26, height: 45))
+    func testPixelRoyalSpritesMapOnlyFaceCards() {
+        XCTAssertNotNil(PixelSprites.twoWayRoyalHalf(for: .jack))
+        XCTAssertNotNil(PixelSprites.twoWayRoyalHalf(for: .queen))
+        XCTAssertNotNil(PixelSprites.twoWayRoyalHalf(for: .king))
+        XCTAssertNil(PixelSprites.twoWayRoyalHalf(for: .ten))
+    }
+
+    func testPixelRoyalColorwaysFollowSuitColor() {
+        XCTAssertEqual(PixelRoyalColorway.matching(.hearts), .redSuit)
+        XCTAssertEqual(PixelRoyalColorway.matching(.diamonds), .redSuit)
+        XCTAssertEqual(PixelRoyalColorway.matching(.spades), .blackSuit)
+        XCTAssertEqual(PixelRoyalColorway.matching(.clubs), .blackSuit)
+    }
+
+    func testTwoWayPixelRoyalsShareOneSymmetricCenterRow() throws {
+        for rank in [Rank.jack, .queen, .king] {
+            let half = try XCTUnwrap(PixelSprites.twoWayRoyalHalf(for: rank))
+            let centerRow = half.cells[half.height - 1]
+
+            XCTAssertEqual(half.width, 26)
+            XCTAssertEqual(half.height * 2 - 1, 45)
+            XCTAssertEqual(centerRow, Array(centerRow.reversed()))
+        }
+    }
+
+    func testTwoWayPixelRoyalsUseTheSameSashBand() throws {
+        let sashStarts = [18, 18, 17, 17, 16, 16, 15, 14, 12, 11]
+        let sashBand = [
+            PixelInk.gold.rawValue,
+            PixelInk.robe.rawValue,
+            PixelInk.robe.rawValue,
+            PixelInk.gold.rawValue,
+        ]
+
+        for rank in [Rank.jack, .queen, .king] {
+            let half = try XCTUnwrap(PixelSprites.twoWayRoyalHalf(for: rank))
+
+            for (row, start) in sashStarts.enumerated() {
+                XCTAssertEqual(
+                    Array(half.cells[row + 13][start..<(start + sashBand.count)]),
+                    sashBand,
+                    "\(rank) sash differs on row \(row + 13)"
+                )
+            }
+        }
     }
 
     func testPixelStyleReducesTiltWithoutDiscardingItsDirection() {
