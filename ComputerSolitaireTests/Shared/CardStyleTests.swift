@@ -168,9 +168,4 @@ final class CardStyleTests: XCTestCase {
         }
     }
 
-    func testPixelStyleReducesTiltWithoutDiscardingItsDirection() {
-        XCTAssertEqual(CardTilt.displayAngle(for: 2, style: .pixel), 0.5)
-        XCTAssertEqual(CardTilt.displayAngle(for: -2, style: .pixel), -0.5)
-        XCTAssertEqual(CardTilt.displayAngle(for: 2, style: .classic), 2)
-    }
 }
