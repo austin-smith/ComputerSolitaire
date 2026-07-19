@@ -6,6 +6,12 @@ struct DrawOverlayView: View {
     let cardSize: CGSize
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
+    /// Fresh-board deals queue every card on one shared anchor, so waiting
+    /// cards hide until takeoff (a visible queue would peel from under the
+    /// deck). Stock deals and draws keep their queues visible: their cards
+    /// wait on distinct per-index anchors, covering the already-decremented
+    /// stock until each departs.
+    var hidesUntilTakeoff = false
 
     var body: some View {
         ForEach(cards) { item in
@@ -16,11 +22,96 @@ struct DrawOverlayView: View {
                 end: item.end,
                 delay: item.delay,
                 isCardTiltEnabled: isCardTiltEnabled,
-                cardTilts: $cardTilts
+                cardTilts: $cardTilts,
+                hidesUntilTakeoff: hidesUntilTakeoff
             )
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// The clear-the-table sweep before a fresh deal: one palm stroke crosses
+/// the board and every card rides it off the right edge, piling into a
+/// traveling clump. One linear progress drives the whole stroke; the
+/// acceleration and each card's catch-and-carry happen per frame inside
+/// `WipeRideEffect`, because a clump only forms when positions track the
+/// palm's front continuously — endpoint animation can't produce it.
+struct BoardWipeOverlayView: View {
+    let cards: [BoardWipeCard]
+    let sweepSpan: CGFloat
+    let strokeDuration: Double
+    let isCardTiltEnabled: Bool
+    @Binding var cardTilts: [UUID: Double]
+    @Environment(\.motionPolicy) private var motion
+    @State private var strokeProgress: CGFloat = 0
+
+    var body: some View {
+        Group {
+            ForEach(cards) { item in
+                CardView(
+                    card: item.card,
+                    isSelected: false,
+                    cardSize: item.size,
+                    // Shares the real cards' resting tilt so replacing the
+                    // board with the overlay is pixel-identical — otherwise
+                    // every card visibly snaps straight before the stroke.
+                    isCardTiltEnabled: isCardTiltEnabled,
+                    cardTilts: $cardTilts,
+                    isAccessibilityElement: false
+                )
+                .modifier(
+                    WipeRideEffect(
+                        progress: strokeProgress,
+                        item: item,
+                        sweepSpan: sweepSpan
+                    )
+                )
+                .position(item.start)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .onAppear {
+            // Linear on purpose: the whip lives in the front's quadratic
+            // curve, and the completion in ContentView scales through the
+            // same policy so teardown lands after the stroke finishes.
+            withAnimation(motion.linear(strokeDuration)) {
+                strokeProgress = 1
+            }
+        }
+    }
+}
+
+/// Per-frame catch-and-carry: a card stays planted until the palm's front
+/// reaches it, then translates with the front, picking up its tilt and
+/// vertical wobble over its first card-width of travel.
+private struct WipeRideEffect: GeometryEffect {
+    var progress: CGFloat
+    let item: BoardWipeCard
+    let sweepSpan: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let dx = BoardWipeCoordinator.sweptDisplacement(
+            progress: progress,
+            startX: item.start.x,
+            rideOffset: item.rideOffset,
+            sweepSpan: sweepSpan
+        )
+        // How settled into the clump the card is: jostle ramps in over the
+        // first card-width of carry, then holds.
+        let carried = min(1, dx / max(size.width, 1))
+        var transform = CGAffineTransform(translationX: dx, y: item.wobble * carried)
+        transform = transform
+            .translatedBy(x: size.width / 2, y: size.height / 2)
+            .rotated(by: item.rotationDegrees * carried * .pi / 180)
+            .translatedBy(x: -size.width / 2, y: -size.height / 2)
+        return ProjectionTransform(transform)
     }
 }
 
@@ -82,8 +173,10 @@ private struct DrawOverlayCardView: View {
     let delay: Double
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
+    let hidesUntilTakeoff: Bool
     @Environment(\.motionPolicy) private var motion
     @State private var progress: CGFloat = 0
+    @State private var hasTakenOff = false
 
     var body: some View {
         let currentX = start.x + (end.x - start.x) * progress
@@ -102,12 +195,23 @@ private struct DrawOverlayCardView: View {
             isAccessibilityElement: false
         )
         .position(x: currentX, y: currentY)
+        // See DrawOverlayView: only fresh-board deals hide their queue.
+        .opacity(!hidesUntilTakeoff || hasTakenOff ? 1 : 0)
         .onAppear {
             // Travel pace matches the coordinator plans' travelDuration; the
             // completion in ContentView scales through the same policy, so
             // the overlay always comes down after the cards have settled.
             withAnimation(motion.spring(response: 0.32, dampingFraction: 0.86)?.delay(motion.duration(delay))) {
                 progress = 1
+            }
+            if hidesUntilTakeoff {
+                // The reveal rides the same animation clock as the travel
+                // spring (not a wall-clock timer): if the main thread runs
+                // behind during a big board mount, both shift together and
+                // a card can never be seen mid-air before it "exists".
+                withAnimation(motion.linear(0.05)?.delay(motion.duration(delay))) {
+                    hasTakenOff = true
+                }
             }
         }
     }

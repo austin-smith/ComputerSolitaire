@@ -5,12 +5,11 @@ import XCTest
 /// stashes and resumes per-mode sessions without touching statistics.
 @MainActor
 final class GameSessionActivationTests: XCTestCase {
-    private static var retainedViewModels: [SolitaireViewModel] = []
 
     // Verifies switching variants mid-game records no loss in either variant's bucket.
     func testActivateVariantDoesNotRecordLoss() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             viewModel.newGame(mode: .klondikeDrawThree)
 
             viewModel.activateGame(.freecell, restoringFrom: nil)
@@ -24,8 +23,8 @@ final class GameSessionActivationTests: XCTestCase {
     // Verifies a stashed session survives the switch round trip exactly: board, progress,
     // score, undo history, and redeal baseline.
     func testActivateVariantRoundTripsStashedSession() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             let state = GameStateFixtures.seededFreeCellDeal(seed: 7)
             let redealState = GameStateFixtures.seededFreeCellDeal(seed: 8)
             let snapshot = GameSnapshot(
@@ -59,8 +58,8 @@ final class GameSessionActivationTests: XCTestCase {
 
     // Verifies a missing payload deals a fresh game for the requested variant.
     func testActivateVariantDealsFreshWhenPayloadNil() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             viewModel.newGame(mode: .klondikeDrawThree)
 
             XCTAssertFalse(viewModel.activateGame(.freecell, restoringFrom: nil))
@@ -75,8 +74,8 @@ final class GameSessionActivationTests: XCTestCase {
 
     // Verifies a payload that fails restore sanitization falls back to a fresh deal.
     func testActivateVariantDealsFreshWhenPayloadInvalid() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             let invalid = makePayload(state: GameStateFixtures.emptyBoard(), movesCount: 3)
 
             XCTAssertFalse(viewModel.activateGame(.klondikeDrawThree, restoringFrom: invalid))
@@ -88,8 +87,8 @@ final class GameSessionActivationTests: XCTestCase {
 
     // Verifies a payload belonging to another variant is rejected in favor of a fresh deal.
     func testActivateVariantRejectsWrongVariantPayload() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             let freeCellPayload = makePayload(
                 state: GameStateFixtures.seededFreeCellDeal(seed: 7),
                 movesCount: 12
@@ -107,8 +106,8 @@ final class GameSessionActivationTests: XCTestCase {
     // locked to the deal). Its statistics must land entirely in the bucket
     // of the mode it lives and displays as.
     func testLegacyMismatchedDrawCountsRecordIntoTheModesOwnBucket() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             let payload = makePayload(
                 state: GameStateFixtures.seededKlondikeDeal(seed: 7),
                 movesCount: 12,
@@ -131,8 +130,8 @@ final class GameSessionActivationTests: XCTestCase {
     // rejected: a draw-three Klondike session must not restore into a
     // requested draw-one game.
     func testActivateGameRejectsWrongModePayloadOfSameVariant() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             let drawThreePayload = makePayload(
                 state: GameStateFixtures.seededKlondikeDeal(seed: 7),
                 movesCount: 12
@@ -148,10 +147,10 @@ final class GameSessionActivationTests: XCTestCase {
     // Verifies elapsed time does not accrue while a session sits stashed: 600s of play
     // stashed for 300s still reports 600s after reactivation.
     func testStashedTimeDoesNotAccrue() {
-        withIsolatedStatsStore {
+        SessionTestHarness.withIsolatedStatsStore {
             let clock = TestDateProvider(now: DateFixtures.reference)
             let viewModel = SolitaireViewModel(dateProvider: clock)
-            Self.retainedViewModels.append(viewModel)
+            SessionTestHarness.retain(viewModel)
             let payload = makePayload(
                 state: GameStateFixtures.seededFreeCellDeal(seed: 7),
                 movesCount: 12,
@@ -168,10 +167,10 @@ final class GameSessionActivationTests: XCTestCase {
     // A payload stashed while paused restores paused; resuming must not
     // charge the game for time spent paused or stashed.
     func testRestoredPausedPayloadResumesWithoutAccruingStashTime() {
-        withIsolatedStatsStore {
+        SessionTestHarness.withIsolatedStatsStore {
             let clock = TestDateProvider(now: DateFixtures.reference)
             let viewModel = SolitaireViewModel(dateProvider: clock)
-            Self.retainedViewModels.append(viewModel)
+            SessionTestHarness.retain(viewModel)
             let payload = makePayload(
                 state: GameStateFixtures.seededFreeCellDeal(seed: 7),
                 movesCount: 12,
@@ -196,8 +195,8 @@ final class GameSessionActivationTests: XCTestCase {
 
     // Verifies reactivating a finalized (won) session does not finalize it again on New Game.
     func testActivateVariantWithFinalizedPayloadDoesNotRefinalizeOnNewGame() {
-        withIsolatedStatsStore {
-            let viewModel = makeViewModel()
+        SessionTestHarness.withIsolatedStatsStore {
+            let viewModel = SessionTestHarness.makeViewModel()
             let payload = makePayload(
                 state: GameStateFixtures.seededFreeCellDeal(seed: 7),
                 movesCount: 12,
@@ -213,34 +212,6 @@ final class GameSessionActivationTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func withIsolatedStatsStore(_ body: () -> Void) {
-        let defaults = UserDefaults.standard
-        let statsKeys = GameMode.allCases.map { GameStatisticsStore.defaultsKey(for: $0) }
-        let previousStatsData = statsKeys.reduce(into: [String: Data]()) { result, key in
-            if let data = defaults.data(forKey: key) {
-                result[key] = data
-            }
-        }
-        for key in statsKeys {
-            defaults.removeObject(forKey: key)
-        }
-        defer {
-            for key in statsKeys {
-                if let value = previousStatsData[key] {
-                    defaults.set(value, forKey: key)
-                } else {
-                    defaults.removeObject(forKey: key)
-                }
-            }
-        }
-        body()
-    }
-
-    private func makeViewModel() -> SolitaireViewModel {
-        let viewModel = SolitaireViewModel()
-        Self.retainedViewModels.append(viewModel)
-        return viewModel
-    }
 
     private func makePayload(
         state: GameState,

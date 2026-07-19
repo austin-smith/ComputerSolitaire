@@ -117,6 +117,12 @@ struct ContentView: View {
     @State private var dealAnimationCards: [DrawAnimationCard] = []
     @State private var dealingCardIDs: Set<UUID> = []
     @State private var dealAnimationToken = UUID()
+    /// True while the active deal flight is a fresh-board deal, whose queued
+    /// cards hide until takeoff; stock deals keep their queues visible.
+    @State private var dealFlightHidesQueuedCards = false
+    @State private var wipeAnimationCards: [BoardWipeCard] = []
+    @State private var wipeAnimationToken = UUID()
+    @State private var wipeSweepSpan: CGFloat = 0
     /// The move count when the active deal flight took off; a later move means
     /// gameplay has mutated the position the flight refers to.
     @State private var dealAnimationMovesCount = 0
@@ -858,6 +864,15 @@ struct ContentView: View {
             guard let event else { return }
             startDealAnimation(for: event.dealtCardIDs)
         }
+        .onChange(of: viewModel.latestBoardDealEvent) { _, event in
+            // A fresh board deals itself in from the stock: new game,
+            // redeal, Golf's next hole, or a game switch that found nothing
+            // to restore. Like the tableau deal above, the session publishes
+            // an explicit event — restores never set it — so a hydrated
+            // board can never replay a deal that already happened.
+            guard event != nil else { return }
+            startNewGameDealAnimation()
+        }
         .onChange(of: viewModel.movesCount) { _, movesCount in
             // The board stays live during a deal flight, and a move that lands
             // mid-flight can relocate a card the overlay is still flying toward
@@ -873,6 +888,17 @@ struct ContentView: View {
         .overlay {
             GeometryReader { _ in
                 ZStack {
+                    BoardWipeOverlayView(
+                        cards: wipeAnimationCards,
+                        sweepSpan: wipeSweepSpan,
+                        strokeDuration: BoardWipeCoordinator.strokeDuration,
+                        isCardTiltEnabled: isCardTiltEnabled,
+                        cardTilts: $cardTilts
+                    )
+                    // Fresh identity per wipe so the stroke's onAppear
+                    // animation restarts from a planted palm every time.
+                    .id(wipeAnimationToken)
+                    .zIndex(45)
                     DrawOverlayView(
                         cards: drawAnimationCards,
                         cardSize: effectiveCardSize,
@@ -884,7 +910,8 @@ struct ContentView: View {
                         cards: dealAnimationCards,
                         cardSize: effectiveCardSize,
                         isCardTiltEnabled: isCardTiltEnabled,
-                        cardTilts: $cardTilts
+                        cardTilts: $cardTilts,
+                        hidesUntilTakeoff: dealFlightHidesQueuedCards
                     )
                     .zIndex(50)
                     UndoOverlayView(
@@ -922,7 +949,9 @@ struct ContentView: View {
                 // shared win overlay never presents for it.
                 if viewModel.golfMatch.isComplete {
                     GolfMatchSummaryOverlay(match: viewModel.golfMatch) {
-                        viewModel.startNewGolfMatch()
+                        dealFreshBoard {
+                            viewModel.startNewGolfMatch()
+                        }
                     }
                     .transition(.opacity)
                 } else if viewModel.isGolfHoleOver,
@@ -936,7 +965,11 @@ struct ContentView: View {
                         matchTotalThroughHole: viewModel.golfLiveMatchTotal,
                         isFinalHole: viewModel.golfMatch.currentHoleNumber == GolfMatchState.holeCount,
                         didClearBoard: viewModel.isWin,
-                        onAdvance: { viewModel.advanceGolfHole() },
+                        onAdvance: {
+                            dealFreshBoard {
+                                viewModel.advanceGolfHole()
+                            }
+                        },
                         onUndo: { viewModel.undo() }
                     )
                     .transition(.opacity)
@@ -1072,13 +1105,76 @@ struct ContentView: View {
 
     private func startNewGameFromUI() {
         stopAutoFinish()
-        winCelebration.reset(to: .idle)
-        // New Game replaces the board as thoroughly as a game switch: stale
-        // flights (deal, draw, undo) must not animate over the fresh deal.
-        resetTransientBoardState()
         isScreenshotSession = false
-        viewModel.newGame()
+        dealFreshBoard {
+            viewModel.newGame()
+        }
+        // Reset after the wipe capture: on a just-won board the celebration
+        // still hides the cascaded foundation cards, and capturing first
+        // keeps the wipe from re-materializing cards the player watched
+        // fly away.
+        winCelebration.reset(to: .idle)
         persistGameNow()
+    }
+
+    /// Runs a session mutation that deals a whole fresh board (new game,
+    /// redeal, Golf's match flow) with animations disabled: the deal-in
+    /// flight hides the fresh cards, so an animated removal would leave the
+    /// old board fading out as ghosts under the flight instead of clearing
+    /// the felt. Stale flights are landed first, as every board replacement
+    /// requires.
+    private func dealFreshBoard(_ mutation: () -> Void) {
+        // Capture the outgoing board before any state is torn down: the
+        // wipe replays these cards from their last resting frames while the
+        // real board already holds the (hidden) fresh deal.
+        let wipedCards = wipeableBoardCards()
+        let wipeFrames = cardFrames
+        let eventBeforeMutation = viewModel.latestBoardDealEvent
+        resetTransientBoardState()
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            mutation()
+        }
+        // Only wipe when the mutation actually dealt a fresh board: Golf's
+        // final-hole advance completes the match and deliberately stays on
+        // the finished board, and sweeping copies off a board that never
+        // leaves would read as a ghost board peeling away.
+        guard viewModel.latestBoardDealEvent != eventBeforeMutation else { return }
+        // Drop the outgoing layout's frames: Redeal reuses the outgoing
+        // game's card IDs, so stale entries would satisfy the deal flight's
+        // readiness check and land cards at their played-out positions.
+        // The wipe is unaffected — it plans from the snapshot captured
+        // above — and the fresh board republishes within a frame.
+        cardFrames = [:]
+        startBoardWipe(for: wipedCards, frames: wipeFrames)
+    }
+
+    /// The outgoing board's visible cards — everything with a resting frame
+    /// that isn't already hidden behind an overlay flight or the win
+    /// celebration. Stock cards publish no frames, so the deck stays put.
+    private func wipeableBoardCards() -> [Card] {
+        let hidden = effectiveHiddenCardIDs.union(drawingCardIDs)
+        return cardLookup(in: viewModel.state).values.filter {
+            !hidden.contains($0.id) && cardFrames[$0.id] != nil
+        }
+    }
+
+    private func startBoardWipe(for cards: [Card], frames: [UUID: CGRect]) {
+        guard let plan = BoardWipeCoordinator.makeWipePlan(
+            cards: cards,
+            cardFrames: frames,
+            boardSize: boardViewportSize
+        ) else { return }
+        wipeAnimationCards = plan.cards
+        wipeSweepSpan = plan.sweepSpan
+        let token = plan.token
+        wipeAnimationToken = token
+        let total = motion.duration(BoardWipeCoordinator.strokeDuration)
+        DispatchQueue.main.asyncAfter(deadline: .now() + total) {
+            guard wipeAnimationToken == token else { return }
+            wipeAnimationCards = []
+        }
     }
 
     /// Syncs the stored game selection (variant plus per-variant configuration)
@@ -1099,10 +1195,11 @@ struct ContentView: View {
     private func redealFromUI() {
         guard viewModel.canRedeal else { return }
         stopAutoFinish()
+        dealFreshBoard {
+            viewModel.redeal()
+        }
+        // Reset after the wipe capture; see startNewGameFromUI.
         winCelebration.reset(to: .idle)
-        // Redeal replaces the board like New Game does; see above.
-        resetTransientBoardState()
-        viewModel.redeal()
         persistGameNow()
     }
 
@@ -1152,6 +1249,8 @@ struct ContentView: View {
         drawAnimationCards = []
         drawingCardIDs = []
         drawAnimationToken = UUID()
+        wipeAnimationCards = []
+        wipeAnimationToken = UUID()
         cancelDealAnimation()
         undoAnimationItems = []
         undoAnimationTargets = [:]
@@ -1454,42 +1553,126 @@ struct ContentView: View {
         let token = UUID()
         dealAnimationToken = token
         DispatchQueue.main.async {
-            resolveDealAnimation(for: dealtCards, token: token, attemptsRemaining: 24)
+            resolveDealFlight(
+                token: token,
+                attemptsRemaining: 24,
+                retryInterval: 0.01,
+                isReady: {
+                    // Only cards still on the tableau ever publish a landing
+                    // frame: a dealt card that completed a run banked on
+                    // arrival, and its run pile publishes the run's top card
+                    // only. Waiting on a banked card would burn every retry
+                    // before the plan — which already skips frame-less
+                    // cards — could run.
+                    let tableauCardIDs = Set(viewModel.state.tableau.joined().map(\.id))
+                    return dealtCards
+                        .filter { tableauCardIDs.contains($0.id) }
+                        .allSatisfy { cardFrames[$0.id] != nil }
+                },
+                makePlan: {
+                    DealAnimationCoordinator.makeDealPlan(
+                        dealtCards: dealtCards,
+                        cardFrames: cardFrames,
+                        stockFrame: stockFrame
+                    )
+                }
+            )
         }
     }
 
     private func cancelDealAnimation() {
         dealAnimationCards = []
         dealingCardIDs = []
+        dealFlightHidesQueuedCards = false
         dealAnimationToken = UUID()
     }
 
-    private func resolveDealAnimation(for dealtCards: [Card], token: UUID, attemptsRemaining: Int) {
+    /// Flies a fresh board's cards in from the stock, sharing the deal
+    /// flight's overlay, hiding, and cancellation rules — a move or a game
+    /// switch mid-deal lands the flight the same way it lands a stock deal.
+    private func startNewGameDealAnimation() {
+        cancelDealAnimation()
+        let dealtCards = DealAnimationCoordinator.newGameDealSequence(in: viewModel.state)
+        guard !dealtCards.isEmpty else { return }
+
+        dealingCardIDs = Set(dealtCards.map(\.id))
+        // Fresh-board cards all queue on one shared anchor, so the overlay
+        // hides each until its takeoff; see DrawOverlayView.
+        dealFlightHidesQueuedCards = true
+        dealAnimationMovesCount = viewModel.movesCount
+        let token = UUID()
+        dealAnimationToken = token
+        DispatchQueue.main.async {
+            resolveDealFlight(
+                token: token,
+                attemptsRemaining: 75,
+                retryInterval: 0.02,
+                isReady: {
+                    // A fresh board's landing frames arrive a beat after the
+                    // state swap (dealFreshBoard drops the stale set first —
+                    // New Game mints new card IDs, but Redeal reuses the
+                    // outgoing game's, whose leftover frames would otherwise
+                    // pass this check) — and whole seconds later when the
+                    // deal rides a game switch or first launch, where the
+                    // board tree is still building. Patience here is cheap:
+                    // attempts burn only while frames are missing, and any
+                    // interaction lands the flight through the usual cancel
+                    // paths. The deal also waits for the wipe sweep to
+                    // finish clearing the old board off the felt — the
+                    // dealer doesn't deal onto a messy table.
+                    wipeAnimationCards.isEmpty
+                        && dealtCards.allSatisfy { cardFrames[$0.id] != nil }
+                },
+                makePlan: {
+                    DealAnimationCoordinator.makeNewGameDealPlan(
+                        dealtCards: dealtCards,
+                        cardFrames: cardFrames,
+                        stockFrame: stockFrame,
+                        boardSize: boardViewportSize
+                    )
+                },
+                onTakeoff: {
+                    SoundManager.shared.play(.cardDrawFromStock)
+                    HapticManager.shared.play(.stockDraw)
+                }
+            )
+        }
+    }
+
+    /// One resolver drives both deal flights (the stock deal and the fresh
+    /// board): poll until the flight's readiness condition holds, build its
+    /// plan or land the flight, then tear the overlay down once the last
+    /// card has settled — token-gated throughout, so a superseding flight
+    /// or any cancel path orphans the loop harmlessly.
+    private func resolveDealFlight(
+        token: UUID,
+        attemptsRemaining: Int,
+        retryInterval: TimeInterval,
+        isReady: @escaping () -> Bool,
+        makePlan: @escaping () -> DealAnimationCoordinator.Plan?,
+        onTakeoff: @escaping () -> Void = {}
+    ) {
         guard dealAnimationToken == token else { return }
-        // Only cards still on the tableau ever publish a landing frame: a
-        // dealt card that completed a run banked on arrival, and its run pile
-        // publishes the run's top card only. Waiting on a banked card would
-        // burn every retry before the plan — which already skips frame-less
-        // cards — could run.
-        let tableauCardIDs = Set(viewModel.state.tableau.joined().map(\.id))
-        let awaitedCards = dealtCards.filter { tableauCardIDs.contains($0.id) }
-        let framesReady = awaitedCards.allSatisfy { cardFrames[$0.id] != nil }
-        if !framesReady, attemptsRemaining > 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                resolveDealAnimation(for: dealtCards, token: token, attemptsRemaining: attemptsRemaining - 1)
+        if !isReady(), attemptsRemaining > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + retryInterval) {
+                resolveDealFlight(
+                    token: token,
+                    attemptsRemaining: attemptsRemaining - 1,
+                    retryInterval: retryInterval,
+                    isReady: isReady,
+                    makePlan: makePlan,
+                    onTakeoff: onTakeoff
+                )
             }
             return
         }
 
-        guard let plan = DealAnimationCoordinator.makeDealPlan(
-            dealtCards: dealtCards,
-            cardFrames: cardFrames,
-            stockFrame: stockFrame
-        ) else {
+        guard let plan = makePlan() else {
             cancelDealAnimation()
             return
         }
 
+        onTakeoff()
         dealAnimationCards = plan.cards
         // The plan drops cards without a landing frame (banked on arrival);
         // trimming the hidden set to the flying cards un-hides those.
@@ -1728,6 +1911,7 @@ struct ContentView: View {
         var lookup: [UUID: Card] = [:]
         for card in state.stock { lookup[card.id] = card }
         for card in state.waste { lookup[card.id] = card }
+        for card in state.reserve { lookup[card.id] = card }
         for card in state.freeCells.compactMap({ $0 }) { lookup[card.id] = card }
         for pile in state.foundations {
             for card in pile { lookup[card.id] = card }

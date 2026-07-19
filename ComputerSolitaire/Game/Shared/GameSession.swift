@@ -49,6 +49,15 @@ final class SolitaireViewModel {
     func publishTableauDealEvent(dealtCardIDs: [UUID]) {
         latestTableauDealEvent = TableauDealEvent(id: UUID(), dealtCardIDs: dealtCardIDs)
     }
+
+    /// The most recent fresh deal (new game, redeal, Golf's next hole),
+    /// published for the board's deal-in flight. Like `TableauDealEvent`, an
+    /// explicit event rather than an inferred state diff, so restores and
+    /// game switches can never replay a deal that already happened.
+    struct BoardDealEvent: Equatable {
+        let id: UUID
+    }
+    private(set) var latestBoardDealEvent: BoardDealEvent?
     private(set) var movesCount: Int = 0
     private(set) var score: Int = 0
     private(set) var gameStartedAt: Date = .now
@@ -307,6 +316,7 @@ final class SolitaireViewModel {
         isDragging = false
         pendingAutoMove = nil
         latestTableauDealEvent = nil
+        latestBoardDealEvent = BoardDealEvent(id: UUID())
         movesCount = 0
         score = 0
         gameStartedAt = dateProvider.now
@@ -332,6 +342,7 @@ final class SolitaireViewModel {
         selection = nil
         isDragging = false
         pendingAutoMove = nil
+        latestBoardDealEvent = BoardDealEvent(id: UUID())
         movesCount = 0
         score = 0
         gameStartedAt = dateProvider.now
@@ -398,6 +409,7 @@ final class SolitaireViewModel {
         guard let sanitizedPayload = payload.sanitizedForRestore(at: now) else { return false }
         clearHint()
         latestTableauDealEvent = nil
+        latestBoardDealEvent = nil
         let offlineDurationSinceSave = max(0, now.timeIntervalSince(sanitizedPayload.savedAt))
         state = sanitizedPayload.state
         movesCount = sanitizedPayload.movesCount
