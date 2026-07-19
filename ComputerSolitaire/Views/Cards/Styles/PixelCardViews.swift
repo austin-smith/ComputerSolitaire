@@ -9,7 +9,11 @@ enum PixelCardStyle {
 enum PixelPalette {
     // Card face
     static let cardFace = Color(red: 0.97, green: 0.96, blue: 0.93)
+    static let cardFaceHighlight = Color(red: 1.00, green: 0.99, blue: 0.96)
+    static let cardFaceShadow = Color(red: 0.82, green: 0.78, blue: 0.70)
     static let outline = Color(red: 0.13, green: 0.12, blue: 0.15)
+    static let dropShadow = Color.black.opacity(0.32)
+    static let selection = Color(red: 1.00, green: 0.78, blue: 0.16)
 
     // Suit inks
     static let red = Color(red: 0.80, green: 0.14, blue: 0.16)
@@ -28,6 +32,16 @@ enum PixelPalette {
     static let hair = Color(red: 0.32, green: 0.22, blue: 0.13)
     static let ermine = Color(red: 0.96, green: 0.95, blue: 0.92)
     static let accent = Color(red: 0.83, green: 0.22, blue: 0.25)
+
+    // Saturated inks used by the existing pixel royal artwork.
+    static let royalOutline = Color(red: 11 / 255, green: 11 / 255, blue: 15 / 255)
+    static let royalSkin = Color(red: 242 / 255, green: 189 / 255, blue: 145 / 255)
+    static let royalGold = Color(red: 245 / 255, green: 174 / 255, blue: 0)
+    static let royalRed = Color(red: 184 / 255, green: 15 / 255, blue: 31 / 255)
+    static let royalBlue = Color(red: 31 / 255, green: 57 / 255, blue: 108 / 255)
+    static let royalBlack = Color(red: 37 / 255, green: 39 / 255, blue: 46 / 255)
+    static let royalSteel = Color(red: 180 / 255, green: 191 / 255, blue: 204 / 255)
+    static let royalWhite = Color(red: 246 / 255, green: 231 / 255, blue: 215 / 255)
 
     static func suitColor(for suit: Suit) -> Color {
         suit.isRed ? red : black
@@ -79,9 +93,72 @@ struct PixelBackColorway {
     }
 }
 
+enum PixelRoyalColorway: Equatable {
+    case redSuit
+    case blackSuit
+
+    static func matching(_ suit: Suit) -> PixelRoyalColorway {
+        suit.isRed ? .redSuit : .blackSuit
+    }
+
+    var tunic: Color {
+        switch self {
+        case .redSuit: PixelPalette.royalRed
+        case .blackSuit: PixelPalette.royalBlack
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .redSuit: PixelPalette.royalBlack
+        case .blackSuit: PixelPalette.royalRed
+        }
+    }
+
+    var sash: Color {
+        accent
+    }
+}
+
 extension PixelPalette {
     static func suitHighlight(for suit: Suit) -> Color {
         suit.isRed ? redLight : blackLight
+    }
+}
+
+// MARK: - Pixel Grid
+
+/// Converts virtual card cells into display-pixel-aligned rectangles. Card
+/// widths are responsive, so a virtual cell is not always an integral number
+/// of points; snapping both edges keeps every filled run crisp without gaps.
+nonisolated struct PixelGrid {
+    let unit: CGFloat
+    let displayScale: CGFloat
+
+    private var resolvedDisplayScale: CGFloat {
+        max(1, displayScale)
+    }
+
+    var cellLength: CGFloat {
+        max(1 / resolvedDisplayScale, snapped(unit))
+    }
+
+    func rect(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat) -> CGRect {
+        let minX = snapped(x * unit)
+        let minY = snapped(y * unit)
+        let maxX = snapped((x + width) * unit)
+        let maxY = snapped((y + height) * unit)
+
+        return CGRect(
+            x: minX,
+            y: minY,
+            width: max(1 / resolvedDisplayScale, maxX - minX),
+            height: max(1 / resolvedDisplayScale, maxY - minY)
+        )
+    }
+
+    func snapped(_ value: CGFloat) -> CGFloat {
+        (value * resolvedDisplayScale).rounded() / resolvedDisplayScale
     }
 }
 
@@ -90,12 +167,14 @@ extension PixelPalette {
 struct PixelCardShape: InsettableShape {
     /// One virtual pixel unit (card width / PixelCardArt.gridWidth).
     let px: CGFloat
+    let displayScale: CGFloat
     var insetAmount: CGFloat = 0
 
     func path(in rect: CGRect) -> Path {
         let insetRect = rect.insetBy(dx: insetAmount, dy: insetAmount)
         let maxCorner = min(insetRect.width, insetRect.height) / 2
-        let step = max(1, min(px, floor(maxCorner / 3)))
+        let grid = PixelGrid(unit: px, displayScale: displayScale)
+        let step = min(grid.cellLength, floor(maxCorner / 3))
         let corner = step * 3
 
         var path = Path()
@@ -148,7 +227,9 @@ enum PixelInk: UInt8 {
     case hair = 9       // "H"
     case white = 10     // "W"
     case accent = 11    // "A"
-    case altRobe = 12   // "B" — contrasting garment (blue on red suits, red on black)
+    case altRobe = 12   // "B" — primary garment color for the suit colorway
+    case steel = 13     // "T" — neutral metal that does not follow the suit palette
+    case secondaryRobe = 14 // "U" — blue garment accent shared by both colorways
 }
 
 struct PixelSprite {
@@ -159,7 +240,7 @@ struct PixelSprite {
     init(_ art: String) {
         let map: [Character: UInt8] = [
             ".": 0, "#": 1, "+": 2, "K": 3, "S": 4, "s": 5,
-            "G": 6, "R": 7, "D": 8, "H": 9, "W": 10, "A": 11, "B": 12
+            "G": 6, "R": 7, "D": 8, "H": 9, "W": 10, "A": 11, "B": 12, "T": 13, "U": 14
         ]
         let lines = art.split(separator: "\n").map(String.init)
         let w = lines.map(\.count).max() ?? 0
@@ -171,6 +252,7 @@ struct PixelSprite {
         width = w
         height = cells.count
     }
+
 }
 
 // MARK: - Sprite Art
@@ -226,37 +308,42 @@ enum PixelSprites {
         }
     }
 
-    // Compact pip suits — 5x5, sized so pip rows and columns never collide.
+    // Compact pip suits use an even 6x6 footprint so their origins and centers
+    // stay on whole grid cells across the responsive card layout.
     static let spadePip = PixelSprite("""
-    ..#..
-    .###.
-    #####
-    #####
-    ..#..
+    ..##..
+    .####.
+    ######
+    ######
+    ##..##
+    ..##..
     """)
 
     static let heartPip = PixelSprite("""
-    .#.#.
-    #####
-    #####
-    .###.
-    ..#..
+    .##.##
+    ######
+    ######
+    .####.
+    ..##..
+    ..##..
     """)
 
     static let diamondPip = PixelSprite("""
-    ..#..
-    .###.
-    #####
-    .###.
-    ..#..
+    ..##..
+    .####.
+    ######
+    ######
+    .####.
+    ..##..
     """)
 
     static let clubPip = PixelSprite("""
-    .###.
-    #####
-    #####
-    ##.##
-    ..#..
+    ..##..
+    .####.
+    ######
+    ..##..
+    .####.
+    ..##..
     """)
 
     static func pipSuit(_ suit: Suit) -> PixelSprite {
@@ -395,7 +482,95 @@ enum PixelSprites {
         ranks[rank.label] ?? aceRank
     }
 
-    // Face card portraits — 28x35, outlined forms in the classic style.
+    // Two-way royal portraits. Each final row is horizontally symmetric so
+    // the upright and rotated copies can overlap without exposing a join.
+    static let twoWayJackHalf = PixelSprite("""
+    .........KKKKKK...........
+    .......KRRRRRRRRKK.KK.....
+    ........GKKKRRRRRKBBK.....
+    ........KKKKGGKRKBKGK.....
+    ..KK....KSSKKKKGGKKK......
+    ..GB....KKKWKKKKKKK.......
+    .KBBK..KSKSSKKKKKK........
+    .GBBB..KSSSSSKKKK.........
+    ..BB....KSSSSKKKK.........
+    .KRRK...KSSSSSKKKK........
+    .KKKK....KKKSSSKK.........
+    ..GG......KSSSKKGKK.......
+    ..KK....KGGKSKGGKGKKK.....
+    ..KK...KBBKBBBKKKKGAAGK...
+    ..KK..KRBBKKBKKKKBGAAGBK..
+    .KSSKKRRUBKKKKKBBGAAGUUK..
+    KSSSSKRRUBKKKKBBBGAAGUUBK.
+    KSSSSKRRUBBBKBBBGAAGRBUUK.
+    KSSSRRRBUBBKBBBBGAAGRBUUB.
+    KSKKRRRUUBBKBBBGAAGBRBUUBK
+    .KKKRRRUUBKBBBGAAGKBRRBUBK
+    KRRBRRBUBKBBGAAGKKBKRRBUBK
+    KRRBKRBBKBBGAAGBBKBBRKBRRK
+    """)
+
+    static let twoWayQueenHalf = PixelSprite("""
+    ........KK..K.............
+    ........KGKKGKKK..........
+    ........KGGGKGGK..........
+    ........KSKKKKGGK.........
+    ........SKSKKKKGKK........
+    .......KWKSWKKKGKKK.......
+    .......KSSSSKBKKKKK.......
+    .......SSSSSSKKKKKK.......
+    .KR.....KSSSSKKKGKKK......
+    KRGR....KSSKSKKKGKKK......
+    KKRKK....KKSSKKKKKKKK.....
+    .KGGK...KKKSSKKKKKKBK.....
+    KKGGK...KKWSKGGGKGKKKK....
+    KBB....KBKBBBKKKKBGAAG....
+    ..BK..KRBBBKBKKKBBGAAGK...
+    .KSSKRRRUBKBKKKBBGAAGUU...
+    KSSSSRRRUBKBKKBBBGAAGUUK..
+    KSSSSRRRUBKKKBBBGAAGRBUU..
+    KSKKKRRRUBKKBBBBGAAGRBUU..
+    KSKKRRRUUBKBBBBGAAGBRBUUK.
+    .KKBKRRUUKBBBBGAAGBBRRBUK.
+    KRRRKRBUKBBBGAAGKBBKRRBUK.
+    KKBBBKKKBBBGAAGBBBKKKBBBKK
+    """)
+
+    static let twoWayKingHalf = PixelSprite("""
+    ..........K.KK............
+    .......GK.G.KG..R.........
+    .......KGGKGGGGKGKKG......
+    ........GGGGRKGGKGGK......
+    ........KKKKKKGGGGK.......
+    ..K.....KWWSKKKKKKK.......
+    .KWK....KKSSRKKBKKKK......
+    .KWTK...SKSSSKKKKKK.......
+    .KWTK..KSSSSSKSKKKK.......
+    .KWTK...KKSSKKKKKKKK......
+    .KWTK...KSKKKKKKKKKK......
+    .KWTK...KKKKKSSKKKKK......
+    .KWTK..KKKKKRSKGGKKK......
+    .KWTK...KKKKKBBKKKGAAG....
+    KGGGGGKKKKKBBKKKKBGAAGB...
+    .KSS.KRBUKBKBKKKBGAAGUUK..
+    KSSSSRRBUKKKBKKBBGAAGUUB..
+    KSSSSRRBUKKKBKBBGAAGRRUUK.
+    KSSSRRRBUKKKBBBBGAAGRRUUK.
+    KSKKRRRUUKKBBBBGAAGBRRUUB.
+    .BKKKRRUUKBBBBGAAGBBRRRUBK
+    KRBBRKRUBBKBGAAGKBBBRRRUBK
+    KRRRRKRBBKKGAAGKKBBRKRRRRK
+    """)
+
+    static func twoWayRoyalHalf(for rank: Rank) -> PixelSprite? {
+        switch rank {
+        case .jack: twoWayJackHalf
+        case .queen: twoWayQueenHalf
+        case .king: twoWayKingHalf
+        default: nil
+        }
+    }
+
     static let king = PixelSprite("""
     ........G..G..G..G..G.......
     .......KGGGGGGGGGGGGGGK.....
@@ -534,9 +709,10 @@ enum PixelCardArt {
         in context: GraphicsContext,
         x: CGFloat,
         y: CGFloat,
-        unit: CGFloat,
+        grid: PixelGrid,
         scale: CGFloat = 1,
         flipped: Bool = false,
+        antialiased: Bool = true,
         color: (PixelInk) -> Color?
     ) {
         for row in 0..<sprite.height {
@@ -555,13 +731,17 @@ enum PixelCardArt {
                     guard sprite.cells[srcRow][nextCol] == value else { break }
                     run += 1
                 }
-                let rect = CGRect(
-                    x: (x + CGFloat(col) * scale) * unit,
-                    y: (y + CGFloat(row) * scale) * unit,
-                    width: CGFloat(run) * scale * unit,
-                    height: scale * unit
-                ).insetBy(dx: -0.2, dy: -0.2)
-                context.fill(Path(rect), with: .color(fill))
+                let rect = grid.rect(
+                    x: x + CGFloat(col) * scale,
+                    y: y + CGFloat(row) * scale,
+                    width: CGFloat(run) * scale,
+                    height: scale
+                )
+                context.fill(
+                    Path(rect),
+                    with: .color(fill),
+                    style: FillStyle(antialiased: antialiased)
+                )
                 col += run
             }
         }
@@ -570,18 +750,17 @@ enum PixelCardArt {
     static func fillCells(
         _ context: GraphicsContext,
         x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat,
-        unit: CGFloat,
+        grid: PixelGrid,
         color: Color
     ) {
-        let rect = CGRect(x: x * unit, y: y * unit, width: w * unit, height: h * unit)
-            .insetBy(dx: -0.2, dy: -0.2)
+        let rect = grid.rect(x: x, y: y, width: w, height: h)
         context.fill(Path(rect), with: .color(color))
     }
 
     // MARK: Front
 
-    static func drawFront(card: Card, in context: GraphicsContext, size: CGSize, unit: CGFloat) {
-        let gridH = size.height / unit
+    static func drawFront(card: Card, in context: GraphicsContext, size: CGSize, grid: PixelGrid) {
+        let gridH = size.height / grid.unit
         let centerY = gridH / 2
         let ink = PixelPalette.suitColor(for: card.suit)
         let suitSprite = PixelSprites.suit(card.suit)
@@ -594,19 +773,19 @@ enum PixelCardArt {
             }
         }
 
+        drawFaceBevel(in: context, gridHeight: gridH, grid: grid)
+
         // Corner indices: rank top-left / suit top-right, mirrored below.
-        draw(rankSprite, in: context, x: 3, y: 3, unit: unit, color: solid)
-        draw(suitSprite, in: context, x: gridWidth - 3 - 7, y: 3, unit: unit, color: solid)
+        draw(rankSprite, in: context, x: 3, y: 3, grid: grid, color: solid)
+        draw(suitSprite, in: context, x: gridWidth - 3 - 7, y: 3, grid: grid, color: solid)
         draw(
             rankSprite, in: context,
             x: gridWidth - 3 - CGFloat(rankSprite.width), y: gridH - 3 - 7,
-            unit: unit, flipped: true, color: solid
+            grid: grid, flipped: true, color: solid
         )
-        draw(suitSprite, in: context, x: 3, y: gridH - 3 - 7, unit: unit, flipped: true, color: solid)
+        draw(suitSprite, in: context, x: 3, y: gridH - 3 - 7, grid: grid, flipped: true, color: solid)
 
-        if let portrait = PixelSprites.portrait(for: card.rank) {
-            drawPortrait(portrait, card: card, in: context, centerY: centerY, unit: unit)
-        } else if card.rank == .ace {
+        if card.rank == .ace {
             let shaded: (PixelInk) -> Color? = { pixelInk in
                 switch pixelInk {
                 case .ink: return ink
@@ -617,18 +796,95 @@ enum PixelCardArt {
             draw(
                 suitSprite, in: context,
                 x: (gridWidth - 14) / 2, y: centerY - 7,
-                unit: unit, scale: 2, color: shaded
+                grid: grid, scale: 2, color: shaded
             )
-        } else {
+        } else if card.rank.rawValue < Rank.jack.rawValue {
             let pipSprite = PixelSprites.pipSuit(card.suit)
             for pip in pipPlacements(count: card.rank.rawValue) {
                 draw(
                     pipSprite, in: context,
-                    x: pip.x, y: centerY + pip.dy - 2.5,
-                    unit: unit, flipped: pip.dy > 0, color: solid
+                    x: pip.x,
+                    y: centerY + pip.dy - CGFloat(pipSprite.height / 2),
+                    grid: grid,
+                    flipped: pip.dy > 0,
+                    color: solid
                 )
             }
+        } else if let half = PixelSprites.twoWayRoyalHalf(for: card.rank) {
+            drawTwoWayRoyal(half, suit: card.suit, in: context, size: size, grid: grid)
         }
+    }
+
+    private static func drawTwoWayRoyal(
+        _ half: PixelSprite,
+        suit: Suit,
+        in context: GraphicsContext,
+        size: CGSize,
+        grid: PixelGrid
+    ) {
+        let artworkWidth = CGFloat(half.width)
+        let artworkHeight = CGFloat(half.height * 2 - 1)
+        let gridHeight = size.height / grid.unit
+        let originX = (gridWidth - artworkWidth) / 2
+        let originY = (gridHeight - artworkHeight) / 2
+        let colorway = PixelRoyalColorway.matching(suit)
+        let royalInk: (PixelInk) -> Color? = { ink in
+            switch ink {
+            case .outlineDark: PixelPalette.royalOutline
+            case .skin: PixelPalette.royalSkin
+            case .gold: PixelPalette.royalGold
+            case .robe: colorway.tunic
+            case .accent: colorway.sash
+            case .altRobe: colorway.tunic
+            case .secondaryRobe: PixelPalette.royalBlue
+            case .steel: PixelPalette.royalSteel
+            case .white: PixelPalette.royalWhite
+            default: nil
+            }
+        }
+
+        draw(
+            half,
+            in: context,
+            x: originX,
+            y: originY,
+            grid: grid,
+            antialiased: false,
+            color: royalInk
+        )
+        draw(
+            half,
+            in: context,
+            x: originX,
+            y: originY + CGFloat(half.height - 1),
+            grid: grid,
+            flipped: true,
+            antialiased: false,
+            color: royalInk
+        )
+    }
+
+    private static func drawFaceBevel(
+        in context: GraphicsContext,
+        gridHeight: CGFloat,
+        grid: PixelGrid
+    ) {
+        fillCells(
+            context, x: 4, y: 2, w: gridWidth - 8, h: 1,
+            grid: grid, color: PixelPalette.cardFaceHighlight
+        )
+        fillCells(
+            context, x: 2, y: 4, w: 1, h: gridHeight - 8,
+            grid: grid, color: PixelPalette.cardFaceHighlight
+        )
+        fillCells(
+            context, x: 4, y: gridHeight - 3, w: gridWidth - 8, h: 1,
+            grid: grid, color: PixelPalette.cardFaceShadow
+        )
+        fillCells(
+            context, x: gridWidth - 3, y: 4, w: 1, h: gridHeight - 8,
+            grid: grid, color: PixelPalette.cardFaceShadow
+        )
     }
 
     private static func drawPortrait(
@@ -636,13 +892,13 @@ enum PixelCardArt {
         card: Card,
         in context: GraphicsContext,
         centerY: CGFloat,
-        unit: CGFloat
+        grid: PixelGrid
     ) {
         let isRed = card.suit.isRed
         let originX = (gridWidth - CGFloat(portrait.width)) / 2
         let originY = centerY - CGFloat(portrait.height) / 2
 
-        draw(portrait, in: context, x: originX, y: originY, unit: unit) { pixelInk in
+        draw(portrait, in: context, x: originX, y: originY, grid: grid) { pixelInk in
             switch pixelInk {
             case .outlineDark: return PixelPalette.outline
             case .skin: return PixelPalette.skinTone
@@ -654,6 +910,8 @@ enum PixelCardArt {
             case .white: return PixelPalette.ermine
             case .accent: return PixelPalette.accent
             case .altRobe: return isRed ? PixelPalette.robeBlue : PixelPalette.robeRed
+            case .steel: return PixelPalette.royalSteel
+            case .secondaryRobe: return PixelPalette.royalBlue
             case .ink, .inkHi, .none: return nil
             }
         }
@@ -666,9 +924,9 @@ enum PixelCardArt {
         let dy: CGFloat // sprite center offset from card center
     }
 
-    private static let leftCol: CGFloat = 10.5
-    private static let midCol: CGFloat = 17.5
-    private static let rightCol: CGFloat = 24.5
+    private static let leftCol: CGFloat = 10
+    private static let midCol: CGFloat = 17
+    private static let rightCol: CGFloat = 24
 
     static func pipPlacements(count: Int) -> [PipPlacement] {
         func cols(_ dys: [CGFloat]) -> [PipPlacement] {
@@ -686,7 +944,7 @@ enum PixelCardArt {
         case 4: return cols([-11, 11])
         case 5: return cols([-11, 11]) + mid([0])
         case 6: return cols([-11, 0, 11])
-        case 7: return cols([-11, 0, 11]) + mid([-5.5])
+        case 7: return cols([-11, 0, 11]) + mid([-6])
         case 8: return cols([-12, -4, 4, 12])
         case 9: return cols([-12, -4, 4, 12]) + mid([0])
         case 10: return cols([-12, -4, 4, 12]) + mid([-8, 8])
@@ -699,18 +957,18 @@ enum PixelCardArt {
     /// Woven-lattice card back: a bright single-pixel frame around a diagonal
     /// weave in the colorway's muted tone with mid-tone intersections.
     static func drawBack(
-        in context: GraphicsContext, size: CGSize, unit: CGFloat,
+        in context: GraphicsContext, size: CGSize, grid: PixelGrid,
         colorway: PixelBackColorway = .navy
     ) {
-        let gridH = size.height / unit
+        let gridH = size.height / grid.unit
         let lastRow = Int(gridH.rounded(.down)) - 3
 
         // Inner bright frame, one unit thick, inset 2 from the edge.
         let frame = colorway.bright
-        fillCells(context, x: 2, y: 2, w: gridWidth - 4, h: 1, unit: unit, color: frame)
-        fillCells(context, x: 2, y: gridH - 3, w: gridWidth - 4, h: 1, unit: unit, color: frame)
-        fillCells(context, x: 2, y: 3, w: 1, h: gridH - 6, unit: unit, color: frame)
-        fillCells(context, x: gridWidth - 3, y: 3, w: 1, h: gridH - 6, unit: unit, color: frame)
+        fillCells(context, x: 2, y: 2, w: gridWidth - 4, h: 1, grid: grid, color: frame)
+        fillCells(context, x: 2, y: gridH - 3, w: gridWidth - 4, h: 1, grid: grid, color: frame)
+        fillCells(context, x: 2, y: 3, w: 1, h: gridH - 6, grid: grid, color: frame)
+        fillCells(context, x: gridWidth - 3, y: 3, w: 1, h: gridH - 6, grid: grid, color: frame)
 
         // Diagonal weave, phase-locked to the card center.
         let centerX = Int(gridWidth) / 2
@@ -724,16 +982,84 @@ enum PixelCardArt {
                 if onSum && onDiff {
                     fillCells(
                         context, x: CGFloat(cx), y: CGFloat(cy), w: 1, h: 1,
-                        unit: unit, color: colorway.mid
+                        grid: grid, color: colorway.mid
                     )
                 } else if onSum || onDiff {
                     fillCells(
                         context, x: CGFloat(cx), y: CGFloat(cy), w: 1, h: 1,
-                        unit: unit, color: colorway.muted
+                        grid: grid, color: colorway.muted
                     )
                 }
             }
         }
+
+        drawBackMedallion(in: context, gridHeight: gridH, grid: grid, colorway: colorway)
+    }
+
+    private static func drawBackMedallion(
+        in context: GraphicsContext,
+        gridHeight: CGFloat,
+        grid: PixelGrid,
+        colorway: PixelBackColorway
+    ) {
+        let originX: CGFloat = 11
+        let originY = (gridHeight - 24) / 2
+
+        fillCells(context, x: originX, y: originY, w: 18, h: 24, grid: grid, color: colorway.deep)
+        fillCells(context, x: originX, y: originY, w: 18, h: 1, grid: grid, color: colorway.bright)
+        fillCells(context, x: originX, y: originY + 23, w: 18, h: 1, grid: grid, color: colorway.bright)
+        fillCells(context, x: originX, y: originY + 1, w: 1, h: 22, grid: grid, color: colorway.bright)
+        fillCells(context, x: originX + 17, y: originY + 1, w: 1, h: 22, grid: grid, color: colorway.bright)
+
+        let brightInk: (PixelInk) -> Color? = { ink in
+            ink == .none ? nil : colorway.bright
+        }
+        let mutedInk: (PixelInk) -> Color? = { ink in
+            ink == .none ? nil : colorway.muted
+        }
+
+        draw(PixelSprites.spadePip, in: context, x: 13, y: originY + 4, grid: grid, color: brightInk)
+        draw(PixelSprites.heartPip, in: context, x: 21, y: originY + 4, grid: grid, color: mutedInk)
+        draw(PixelSprites.diamondPip, in: context, x: 13, y: originY + 14, grid: grid, color: mutedInk)
+        draw(PixelSprites.clubPip, in: context, x: 21, y: originY + 14, grid: grid, color: brightInk)
+    }
+}
+
+// MARK: - Card Surface
+
+private struct PixelCardSurface<Content: View>: View {
+    let cardSize: CGSize
+    let displayScale: CGFloat
+    let fill: Color
+    let isSelected: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        let unit = cardSize.width / PixelCardArt.gridWidth
+        let grid = PixelGrid(unit: unit, displayScale: displayScale)
+        let shape = PixelCardShape(px: unit, displayScale: displayScale)
+        let borderWidth = isSelected ? grid.cellLength * 2 : grid.cellLength
+        let shadowOffset = grid.cellLength * (isSelected ? 2 : 1)
+
+        ZStack {
+            shape
+                .fill(PixelPalette.dropShadow, style: FillStyle(antialiased: false))
+                .offset(x: shadowOffset, y: shadowOffset)
+
+            ZStack {
+                shape.fill(fill, style: FillStyle(antialiased: false))
+                content
+            }
+            .clipShape(shape, style: FillStyle(antialiased: false))
+            .overlay {
+                shape.strokeBorder(
+                    isSelected ? PixelPalette.selection : PixelPalette.outline,
+                    lineWidth: borderWidth,
+                    antialiased: false
+                )
+            }
+        }
+        .frame(width: cardSize.width, height: cardSize.height)
     }
 }
 
@@ -743,30 +1069,22 @@ struct PixelCardFrontView: View {
     let card: Card
     let cardSize: CGSize
     let isSelected: Bool
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         let unit = cardSize.width / PixelCardArt.gridWidth
-        let shape = PixelCardShape(px: unit)
-        let borderColor = isSelected ? Color.yellow.opacity(0.92) : PixelPalette.outline
-        let borderWidth = isSelected ? max(2, unit * 1.6) : max(0.8, unit)
+        let grid = PixelGrid(unit: unit, displayScale: displayScale)
 
-        ZStack {
-            shape.fill(PixelPalette.cardFace, style: FillStyle(antialiased: false))
+        PixelCardSurface(
+            cardSize: cardSize,
+            displayScale: displayScale,
+            fill: PixelPalette.cardFace,
+            isSelected: isSelected
+        ) {
             Canvas { context, size in
-                PixelCardArt.drawFront(card: card, in: context, size: size, unit: unit)
+                PixelCardArt.drawFront(card: card, in: context, size: size, grid: grid)
             }
         }
-        .frame(width: cardSize.width, height: cardSize.height)
-        .clipShape(shape, style: FillStyle(antialiased: false))
-        .overlay(
-            shape.strokeBorder(borderColor, lineWidth: borderWidth, antialiased: false)
-        )
-        .shadow(
-            color: Color.black.opacity(isSelected ? 0.24 : 0.10),
-            radius: isSelected ? 7 : 2,
-            x: 0,
-            y: isSelected ? 4 : 1
-        )
     }
 }
 
@@ -777,6 +1095,7 @@ struct PixelCardBackView: View {
     let isSelected: Bool
 
     @AppStorage(SettingsKey.cardBackColor) private var cardBackColorRawValue = CardBackColor.defaultValue.id
+    @Environment(\.displayScale) private var displayScale
 
     init(cardSize: CGSize, isSelected: Bool = false) {
         self.cardSize = cardSize
@@ -785,28 +1104,19 @@ struct PixelCardBackView: View {
 
     var body: some View {
         let unit = cardSize.width / PixelCardArt.gridWidth
-        let shape = PixelCardShape(px: unit)
-        let borderColor = isSelected ? Color.yellow.opacity(0.88) : PixelPalette.outline
-        let borderWidth = isSelected ? max(2, unit * 1.6) : max(0.8, unit)
+        let grid = PixelGrid(unit: unit, displayScale: displayScale)
         let colorway = PixelBackColorway.matching(.from(rawValue: cardBackColorRawValue))
 
-        ZStack {
-            shape.fill(colorway.deep, style: FillStyle(antialiased: false))
+        PixelCardSurface(
+            cardSize: cardSize,
+            displayScale: displayScale,
+            fill: colorway.deep,
+            isSelected: isSelected
+        ) {
             Canvas { context, size in
-                PixelCardArt.drawBack(in: context, size: size, unit: unit, colorway: colorway)
+                PixelCardArt.drawBack(in: context, size: size, grid: grid, colorway: colorway)
             }
         }
-        .frame(width: cardSize.width, height: cardSize.height)
-        .clipShape(shape, style: FillStyle(antialiased: false))
-        .overlay(
-            shape.strokeBorder(borderColor, lineWidth: borderWidth, antialiased: false)
-        )
-        .shadow(
-            color: Color.black.opacity(isSelected ? 0.24 : 0.12),
-            radius: isSelected ? 7 : 2,
-            x: 0,
-            y: isSelected ? 4 : 1
-        )
     }
 }
 
@@ -818,4 +1128,32 @@ struct PixelStandaloneCardBackView: View {
     var body: some View {
         PixelCardBackView(cardSize: cardSize)
     }
+}
+
+#Preview("Pixel Deck") {
+    let cardSize = CGSize(width: 80, height: 116)
+    let cards = [
+        Card(suit: .spades, rank: .ace, isFaceUp: true),
+        Card(suit: .hearts, rank: .seven, isFaceUp: true),
+        Card(suit: .clubs, rank: .ten, isFaceUp: true),
+        Card(suit: .diamonds, rank: .jack, isFaceUp: true),
+        Card(suit: .hearts, rank: .queen, isFaceUp: true),
+        Card(suit: .spades, rank: .king, isFaceUp: true),
+    ]
+
+    VStack(spacing: 20) {
+        HStack(spacing: 12) {
+            ForEach(cards.prefix(3)) { card in
+                PixelCardFrontView(card: card, cardSize: cardSize, isSelected: false)
+            }
+        }
+        HStack(spacing: 12) {
+            ForEach(cards.suffix(3)) { card in
+                PixelCardFrontView(card: card, cardSize: cardSize, isSelected: false)
+            }
+            PixelCardBackView(cardSize: cardSize)
+        }
+    }
+    .padding(28)
+    .background(Color(red: 0.16, green: 0.38, blue: 0.32))
 }
