@@ -12,15 +12,18 @@ struct DropTargetFrameKey: PreferenceKey {
     }
 }
 
-// Single-frame keys must ignore the default: on macOS, sibling subtrees that
-// never set the key still run reduce with .zero, and a last-wins reducer lets
-// that erase the real frame (the draw animation then never runs).
+// Single-frame keys must ignore sizeless candidates: sibling subtrees that
+// never set the key still run reduce, and a last-wins reducer lets them erase
+// the real frame (the draw animation then never runs). Rejecting only `.zero`
+// is not enough — a subtree measured before layout reports a rect with a real
+// origin but no size, e.g. `(148, 0, 0 x 0)`, which clears that test and
+// clobbers the live frame. Size is what makes a candidate meaningful here.
 struct StockFrameKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
 
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         let next = nextValue()
-        if next != .zero {
+        if !next.isEmpty {
             value = next
         }
     }
@@ -31,7 +34,7 @@ struct WasteFrameKey: PreferenceKey {
 
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         let next = nextValue()
-        if next != .zero {
+        if !next.isEmpty {
             value = next
         }
     }
@@ -255,11 +258,34 @@ struct ContentView: View {
         }
     }
 
+    /// Gives the bottom bar a real navigation host on iOS.
+    ///
+    /// `.bottomBar` expects to be owned by a navigation container. Hosted bare
+    /// in the `WindowGroup` the items are bridged onto the window root, where
+    /// board mutations tear the bar down and `.toolbar(_:for: .bottomBar)` has
+    /// nothing to act on — which is why bar visibility used to be faked by
+    /// emptying the item list.
+    ///
+    /// The stack is purely a host: it never pushes and its own navigation bar
+    /// is hidden. It does add a subtree that reports sizeless frames before
+    /// layout, so the single-frame preference keys reject those explicitly.
+    private func toolbarHost(for view: some View) -> some View {
+#if os(iOS)
+        NavigationStack {
+            view
+                .toolbar(.hidden, for: .navigationBar)
+                .toolbar(isShowingGamePicker ? .hidden : .visible, for: .bottomBar)
+        }
+#else
+        view
+#endif
+    }
+
     // The decoration helpers are generic over their content — never AnyView.
     // Type erasure here would strip the board's structural identity, forcing
     // SwiftUI to diff the whole scene through an opaque box on every update.
     private func sceneDecorations(for baseView: some View) -> some View {
-        let toolbarView = applyToolbar(to: baseView)
+        let toolbarView = toolbarHost(for: applyToolbar(to: baseView))
         let sheetsView = applySheets(to: toolbarView)
         return applyObservers(to: sheetsView)
     }
