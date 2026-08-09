@@ -34,7 +34,3 @@ Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS.
 | **Scorpion** | Build down by suit to complete four King-to-Ace runs in place, moving face-up cards with everything stacked on them | [Rules](docs/rules/scorpion.md) |
 | **Forty Thieves** | Build ten columns down by suit, one card at a time, using two decks and a single pass through the stock | [Rules](docs/rules/fortythieves.md) |
 | **Canfield** | Play a 13-card reserve onto foundations that start at a dealt base rank and wrap | [Rules](docs/rules/canfield.md) |
-
-## License
-
-Computer Solitaire is available under the [MIT License](LICENSE).
