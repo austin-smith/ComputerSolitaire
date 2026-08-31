@@ -17,6 +17,7 @@ struct DropTargetFrameKey: PreferenceKey {
 /// current card destinations with a missing or stale stock anchor from another
 /// pass.
 struct BoardFramePreferences: Equatable {
+    var dealEventID: UUID?
     var stockFrame: CGRect = .zero
     var cardFrames: [UUID: CGRect] = [:]
 }
@@ -29,6 +30,9 @@ struct BoardFrameKey: PreferenceKey {
 
     static func reduce(value: inout BoardFramePreferences, nextValue: () -> BoardFramePreferences) {
         let next = nextValue()
+        if let dealEventID = next.dealEventID {
+            value.dealEventID = dealEventID
+        }
         if !next.stockFrame.isEmpty {
             value.stockFrame = next.stockFrame
         }
@@ -115,6 +119,7 @@ struct ContentView: View {
     @State private var wasteReturnAnchorCardID: UUID?
     @State private var wasteReturnAnchorFrame: CGRect?
     @State private var cardFrames: [UUID: CGRect] = [:]
+    @State private var boardFrameDealEventID: UUID?
     @State private var cardTilts: [UUID: Double] = [:]
 #if os(iOS)
     @State private var isShowingSettings = false
@@ -603,6 +608,7 @@ struct ContentView: View {
     @ViewBuilder
     private func boardRoot(for geometry: GeometryProxy) -> some View {
         let boardColumnCount = max(viewModel.state.tableau.count, viewModel.gameVariant.boardColumnCount)
+        let boardDealEventID = viewModel.latestBoardDealEvent?.id
 #if os(iOS)
         let metrics = Layout.metrics(
             for: geometry.size,
@@ -806,6 +812,12 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .coordinateSpace(name: "board")
+        .transformPreference(BoardFrameKey.self) { preferences in
+            // Geometry belongs to a specific fresh-board event. Including the
+            // event in the Equatable preference guarantees that an unchanged
+            // redeal still publishes a new, causally tagged snapshot.
+            preferences.dealEventID = boardDealEventID
+        }
         .sensoryFeedback(trigger: hapticFeedback.trigger) {
             hapticFeedback.feedbackForTrigger
         }
@@ -817,13 +829,7 @@ struct ContentView: View {
             wasteFrame = frame
         }
         .onPreferenceChange(BoardFrameKey.self) { frames in
-            if !framesApproximatelyEqual(stockFrame, frames.stockFrame) {
-                stockFrame = frames.stockFrame
-            }
-            if shouldUpdateCardFrames(with: frames.cardFrames) {
-                cardFrames = frames.cardFrames
-            }
-            resolvePendingNewGameDealIfReady()
+            acceptBoardFramePreferences(frames)
         }
         .onAppear {
             boardViewportSize = geometry.size
@@ -1180,8 +1186,7 @@ struct ContentView: View {
             // Redeal reuses card IDs, so no geometry from the outgoing board
             // may satisfy the fresh deal. Both frame sets republish together
             // from the new board through BoardFrameKey.
-            stockFrame = .zero
-            cardFrames = [:]
+            invalidateBoardFramePreferences()
             prepareNewGameDealAnimation(for: event)
         }
         // Only wipe when the mutation actually dealt a fresh board: Golf's
@@ -1262,8 +1267,7 @@ struct ContentView: View {
         let payload = GamePersistence.load(mode: mode, from: modelContext)
         let restored = viewModel.activateGame(mode, restoringFrom: payload)
         if !restored, let event = viewModel.latestBoardDealEvent {
-            stockFrame = .zero
-            cardFrames = [:]
+            invalidateBoardFramePreferences()
             prepareNewGameDealAnimation(for: event)
         }
         rememberSelectedGame()
@@ -1651,6 +1655,32 @@ struct ContentView: View {
         dealAnimationToken = UUID()
     }
 
+    private func invalidateBoardFramePreferences() {
+        boardFrameDealEventID = nil
+        stockFrame = .zero
+        cardFrames = [:]
+    }
+
+    private func acceptBoardFramePreferences(_ preferences: BoardFramePreferences) {
+        // A callback from the outgoing layout may already be queued when a
+        // new game or restore becomes current. Never let that stale snapshot
+        // replace the current board's geometry, even if card IDs match.
+        guard preferences.dealEventID == viewModel.latestBoardDealEvent?.id else {
+            return
+        }
+
+        if boardFrameDealEventID != preferences.dealEventID {
+            boardFrameDealEventID = preferences.dealEventID
+        }
+        if !framesApproximatelyEqual(stockFrame, preferences.stockFrame) {
+            stockFrame = preferences.stockFrame
+        }
+        if shouldUpdateCardFrames(with: preferences.cardFrames) {
+            cardFrames = preferences.cardFrames
+        }
+        resolvePendingNewGameDealIfReady()
+    }
+
     /// Arms a fresh deal before its board is allowed to render. Real cards are
     /// hidden immediately; the flight begins only after one current layout
     /// snapshot contains every destination and the required source anchor.
@@ -1682,6 +1712,7 @@ struct ContentView: View {
         guard let pending = pendingNewGameDeal,
               viewModel.latestBoardDealEvent?.id == pending.eventID,
               dealAnimationToken == pending.token,
+              boardFrameDealEventID == pending.eventID,
               wipeAnimationCards.isEmpty,
               pending.cards.allSatisfy({ cardFrames[$0.id] != nil }) else { return }
 
