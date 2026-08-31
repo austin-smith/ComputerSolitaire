@@ -44,7 +44,12 @@ struct TableauStockView: View {
             .background(
                 GeometryReader { proxy in
                     Color.clear
-                        .preference(key: StockFrameKey.self, value: proxy.frame(in: .named("board")))
+                        .preference(
+                            key: BoardFrameKey.self,
+                            value: BoardFramePreferences(
+                                stockFrame: proxy.frame(in: .named("board"))
+                            )
+                        )
                 }
             )
             .contentShape(Rectangle())

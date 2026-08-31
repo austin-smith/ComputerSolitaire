@@ -81,8 +81,7 @@ final class NewGameDealAnimationTests: XCTestCase {
         let plan = DealAnimationCoordinator.makeNewGameDealPlan(
             dealtCards: sequence,
             cardFrames: frames(for: sequence),
-            stockFrame: stockFrame,
-            boardSize: CGSize(width: 800, height: 600)
+            source: .stock(frame: stockFrame)
         )
 
         XCTAssertEqual(plan?.cards.count, 28)
@@ -94,15 +93,14 @@ final class NewGameDealAnimationTests: XCTestCase {
 
     // Verifies the stockless variants (FreeCell, Yukon) deal from an
     // invisible deck just above the board's top edge.
-    func testPlanFallsBackToAboveBoardWhenStockless() {
+    func testPlanUsesAboveBoardSourceWhenStockless() {
         let state = GameStateFixtures.seededFreeCellDeal(seed: 8)
         let sequence = DealAnimationCoordinator.newGameDealSequence(in: state)
 
         let plan = DealAnimationCoordinator.makeNewGameDealPlan(
             dealtCards: sequence,
             cardFrames: frames(for: sequence),
-            stockFrame: .zero,
-            boardSize: CGSize(width: 800, height: 600)
+            source: .aboveBoard(boardSize: CGSize(width: 800, height: 600))
         )
 
         XCTAssertEqual(plan?.cards.first?.start, CGPoint(x: 400, y: -112))
@@ -116,10 +114,64 @@ final class NewGameDealAnimationTests: XCTestCase {
             DealAnimationCoordinator.makeNewGameDealPlan(
                 dealtCards: sequence,
                 cardFrames: frames(for: sequence),
-                stockFrame: .zero,
-                boardSize: .zero
+                source: .aboveBoard(boardSize: .zero)
             )
         )
+        XCTAssertNil(
+            DealAnimationCoordinator.makeNewGameDealPlan(
+                dealtCards: sequence,
+                cardFrames: frames(for: sequence),
+                source: .stock(frame: .zero)
+            )
+        )
+    }
+
+    // The launch planner receives one coherent layout snapshot: source and
+    // destination frames reduce together, and a sizeless layout candidate
+    // cannot erase the real stock anchor or deal generation.
+    func testBoardFramePreferencesCombineStockAndCardsAtomically() {
+        let dealEventID = UUID()
+        let stockFrame = CGRect(x: 20, y: 30, width: 80, height: 112)
+        let card = GameStateFixtures.seededKlondikeDeal(seed: 15).tableau[0][0]
+        let cardFrame = CGRect(x: 120, y: 200, width: 80, height: 112)
+        var snapshot = BoardFrameKey.defaultValue
+
+        BoardFrameKey.reduce(value: &snapshot) {
+            BoardFramePreferences(dealEventID: dealEventID, stockFrame: stockFrame)
+        }
+        BoardFrameKey.reduce(value: &snapshot) {
+            BoardFramePreferences(cardFrames: [card.id: cardFrame])
+        }
+        BoardFrameKey.reduce(value: &snapshot) {
+            BoardFramePreferences(stockFrame: CGRect(x: 400, y: 0, width: 0, height: 0))
+        }
+
+        XCTAssertEqual(snapshot.dealEventID, dealEventID)
+        XCTAssertEqual(snapshot.stockFrame, stockFrame)
+        XCTAssertEqual(snapshot.cardFrames, [card.id: cardFrame])
+    }
+
+    // Redeal deliberately preserves card identity and may reproduce the exact
+    // same geometry. The event generation must still change the Equatable
+    // preference so SwiftUI publishes a fresh snapshot to the deal resolver.
+    func testBoardFramePreferencesDistinguishIdenticalRedealGeometry() {
+        let firstDealID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        let redealID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        let stockFrame = CGRect(x: 20, y: 30, width: 80, height: 112)
+        let card = GameStateFixtures.seededKlondikeDeal(seed: 16).tableau[0][0]
+        let cardFrames = [card.id: CGRect(x: 120, y: 200, width: 80, height: 112)]
+        let firstDeal = BoardFramePreferences(
+            dealEventID: firstDealID,
+            stockFrame: stockFrame,
+            cardFrames: cardFrames
+        )
+        let identicalRedeal = BoardFramePreferences(
+            dealEventID: redealID,
+            stockFrame: stockFrame,
+            cardFrames: cardFrames
+        )
+
+        XCTAssertNotEqual(firstDeal, identicalRedeal)
     }
 
     func testPlanSkipsCardsWithoutLandingFrames() {
@@ -130,8 +182,7 @@ final class NewGameDealAnimationTests: XCTestCase {
         let plan = DealAnimationCoordinator.makeNewGameDealPlan(
             dealtCards: sequence,
             cardFrames: frames(for: framedCards),
-            stockFrame: CGRect(x: 0, y: 0, width: 80, height: 112),
-            boardSize: CGSize(width: 800, height: 600)
+            source: .stock(frame: CGRect(x: 0, y: 0, width: 80, height: 112))
         )
 
         XCTAssertEqual(plan?.cards.count, sequence.count - 3)
@@ -147,8 +198,7 @@ final class NewGameDealAnimationTests: XCTestCase {
         let spiderPlan = DealAnimationCoordinator.makeNewGameDealPlan(
             dealtCards: spiderSequence,
             cardFrames: frames(for: spiderSequence),
-            stockFrame: CGRect(x: 0, y: 0, width: 80, height: 112),
-            boardSize: CGSize(width: 800, height: 600)
+            source: .stock(frame: CGRect(x: 0, y: 0, width: 80, height: 112))
         )
         XCTAssertEqual(spiderSequence.count, 54)
         XCTAssertEqual(
@@ -162,8 +212,7 @@ final class NewGameDealAnimationTests: XCTestCase {
         let canfieldPlan = DealAnimationCoordinator.makeNewGameDealPlan(
             dealtCards: canfieldSequence,
             cardFrames: frames(for: canfieldSequence),
-            stockFrame: CGRect(x: 0, y: 0, width: 80, height: 112),
-            boardSize: CGSize(width: 800, height: 600)
+            source: .stock(frame: CGRect(x: 0, y: 0, width: 80, height: 112))
         )
         XCTAssertEqual(
             canfieldPlan?.maxDelay ?? .infinity,
