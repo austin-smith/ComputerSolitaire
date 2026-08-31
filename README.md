@@ -3,7 +3,7 @@
   <br><span style="font-family: monospace;">Computer Solitaire</span>
 </h1>
 
-Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS. [Find it on the App Store](https://apps.apple.com/us/app/computer-solitaire/id6761316105).
+Computer Solitaire is a fully native Solitaire app for iOS, iPadOS, and macOS. It includes things you enjoy. [Find it on the App Store](https://apps.apple.com/us/app/computer-solitaire/id6761316105).
 
 <p align="center">
   <img src="./docs/screenshots/screen-grab-ios.png" alt="iOS screenshot" height="420" />

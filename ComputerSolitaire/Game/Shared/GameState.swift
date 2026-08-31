@@ -111,6 +111,22 @@ nonisolated struct GameState: Equatable, Codable {
         }
     }
 
+    /// Every card currently in play, across all of the variant containers.
+    var allCards: [Card] {
+        stock + waste + freeCells.compactMap { $0 } + foundations.flatMap { $0 }
+            + tableau.flatMap { $0 } + pyramid.compactMap { $0 } + discard
+            + triPeaks.compactMap { $0 } + reserve
+    }
+
+    /// Whether no card instance appears twice on the board. Deliberately
+    /// weaker than the full-deck composition check persistence applies, so
+    /// partially dealt fixture states still satisfy it; a violation always
+    /// means a move-application bug duplicated a card.
+    var hasNoDuplicateCardIDs: Bool {
+        let cards = allCards
+        return Set(cards.map(\.id)).count == cards.count
+    }
+
     static func newGame() -> GameState {
         newGame(variant: .klondike)
     }
