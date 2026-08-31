@@ -7,6 +7,15 @@ import Foundation
 /// of `UndoAnimationCoordinator`'s `.dealTableauRow` flight, which flies the
 /// same cards back to the same stock anchors.
 enum DealAnimationCoordinator {
+    /// A concrete, already-resolved source for a fresh-board deal. Callers
+    /// choose the semantic source first, then wait for its geometry; a missing
+    /// stock frame can never silently turn a stock deal into an above-board
+    /// deal.
+    enum NewGameDealSource {
+        case stock(frame: CGRect)
+        case aboveBoard(boardSize: CGSize)
+    }
+
     struct Plan {
         let cards: [DrawAnimationCard]
         let cardIDs: Set<UUID>
@@ -108,8 +117,7 @@ enum DealAnimationCoordinator {
     static func makeNewGameDealPlan(
         dealtCards: [Card],
         cardFrames: [UUID: CGRect],
-        stockFrame: CGRect,
-        boardSize: CGSize
+        source: NewGameDealSource
     ) -> Plan? {
         let flying = dealtCards.compactMap { card -> (card: Card, frame: CGRect)? in
             guard let frame = cardFrames[card.id] else { return nil }
@@ -118,10 +126,12 @@ enum DealAnimationCoordinator {
         guard !flying.isEmpty else { return nil }
 
         let start: CGPoint
-        if stockFrame != .zero {
+        switch source {
+        case .stock(let stockFrame):
+            guard !stockFrame.isEmpty else { return nil }
             start = CGPoint(x: stockFrame.midX, y: stockFrame.midY)
-        } else {
-            guard boardSize != .zero else { return nil }
+        case .aboveBoard(let boardSize):
+            guard boardSize.width > 0, boardSize.height > 0 else { return nil }
             let cardHeight = flying[0].frame.height
             start = CGPoint(x: boardSize.width * 0.5, y: -cardHeight)
         }

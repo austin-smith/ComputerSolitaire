@@ -12,20 +12,27 @@ struct DropTargetFrameKey: PreferenceKey {
     }
 }
 
-// Single-frame keys must ignore sizeless candidates: sibling subtrees that
-// never set the key still run reduce, and a last-wins reducer lets them erase
-// the real frame (the draw animation then never runs). Rejecting only `.zero`
-// is not enough — a subtree measured before layout reports a rect with a real
-// origin but no size, e.g. `(148, 0, 0 x 0)`, which clears that test and
-// clobbers the live frame. Size is what makes a candidate meaningful here.
-struct StockFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
+/// One layout-pass snapshot for fresh-deal source and destination frames.
+/// Keeping them in one preference value prevents a cold layout from combining
+/// current card destinations with a missing or stale stock anchor from another
+/// pass.
+struct BoardFramePreferences: Equatable {
+    var stockFrame: CGRect = .zero
+    var cardFrames: [UUID: CGRect] = [:]
+}
 
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+// Sizeless candidates are never meaningful geometry. A subtree measured
+// before layout can report a real origin with a zero size, so checking only
+// against `.zero` would still let it clobber the live stock frame.
+struct BoardFrameKey: PreferenceKey {
+    static var defaultValue = BoardFramePreferences()
+
+    static func reduce(value: inout BoardFramePreferences, nextValue: () -> BoardFramePreferences) {
         let next = nextValue()
-        if !next.isEmpty {
-            value = next
+        if !next.stockFrame.isEmpty {
+            value.stockFrame = next.stockFrame
         }
+        value.cardFrames.merge(next.cardFrames, uniquingKeysWith: { _, new in new })
     }
 }
 
@@ -37,14 +44,6 @@ struct WasteFrameKey: PreferenceKey {
         if !next.isEmpty {
             value = next
         }
-    }
-}
-
-struct CardFrameKey: PreferenceKey {
-    static var defaultValue: [UUID: CGRect] = [:]
-
-    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
-        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
 }
 
@@ -64,7 +63,10 @@ struct CardFramePreference: ViewModifier {
                     height: frame.height
                 )
                 Color.clear
-                    .preference(key: CardFrameKey.self, value: [cardID: adjustedFrame])
+                    .preference(
+                        key: BoardFrameKey.self,
+                        value: BoardFramePreferences(cardFrames: [cardID: adjustedFrame])
+                    )
             }
         )
     }
@@ -77,6 +79,13 @@ extension View {
 }
 
 struct ContentView: View {
+    private struct PendingNewGameDeal {
+        let eventID: UUID
+        let cards: [Card]
+        let startsFromStock: Bool
+        let token: UUID
+    }
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var isReduceMotionEnabled
@@ -120,6 +129,7 @@ struct ContentView: View {
     @State private var dealAnimationCards: [DrawAnimationCard] = []
     @State private var dealingCardIDs: Set<UUID> = []
     @State private var dealAnimationToken = UUID()
+    @State private var pendingNewGameDeal: PendingNewGameDeal?
     /// True while the active deal flight is a fresh-board deal, whose queued
     /// cards hide until takeoff; stock deals keep their queues visible.
     @State private var dealFlightHidesQueuedCards = false
@@ -803,23 +813,26 @@ struct ContentView: View {
             dropFrames = frames
             refreshLoadedWinPresentationIfNeeded()
         }
-        .onPreferenceChange(StockFrameKey.self) { frame in
-            stockFrame = frame
-        }
         .onPreferenceChange(WasteFrameKey.self) { frame in
             wasteFrame = frame
         }
-        .onPreferenceChange(CardFrameKey.self) { frames in
-            if shouldUpdateCardFrames(with: frames) {
-                cardFrames = frames
+        .onPreferenceChange(BoardFrameKey.self) { frames in
+            if !framesApproximatelyEqual(stockFrame, frames.stockFrame) {
+                stockFrame = frames.stockFrame
             }
+            if shouldUpdateCardFrames(with: frames.cardFrames) {
+                cardFrames = frames.cardFrames
+            }
+            resolvePendingNewGameDealIfReady()
         }
         .onAppear {
             boardViewportSize = geometry.size
+            resolvePendingNewGameDealIfReady()
             refreshLoadedWinPresentationIfNeeded()
         }
         .onChange(of: geometry.size) { _, newSize in
             boardViewportSize = newSize
+            resolvePendingNewGameDealIfReady()
             refreshLoadedWinPresentationIfNeeded()
         }
         .onChange(of: viewModel.isWin) { _, isWin in
@@ -899,15 +912,6 @@ struct ContentView: View {
             // a deal can never replay the flight.
             guard let event else { return }
             startDealAnimation(for: event.dealtCardIDs)
-        }
-        .onChange(of: viewModel.latestBoardDealEvent) { _, event in
-            // A fresh board deals itself in from the stock: new game,
-            // redeal, Golf's next hole, or a game switch that found nothing
-            // to restore. Like the tableau deal above, the session publishes
-            // an explicit event — restores never set it — so a hydrated
-            // board can never replay a deal that already happened.
-            guard event != nil else { return }
-            startNewGameDealAnimation()
         }
         .onChange(of: viewModel.movesCount) { _, movesCount in
             // The board stays live during a deal flight, and a move that lands
@@ -1171,18 +1175,20 @@ struct ContentView: View {
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             mutation()
+            guard let event = viewModel.latestBoardDealEvent,
+                  event != eventBeforeMutation else { return }
+            // Redeal reuses card IDs, so no geometry from the outgoing board
+            // may satisfy the fresh deal. Both frame sets republish together
+            // from the new board through BoardFrameKey.
+            stockFrame = .zero
+            cardFrames = [:]
+            prepareNewGameDealAnimation(for: event)
         }
         // Only wipe when the mutation actually dealt a fresh board: Golf's
         // final-hole advance completes the match and deliberately stays on
         // the finished board, and sweeping copies off a board that never
         // leaves would read as a ghost board peeling away.
         guard viewModel.latestBoardDealEvent != eventBeforeMutation else { return }
-        // Drop the outgoing layout's frames: Redeal reuses the outgoing
-        // game's card IDs, so stale entries would satisfy the deal flight's
-        // readiness check and land cards at their played-out positions.
-        // The wipe is unaffected — it plans from the snapshot captured
-        // above — and the fresh board republishes within a frame.
-        cardFrames = [:]
         startBoardWipe(for: wipedCards, frames: wipeFrames)
     }
 
@@ -1210,6 +1216,7 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + total) {
             guard wipeAnimationToken == token else { return }
             wipeAnimationCards = []
+            resolvePendingNewGameDealIfReady()
         }
     }
 
@@ -1253,7 +1260,12 @@ struct ContentView: View {
         isSettlingHydratedGame = true
         isScreenshotSession = false
         let payload = GamePersistence.load(mode: mode, from: modelContext)
-        viewModel.activateGame(mode, restoringFrom: payload)
+        let restored = viewModel.activateGame(mode, restoringFrom: payload)
+        if !restored, let event = viewModel.latestBoardDealEvent {
+            stockFrame = .zero
+            cardFrames = [:]
+            prepareNewGameDealAnimation(for: event)
+        }
         rememberSelectedGame()
         reconcileTimeScoringPause()
         winCelebration.syncForLoadedGame(
@@ -1632,16 +1644,17 @@ struct ContentView: View {
     }
 
     private func cancelDealAnimation() {
+        pendingNewGameDeal = nil
         dealAnimationCards = []
         dealingCardIDs = []
         dealFlightHidesQueuedCards = false
         dealAnimationToken = UUID()
     }
 
-    /// Flies a fresh board's cards in from the stock, sharing the deal
-    /// flight's overlay, hiding, and cancellation rules — a move or a game
-    /// switch mid-deal lands the flight the same way it lands a stock deal.
-    private func startNewGameDealAnimation() {
+    /// Arms a fresh deal before its board is allowed to render. Real cards are
+    /// hidden immediately; the flight begins only after one current layout
+    /// snapshot contains every destination and the required source anchor.
+    private func prepareNewGameDealAnimation(for event: SolitaireViewModel.BoardDealEvent) {
         cancelDealAnimation()
         let dealtCards = DealAnimationCoordinator.newGameDealSequence(in: viewModel.state)
         guard !dealtCards.isEmpty else { return }
@@ -1653,48 +1666,61 @@ struct ContentView: View {
         dealAnimationMovesCount = viewModel.movesCount
         let token = UUID()
         dealAnimationToken = token
-        DispatchQueue.main.async {
-            resolveDealFlight(
-                token: token,
-                attemptsRemaining: 75,
-                retryInterval: 0.02,
-                isReady: {
-                    // A fresh board's landing frames arrive a beat after the
-                    // state swap (dealFreshBoard drops the stale set first —
-                    // New Game mints new card IDs, but Redeal reuses the
-                    // outgoing game's, whose leftover frames would otherwise
-                    // pass this check) — and whole seconds later when the
-                    // deal rides a game switch or first launch, where the
-                    // board tree is still building. Patience here is cheap:
-                    // attempts burn only while frames are missing, and any
-                    // interaction lands the flight through the usual cancel
-                    // paths. The deal also waits for the wipe sweep to
-                    // finish clearing the old board off the felt — the
-                    // dealer doesn't deal onto a messy table.
-                    wipeAnimationCards.isEmpty
-                        && dealtCards.allSatisfy { cardFrames[$0.id] != nil }
-                },
-                makePlan: {
-                    DealAnimationCoordinator.makeNewGameDealPlan(
-                        dealtCards: dealtCards,
-                        cardFrames: cardFrames,
-                        stockFrame: stockFrame,
-                        boardSize: boardViewportSize
-                    )
-                },
-                onTakeoff: {
-                    SoundManager.shared.play(.cardDrawFromStock)
-                    HapticManager.shared.play(.stockDraw)
-                }
-            )
+        pendingNewGameDeal = PendingNewGameDeal(
+            eventID: event.id,
+            cards: dealtCards,
+            startsFromStock: !viewModel.state.stock.isEmpty,
+            token: token
+        )
+        resolvePendingNewGameDealIfReady()
+    }
+
+    /// Geometry publication drives this transition. There is no retry clock:
+    /// whichever required frame arrives last completes the coherent snapshot
+    /// and starts the flight exactly once.
+    private func resolvePendingNewGameDealIfReady() {
+        guard let pending = pendingNewGameDeal,
+              viewModel.latestBoardDealEvent?.id == pending.eventID,
+              dealAnimationToken == pending.token,
+              wipeAnimationCards.isEmpty,
+              pending.cards.allSatisfy({ cardFrames[$0.id] != nil }) else { return }
+
+        let source: DealAnimationCoordinator.NewGameDealSource
+        if pending.startsFromStock {
+            guard !stockFrame.isEmpty else { return }
+            source = .stock(frame: stockFrame)
+        } else {
+            guard boardViewportSize.width > 0, boardViewportSize.height > 0 else { return }
+            source = .aboveBoard(boardSize: boardViewportSize)
+        }
+
+        guard let plan = DealAnimationCoordinator.makeNewGameDealPlan(
+            dealtCards: pending.cards,
+            cardFrames: cardFrames,
+            source: source
+        ) else {
+            assertionFailure("Complete fresh-deal geometry must produce a flight plan")
+            cancelDealAnimation()
+            return
+        }
+
+        pendingNewGameDeal = nil
+        SoundManager.shared.play(.cardDrawFromStock)
+        HapticManager.shared.play(.stockDraw)
+        dealAnimationCards = plan.cards
+        dealingCardIDs = plan.cardIDs
+
+        let total = motion.duration(plan.maxDelay + plan.travelDuration + plan.settleDuration)
+        DispatchQueue.main.asyncAfter(deadline: .now() + total) {
+            guard dealAnimationToken == pending.token else { return }
+            dealAnimationCards = []
+            dealingCardIDs = []
         }
     }
 
-    /// One resolver drives both deal flights (the stock deal and the fresh
-    /// board): poll until the flight's readiness condition holds, build its
-    /// plan or land the flight, then tear the overlay down once the last
-    /// card has settled — token-gated throughout, so a superseding flight
-    /// or any cancel path orphans the loop harmlessly.
+    /// Stock-onto-tableau deals can bank a card immediately and therefore use
+    /// their existing bounded resolver; fresh-board deals require complete
+    /// geometry and are driven by preference publication above.
     private func resolveDealFlight(
         token: UUID,
         attemptsRemaining: Int,
@@ -2142,6 +2168,9 @@ struct ContentView: View {
         } else {
             winCelebration.reset(to: .idle)
             viewModel.newGame(mode: launchMode)
+            if let event = viewModel.latestBoardDealEvent {
+                prepareNewGameDealAnimation(for: event)
+            }
             rememberSelectedGame()
             persistGameNow()
         }
