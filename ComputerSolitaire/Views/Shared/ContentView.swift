@@ -1344,13 +1344,18 @@ struct ContentView: View {
         guard !viewModel.isDragging else { return }
 
         viewModel.clearPendingAutoMove()
+        // The request holds a snapshot from tap time; a move that landed while
+        // it waited (its tap arrived during a drop flight) may have moved the
+        // board on beneath it. The session would refuse the stale move anyway;
+        // dropping the request here also skips its flight animation.
+        guard let liveSelection = viewModel.liveSelection(matching: request.selection) else { return }
         drag.dragTranslation = .zero
         dragReturnOffset = .zero
         drag.setActiveTarget(nil)
-        viewModel.selection = request.selection
+        viewModel.selection = liveSelection
         viewModel.isDragging = true
 
-        if let firstCard = request.selection.cards.first {
+        if let firstCard = liveSelection.cards.first {
             overlayTilt = cardTilts[firstCard.id] ?? 0
             let tiltSettleDuration = isAutoFinishing ? 0.1 : 0.15
             withAnimation(motion.easeOut(tiltSettleDuration)) {

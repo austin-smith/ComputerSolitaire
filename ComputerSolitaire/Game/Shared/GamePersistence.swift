@@ -908,12 +908,6 @@ enum GameStatisticsStore {
 }
 
 nonisolated private extension GameState {
-    var allCards: [Card] {
-        stock + waste + freeCells.compactMap { $0 } + foundations.flatMap { $0 }
-            + tableau.flatMap { $0 } + pyramid.compactMap { $0 } + discard
-            + triPeaks.compactMap { $0 } + reserve
-    }
-
     var isValidForPersistence: Bool {
         guard foundations.count == variant.foundationPileCount else { return false }
         guard freeCells.count == 4 else { return false }

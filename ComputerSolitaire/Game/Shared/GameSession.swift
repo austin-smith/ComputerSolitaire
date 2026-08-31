@@ -746,6 +746,12 @@ final class SolitaireViewModel {
     }
 
     func refreshAutoFinishAvailability() {
+        // Every mutating flow ends here, making it the shared checkpoint for
+        // the deck integrity invariant.
+        assert(
+            state.hasNoDuplicateCardIDs,
+            "Board corruption: a card instance appears more than once"
+        )
         isAutoFinishAvailable = AutoFinishPlanner.canAutoFinish(in: state)
         isHintAvailable = !isWin && HintAdvisor.anyPlayerMoveExists(in: state)
     }
@@ -935,7 +941,21 @@ extension SolitaireViewModel {
     }
 
     func tryMoveSelection(to destination: Destination) -> Bool {
-        guard let selection, let movingCard = selection.cards.first else { return false }
+        guard let staleSelection = selection else { return false }
+        // A selection is a snapshot of the board, and moves apply only after an
+        // animated flight, so the board may have moved on beneath it (for
+        // example, a tap queued during another move's drop flight). Applying a
+        // stale selection duplicates cards: `removeSelection` removes by
+        // position while the destination receives the snapshot's copies.
+        // Re-derive the cards from the current state and refuse on mismatch.
+        guard let selection = liveSelection(matching: staleSelection),
+              let movingCard = selection.cards.first else {
+            self.selection = nil
+            return false
+        }
+        if selection != staleSelection {
+            self.selection = selection
+        }
 
         switch destination {
         case .foundation(let index):
@@ -1017,6 +1037,39 @@ extension SolitaireViewModel {
             }
             return performPyramidMove(selection: selection, to: destination)
         }
+    }
+
+    /// Re-derives `selection` from the current state, returning fresh copies
+    /// of the cards its source holds right now. Returns nil when the source no
+    /// longer holds exactly the selected cards — the selection predates a
+    /// mutation, and applying it would corrupt the board (see
+    /// `tryMoveSelection`).
+    func liveSelection(matching selection: Selection) -> Selection? {
+        let liveCards: [Card]?
+        switch selection.source {
+        case .waste:
+            liveCards = state.waste.last.map { [$0] }
+        case .foundation(let pile):
+            guard state.foundations.indices.contains(pile) else { return nil }
+            liveCards = state.foundations[pile].last.map { [$0] }
+        case .freeCell(let slot):
+            guard state.freeCells.indices.contains(slot) else { return nil }
+            liveCards = state.freeCells[slot].map { [$0] }
+        case .tableau(let pile, let index):
+            guard state.tableau.indices.contains(pile),
+                  state.tableau[pile].indices.contains(index) else { return nil }
+            liveCards = Array(state.tableau[pile][index...])
+        case .pyramid(let index):
+            guard state.pyramid.indices.contains(index) else { return nil }
+            liveCards = state.pyramid[index].map { [$0] }
+        case .triPeaks(let index):
+            guard state.triPeaks.indices.contains(index) else { return nil }
+            liveCards = state.triPeaks[index].map { [$0] }
+        case .reserve:
+            liveCards = state.reserve.last.map { [$0] }
+        }
+        guard let liveCards, liveCards.map(\.id) == selection.cards.map(\.id) else { return nil }
+        return Selection(source: selection.source, cards: liveCards)
     }
 
     func removeSelection(_ selection: Selection) {
