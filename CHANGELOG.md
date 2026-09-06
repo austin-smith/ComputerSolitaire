@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.1
+
+### Changed
+
+- Renamed "Redeal" action to "Restart". ([#99](https://github.com/austin-smith/ComputerSolitaire/pull/99))
+- Redesigned win cascade rendering to reduce rendering overhead and prevent dropped frames from slowing the animation. ([#100](https://github.com/austin-smith/ComputerSolitaire/pull/100))
+
+### Fixed
+
+- Fixed rare duplicate or missing cards when a queued move used a selection captured before another move or stock draw completed. ([#102](https://github.com/austin-smith/ComputerSolitaire/pull/102))
+- Fixed cards briefly appearing in their final positions before the initial deal animation on a fresh launch, and stock deals incorrectly starting above the board. ([#103](https://github.com/austin-smith/ComputerSolitaire/pull/103))
+
+**Full Changelog**: https://github.com/austin-smith/ComputerSolitaire/compare/v0.9.0...v0.9.1
+
 ## 0.9.0 - 2026-08-08
 
 ### Added
