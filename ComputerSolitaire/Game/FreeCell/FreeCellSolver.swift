@@ -53,6 +53,10 @@ nonisolated enum FreeCellSolver {
         var expansions = 0
 
         while let entry = heap.pop() {
+            if Task.isCancelled {
+                return nil
+            }
+
             let nodeIndex = entry.index
             let board = nodes[nodeIndex].board
 

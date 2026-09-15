@@ -352,6 +352,11 @@ nonisolated private extension TriPeaksPlanner {
         var best: (index: Int, remaining: Int, depth: Int)?
 
         while let nodeIndex = pending.popLast() {
+            if Task.isCancelled {
+                wasTruncated = true
+                break
+            }
+
             let node = nodes[nodeIndex]
             let remaining = node.board.remainingCount
 

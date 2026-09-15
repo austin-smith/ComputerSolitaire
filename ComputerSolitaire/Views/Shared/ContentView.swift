@@ -567,6 +567,10 @@ struct ContentView: View {
                     }
                 }
             }
+            .onChange(of: viewModel.hintWiggleToken) { _, _ in
+                // Search completion can arrive after the board's pending autosave.
+                scheduleAutosave()
+            }
             .onChange(of: viewModel.pendingAutoMove?.id) { _, _ in
                 processPendingAutoMoveIfPossible()
                 queueAutoFinishStepIfPossible()
@@ -597,6 +601,7 @@ struct ContentView: View {
                 initializeGameIfNeeded()
             }
             .onDisappear {
+                viewModel.clearHint()
                 persistGameNow()
             }
 #if os(macOS)
@@ -1099,6 +1104,7 @@ struct ContentView: View {
 
     private var isHintDisabled: Bool {
         viewModel.isWin
+            || viewModel.isSearchingForHint
             || isUndoAnimating
             || isDroppingCards
             || isReturningDrag
@@ -1291,6 +1297,7 @@ struct ContentView: View {
     /// Clears in-flight drag/drop/undo/draw animation state so stale animation
     /// completions cannot mutate the game that replaces the current one.
     private func resetTransientBoardState() {
+        viewModel.clearHint()
         drag.reset()
         overlayTilt = 0
         dragReturnOffset = .zero
@@ -1319,6 +1326,7 @@ struct ContentView: View {
 
     private func startAutoFinish() {
         guard !isAutoFinishDisabled else { return }
+        viewModel.clearHint()
         HapticManager.shared.play(.autoFinishStart)
         isAutoFinishing = true
         queueAutoFinishStepIfPossible()

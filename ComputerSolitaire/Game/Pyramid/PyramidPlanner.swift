@@ -538,6 +538,11 @@ nonisolated private extension PyramidPlanner {
         var wasTruncated = false
 
         while let entry = heap.pop() {
+            if Task.isCancelled {
+                wasTruncated = true
+                break
+            }
+
             let nodeIndex = entry.index
             let node = nodes[nodeIndex]
 
@@ -592,6 +597,11 @@ nonisolated private extension PyramidPlanner {
         var best: (index: Int, remaining: Int, depth: Int)?
 
         while let entry = heap.pop() {
+            if Task.isCancelled {
+                wasTruncated = true
+                break
+            }
+
             let nodeIndex = entry.index
             let node = nodes[nodeIndex]
             let remaining = node.board.remainingCount

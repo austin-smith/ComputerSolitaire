@@ -39,6 +39,10 @@ nonisolated enum KlondikePlanner {
         var best: (index: Int, score: Int, depth: Int)?
 
         while let entry = heap.pop() {
+            if Task.isCancelled {
+                break
+            }
+
             let nodeIndex = entry.index
             let node = nodes[nodeIndex]
 

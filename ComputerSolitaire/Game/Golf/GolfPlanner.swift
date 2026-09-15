@@ -386,6 +386,11 @@ nonisolated private extension GolfPlanner {
         var best: (index: Int32, remaining: Int, depth: UInt16)?
 
         while let nodeIndex = pending.popLast() {
+            if Task.isCancelled {
+                wasTruncated = true
+                break
+            }
+
             let node = nodes[Int(nodeIndex)]
             let board = Board(code: node.code)
             let remaining = board.remainingCount
