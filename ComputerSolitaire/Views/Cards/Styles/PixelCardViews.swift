@@ -164,7 +164,7 @@ nonisolated struct PixelGrid {
 
 // MARK: - Card Silhouette (stepped pixel corners)
 
-struct PixelCardShape: InsettableShape {
+nonisolated struct PixelCardShape: InsettableShape {
     /// One virtual pixel unit (card width / PixelCardArt.gridWidth).
     let px: CGFloat
     let displayScale: CGFloat
