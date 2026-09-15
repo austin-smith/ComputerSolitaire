@@ -29,6 +29,7 @@ final class SolitaireViewModel {
     }
     private var selectedCardIDs: Set<UUID> = []
     private(set) var activeHint: HintAdvisor.Hint?
+    private(set) var isSearchingForHint = false
     private(set) var hintWiggleToken = UUID()
     private var hintAutoClearToken = UUID()
     var isDragging: Bool = false
@@ -81,7 +82,9 @@ final class SolitaireViewModel {
     /// Internal so variant session extensions (Golf's hole advance) share the
     /// injected clock.
     let dateProvider: any DateProviding
-    @ObservationIgnored private let hintPlanner = HintPlanner()
+    @ObservationIgnored private let hintSearch: any HintSearching
+    @ObservationIgnored private var hintSearchTask: Task<Void, Never>?
+    @ObservationIgnored private var hintSearchID: UUID?
 
     private var history: [GameSnapshot] = []
 
@@ -93,9 +96,11 @@ final class SolitaireViewModel {
 
     init(
         dateProvider: any DateProviding = SystemDateProvider(),
-        variant: GameVariant = .klondike
+        variant: GameVariant = .klondike,
+        hintSearch: any HintSearching = HintSearchWorker()
     ) {
         self.dateProvider = dateProvider
+        self.hintSearch = hintSearch
         let startedAt = dateProvider.now
         let initialState = GameState.newGame(variant: variant)
         state = initialState
@@ -105,6 +110,10 @@ final class SolitaireViewModel {
         gameStartedAt = startedAt
         hasStartedTrackedGame = false
         GameStatisticsStore.markTrackingStarted(for: gameMode, at: startedAt)
+    }
+
+    deinit {
+        hintSearchTask?.cancel()
     }
 
     var gameVariant: GameVariant {
@@ -179,30 +188,69 @@ final class SolitaireViewModel {
         pauseStartedAt == nil && finalElapsedSeconds == nil
     }
 
-    func requestHint() {
+    @discardableResult
+    func requestHint() -> Task<Void, Never>? {
         guard !isWin else {
             clearHint()
-            return
+            return nil
         }
+        guard !isDragging, pendingAutoMove == nil else { return nil }
+        if let hintSearchTask { return hintSearchTask }
 
-        guard let hint = hintPlanner.bestHint(in: state, stockDrawCount: stockDrawCount) else {
-            clearHint()
-            // The cheap availability check can't know the planner would come up empty
-            // (e.g. a dead stock cycle); now that the full search has, keep the button
-            // honest until the next state change re-evaluates it.
-            isHintAvailable = false
-            HapticManager.shared.play(.invalidDrop)
-            return
+        clearHint()
+        let snapshot = state
+        let drawCount = stockDrawCount
+        let requestID = UUID()
+        hintSearchID = requestID
+        isSearchingForHint = true
+        let task = Task { [weak self, hintSearch] in
+            let hint: HintAdvisor.Hint?
+            do {
+                hint = try await hintSearch.bestHint(in: snapshot, stockDrawCount: drawCount)
+            } catch {
+                self?.finishHintSearch(requestID)
+                return
+            }
+
+            guard let self, self.hintSearchID == requestID else { return }
+            self.finishHintSearch(requestID)
+            guard !Task.isCancelled,
+                  self.state == snapshot,
+                  self.stockDrawCount == drawCount,
+                  !self.isWin, !self.isDragging, self.pendingAutoMove == nil else { return }
+
+            guard let hint else {
+                // Only a completed search of the current position may disable hints.
+                self.isHintAvailable = false
+                HapticManager.shared.play(.invalidDrop)
+                return
+            }
+            self.activeHint = hint
+            self.hintWiggleToken = UUID()
+            self.scheduleHintAutoClear(for: hint)
+            self.hintRequestsInCurrentGame += 1
+            HapticManager.shared.play(.hintFound)
         }
+        hintSearchTask = task
+        return task
+    }
 
-        activeHint = hint
-        hintWiggleToken = UUID()
-        scheduleHintAutoClear(for: hint)
-        hintRequestsInCurrentGame += 1
-        HapticManager.shared.play(.hintFound)
+    private func finishHintSearch(_ requestID: UUID) {
+        guard hintSearchID == requestID else { return }
+        hintSearchTask = nil
+        hintSearchID = nil
+        isSearchingForHint = false
+    }
+
+    private func cancelHintSearch() {
+        hintSearchTask?.cancel()
+        hintSearchTask = nil
+        hintSearchID = nil
+        isSearchingForHint = false
     }
 
     func clearHint() {
+        cancelHintSearch()
         hintAutoClearToken = UUID()
         activeHint = nil
     }
@@ -224,6 +272,7 @@ final class SolitaireViewModel {
     }
 
     func resetStatisticsTracking() {
+        cancelHintSearch()
         hasStartedTrackedGame = false
         isCurrentGameFinalized = true
         hintRequestsInCurrentGame = 0
@@ -265,6 +314,7 @@ final class SolitaireViewModel {
 
     @discardableResult
     func pauseTimeScoring(at date: Date = .now) -> Bool {
+        cancelHintSearch()
         guard !hasAppliedTimeBonus else { return false }
         guard pauseStartedAt == nil else { return false }
         pauseStartedAt = date

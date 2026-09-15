@@ -154,6 +154,11 @@ nonisolated private extension SpiderPlanner {
         var best: (index: Int, score: Int, depth: Int)?
 
         while let entry = heap.pop() {
+            if Task.isCancelled {
+                wasTruncated = true
+                break
+            }
+
             let nodeIndex = entry.index
             let node = nodes[nodeIndex]
 
