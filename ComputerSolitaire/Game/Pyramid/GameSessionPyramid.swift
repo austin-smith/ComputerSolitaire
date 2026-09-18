@@ -104,13 +104,7 @@ extension SolitaireViewModel {
 
     @discardableResult
     func startDragFromPyramid(index: Int) -> Bool {
-        guard state.pyramid.indices.contains(index),
-              let card = state.pyramid[index],
-              PyramidGameRules.isSelectable(index: index, in: state.pyramid) else { return false }
-        clearHint()
-        selection = Selection(source: .pyramid(index: index), cards: [card])
-        isDragging = true
-        return true
+        startDrag(from: .pyramid(index))
     }
 
     // MARK: Stock

@@ -16,7 +16,7 @@ concurrency:
 jobs:
   macos-unit-tests:
     name: macOS Build & Test
-    runs-on: macos-26
+    runs-on: xcode-27
 
     steps:
       - name: Checkout
@@ -43,7 +43,7 @@ jobs:
 
   ios-build:
     name: iOS Build
-    runs-on: macos-26
+    runs-on: xcode-27
 
     steps:
       - name: Checkout
@@ -62,7 +62,7 @@ jobs:
 
   mas-build:
     name: Mac App Store Build
-    runs-on: macos-26
+    runs-on: xcode-27
 
     steps:
       - name: Checkout

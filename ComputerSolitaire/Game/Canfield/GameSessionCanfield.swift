@@ -87,12 +87,7 @@ extension SolitaireViewModel {
 
     @discardableResult
     func startDragFromReserve() -> Bool {
-        guard state.variant == .canfield else { return false }
-        guard let top = state.reserve.last, top.isFaceUp else { return false }
-        clearHint()
-        selection = Selection(source: .reserve, cards: [top])
-        isDragging = true
-        return true
+        startDrag(from: .reserve)
     }
 
     /// The compulsory space fill after a tableau source removal, with the

@@ -30,12 +30,7 @@ extension SolitaireViewModel {
 
     @discardableResult
     func startDragFromFreeCell(index: Int) -> Bool {
-        guard state.variant == .freecell else { return false }
-        guard state.freeCells.indices.contains(index), let card = state.freeCells[index] else { return false }
-        clearHint()
-        selection = Selection(source: .freeCell(slot: index), cards: [card])
-        isDragging = true
-        return true
+        startDrag(from: .freeCell(index))
     }
 
     func freeCellCanMoveStack(_ cards: [Card], to destination: Destination) -> Bool {

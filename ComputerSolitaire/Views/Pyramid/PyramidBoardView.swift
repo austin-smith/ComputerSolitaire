@@ -94,6 +94,7 @@ struct PyramidBoardView: View {
             )
             .allowsHitTesting(false)
         }
+        .cardDrag(cardID: card.id, gesture: dragGesture(.pyramid(index)), isEnabled: isSelectable)
         .opacity(isDragged || isHidden ? 0 : 1)
         .offset(x: offset.width, y: offset.height)
         .zIndex(isDragged ? 40 + Double(row) : Double(row))
@@ -101,7 +102,6 @@ struct PyramidBoardView: View {
         .onTapGesture {
             session.handlePyramidTap(index: index)
         }
-        .gesture(dragGesture(.pyramid(index)))
         .accessibilityHidden(!isAccessibilityElement)
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? .isSelected : [])

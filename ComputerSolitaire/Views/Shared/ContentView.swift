@@ -104,6 +104,7 @@ struct ContentView: View {
     @State private var hapticFeedback = HapticManager.shared
     @State private var dropFrames: [DropTarget: DropTargetGeometry] = [:]
     @State private var drag = DragInteractionController()
+    @State private var dragSession = DragSessionController()
     // Flight-boundary drag state stays as `@State` — not on the controller —
     // because these fields are written with `withAnimation`, and `@State`
     // preserves that transaction per attribute even when unanimated writes
@@ -538,6 +539,7 @@ struct ContentView: View {
                 updateMenuPresentationPauseState()
             }
             .onChange(of: viewModel.state) { _, _ in
+                dragSession.invalidateIfBoardChanged(in: viewModel)
                 scheduleAutosave()
                 queueAutoFinishStepIfPossible()
                 // Every path into or out of a dead Golf hole is a state
@@ -601,6 +603,7 @@ struct ContentView: View {
                 initializeGameIfNeeded()
             }
             .onDisappear {
+                dragSession.end(in: viewModel)
                 viewModel.clearHint()
                 persistGameNow()
             }
@@ -817,6 +820,13 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .coordinateSpace(name: "board")
+        .modifier(CardBoardDragModifier(
+            model: viewModel, controller: dragSession, drag: drag,
+            dropFrames: dropFrames,
+            isEnabled: isBoardReady && !isUndoAnimating && !isDroppingCards
+                && !isReturningDrag && !isWinCascadeAnimating,
+            startDrag: startDrag, didFinish: finishDragSession
+        ))
         .transformPreference(BoardFrameKey.self) { preferences in
             // Geometry belongs to a specific fresh-board event. Including the
             // event in the Equatable preference guarantees that an unchanged
@@ -972,21 +982,23 @@ struct ContentView: View {
                     .zIndex(75)
                     WinCascadeOverlayView(winCelebration: winCelebration)
                         .zIndex(90)
-                    DragOverlayView(
-                        viewModel: viewModel,
-                        drag: drag,
-                        cardFrames: cardFrames,
-                        overlayTilt: overlayTilt,
-                        dragReturnOffset: dragReturnOffset,
-                        isReturningDrag: isReturningDrag,
-                        returningCards: returningCards,
-                        isDroppingCards: isDroppingCards,
-                        droppingCards: droppingSelection?.cards ?? [],
-                        dropAnimationOffset: dropAnimationOffset,
-                        wasteReturnAnchorCardID: wasteReturnAnchorCardID,
-                        wasteReturnAnchorFrame: wasteReturnAnchorFrame
-                    )
-                    .zIndex(100)
+                    if !dragSession.isActive {
+                        DragOverlayView(
+                            viewModel: viewModel,
+                            drag: drag,
+                            cardFrames: cardFrames,
+                            overlayTilt: overlayTilt,
+                            dragReturnOffset: dragReturnOffset,
+                            isReturningDrag: isReturningDrag,
+                            returningCards: returningCards,
+                            isDroppingCards: isDroppingCards,
+                            droppingCards: droppingSelection?.cards ?? [],
+                            dropAnimationOffset: dropAnimationOffset,
+                            wasteReturnAnchorCardID: wasteReturnAnchorCardID,
+                            wasteReturnAnchorFrame: wasteReturnAnchorFrame
+                        )
+                        .zIndex(100)
+                    }
                 }
             }
             // Hidden deliberately: these are animation ghosts of on-board
@@ -1297,6 +1309,7 @@ struct ContentView: View {
     /// Clears in-flight drag/drop/undo/draw animation state so stale animation
     /// completions cannot mutate the game that replaces the current one.
     private func resetTransientBoardState() {
+        dragSession.cancel(in: viewModel)
         viewModel.clearHint()
         drag.reset()
         overlayTilt = 0
@@ -1357,6 +1370,11 @@ struct ContentView: View {
     }
 
     private func handleEscape() {
+        if dragSession.isActive {
+            dragSession.cancel(in: viewModel)
+            drag.setActiveTarget(nil)
+            return
+        }
         guard viewModel.isDragging, !isReturningDrag, !isDroppingCards else { return }
         drag.setActiveTarget(nil)
         beginReturnAnimation()
@@ -1422,23 +1440,7 @@ struct ContentView: View {
         drag.dragTranslation = .zero
         dragReturnOffset = .zero
         isReturningDrag = false
-        let started: Bool
-        switch origin {
-        case .waste:
-            started = viewModel.startDragFromWaste()
-        case .foundation(let index):
-            started = viewModel.startDragFromFoundation(index: index)
-        case .freeCell(let index):
-            started = viewModel.startDragFromFreeCell(index: index)
-        case .tableau(let pile, let index):
-            started = viewModel.startDragFromTableau(pileIndex: pile, cardIndex: index)
-        case .pyramid(let index):
-            started = viewModel.startDragFromPyramid(index: index)
-        case .triPeaks(let index):
-            started = viewModel.startDragFromTriPeaks(index: index)
-        case .reserve:
-            started = viewModel.startDragFromReserve()
-        }
+        let started = viewModel.startDrag(from: origin)
 
         if started, let firstCard = viewModel.selection?.cards.first {
             if case .waste = origin {
@@ -1453,6 +1455,17 @@ struct ContentView: View {
             }
         }
         return started
+    }
+
+    private func finishDragSession(_ moved: Bool) {
+        wasteReturnAnchorCardID = nil
+        wasteReturnAnchorFrame = nil
+        drag.reset()
+        if !moved {
+            SoundManager.shared.play(.invalidDrop)
+            HapticManager.shared.play(.invalidDrop)
+        }
+        processPendingAutoMoveIfPossible()
     }
 
     private func finishDrag() {
@@ -1803,20 +1816,7 @@ struct ContentView: View {
     }
 
     private func destination(for target: DropTarget) -> Destination {
-        switch target {
-        case .freeCell(let index):
-            return .freeCell(index)
-        case .foundation(let index):
-            return .foundation(index)
-        case .tableau(let index):
-            return .tableau(index)
-        case .pyramid(let index):
-            return .pyramid(index)
-        case .waste:
-            return .waste
-        case .discard:
-            return .discard
-        }
+        target.destination
     }
 
     private func dropTarget(for destination: Destination) -> DropTarget {

@@ -9,6 +9,19 @@ nonisolated enum DropTarget: Hashable {
     case discard
 }
 
+extension DropTarget {
+    var destination: Destination {
+        switch self {
+        case .foundation(let index): .foundation(index)
+        case .tableau(let index): .tableau(index)
+        case .freeCell(let index): .freeCell(index)
+        case .pyramid(let index): .pyramid(index)
+        case .waste: .waste
+        case .discard: .discard
+        }
+    }
+}
+
 nonisolated enum DragOrigin: Hashable {
     case waste
     case foundation(Int)

@@ -576,12 +576,7 @@ final class SolitaireViewModel {
 
     @discardableResult
     func startDragFromFoundation(index: Int) -> Bool {
-        guard state.variant.allowsFoundationRollback else { return false }
-        guard let top = state.foundations[index].last else { return false }
-        clearHint()
-        selection = Selection(source: .foundation(pile: index), cards: [top])
-        isDragging = true
-        return true
+        startDrag(from: .foundation(index))
     }
 
     @discardableResult
@@ -893,14 +888,7 @@ extension SolitaireViewModel {
 
     @discardableResult
     func startDragFromWaste() -> Bool {
-        guard state.variant.dealsFromStock else { return false }
-        // The TriPeaks and Golf waste tops are the match target, never a mover.
-        guard state.variant != .tripeaks, state.variant != .golf else { return false }
-        guard let top = state.waste.last, state.wasteDrawCount > 0 else { return false }
-        clearHint()
-        selection = Selection(source: .waste, cards: [top])
-        isDragging = true
-        return true
+        startDrag(from: .waste)
     }
 
     /// Turns the spent waste over to form the new stock, order preserved.

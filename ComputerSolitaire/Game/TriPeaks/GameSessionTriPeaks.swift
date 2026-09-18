@@ -94,14 +94,7 @@ extension SolitaireViewModel {
 
     @discardableResult
     func startDragFromTriPeaks(index: Int) -> Bool {
-        guard state.triPeaks.indices.contains(index),
-              let card = state.triPeaks[index],
-              card.isFaceUp,
-              TriPeaksGeometry.isUncovered(index, in: state.triPeaks) else { return false }
-        clearHint()
-        selection = Selection(source: .triPeaks(index: index), cards: [card])
-        isDragging = true
-        return true
+        startDrag(from: .triPeaks(index))
     }
 
     // MARK: Stock

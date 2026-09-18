@@ -215,17 +215,14 @@ struct WasteView: View {
                     hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
                     isAccessibilityElement: false
                 )
+                .cardDrag(cardID: card.id, gesture: dragGesture(.waste), isEnabled: isTopCard)
                 .opacity(isDragged || isDrawing || isHidden ? 0 : 1)
                 .offset(x: xOffset, y: 0)
                 .zIndex(isTopCard ? 2 : Double(index))
                 .allowsHitTesting(isTopCard && !isDrawing && !isHidden)
                 .cardFramePreference(card.id, xOffset: xOffset)
 
-                if isTopCard {
-                    cardView.gesture(dragGesture(.waste))
-                } else {
-                    cardView
-                }
+                cardView
             }
         }
         .frame(width: cardSize.width + fanWidth, height: cardSize.height, alignment: .leading)

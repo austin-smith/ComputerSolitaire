@@ -770,13 +770,13 @@ struct FoundationView: View {
                         hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
                         isAccessibilityElement: false
                     )
+                    .cardDrag(cardID: card.id, gesture: dragGesture(.foundation(index)), isEnabled: isTopCard)
                     .opacity(isDragged || isHidden ? 0 : 1)
                     .zIndex(isTopCard && isDragged ? 20 : 0)
                     .allowsHitTesting(isTopCard && !isHidden)
 
                     if isTopCard {
                         cardView
-                            .gesture(dragGesture(.foundation(index)))
                             .cardFramePreference(card.id)
                     } else {
                         cardView
@@ -935,6 +935,7 @@ struct TableauPileView: View {
                     hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
                     isAccessibilityElement: isAccessibilityElement
                 )
+                .cardDrag(cardID: card.id, gesture: dragGesture(.tableau(pile: pileIndex, index: index)), isEnabled: isValidRunOrigin)
                 .opacity(isDragged || isHidden ? 0 : 1)
                 .offset(x: 0, y: yOffset)
                 .zIndex(isDragged ? 20 + Double(index) : Double(index))
@@ -947,7 +948,7 @@ struct TableauPileView: View {
                 .accessibilityHint(accessibilityHint)
                 .cardFramePreference(card.id, yOffset: yOffset)
 
-                cardView.gesture(dragGesture(.tableau(pile: pileIndex, index: index)))
+                cardView
             }
         }
         .frame(width: cardSize.width, height: height, alignment: .top)

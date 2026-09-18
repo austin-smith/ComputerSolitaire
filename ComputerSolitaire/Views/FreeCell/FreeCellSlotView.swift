@@ -51,11 +51,11 @@ struct FreeCellView: View {
                     hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
                     isAccessibilityElement: false
                 )
+                .cardDrag(cardID: card.id, gesture: dragGesture(.freeCell(index)))
                 .opacity(
                     (selection.isDragging && selection.isSelected(card))
                         || hiddenCardIDs.contains(card.id) ? 0 : 1
                 )
-                .gesture(dragGesture(.freeCell(index)))
                 .cardFramePreference(card.id)
             }
         }

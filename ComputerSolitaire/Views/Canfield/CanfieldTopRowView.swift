@@ -214,10 +214,10 @@ struct CanfieldReserveView: View {
                         hintWiggleToken: hintedCardIDs.contains(topCard.id) ? hintWiggleToken : nil,
                         isAccessibilityElement: false
                     )
+                    .cardDrag(cardID: topCard.id, gesture: dragGesture(.reserve))
                     .opacity(isDragged || isHidden ? 0 : 1)
                     .allowsHitTesting(!isHidden)
                     .cardFramePreference(topCard.id)
-                    .gesture(dragGesture(.reserve))
                 }
             }
             .frame(width: cardSize.width, height: cardSize.height)

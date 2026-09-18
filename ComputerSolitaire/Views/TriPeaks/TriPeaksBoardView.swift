@@ -77,6 +77,7 @@ struct TriPeaksBoardView: View {
             hintWiggleToken: hintedCardIDs.contains(card.id) ? hintWiggleToken : nil,
             isAccessibilityElement: isAccessibilityElement
         )
+        .cardDrag(cardID: card.id, gesture: dragGesture(.triPeaks(index)), isEnabled: card.isFaceUp && isUncovered)
         .opacity(isDragged || isHidden ? 0 : 1)
         .offset(x: offset.width, y: offset.height)
         .zIndex(isDragged ? 40 + Double(row) : Double(row))
@@ -84,7 +85,6 @@ struct TriPeaksBoardView: View {
         .onTapGesture {
             session.handleTriPeaksTap(index: index)
         }
-        .gesture(dragGesture(.triPeaks(index)))
         .accessibilityHidden(!isAccessibilityElement)
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
