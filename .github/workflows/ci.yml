@@ -16,11 +16,14 @@ concurrency:
 jobs:
   macos-unit-tests:
     name: macOS Build & Test
-    runs-on: macos-26
+    runs-on: xcode-27
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Install Metal toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
 
       - name: Run unit tests (macOS)
         run: |
@@ -43,11 +46,14 @@ jobs:
 
   ios-build:
     name: iOS Build
-    runs-on: macos-26
+    runs-on: xcode-27
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Install Metal toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
 
       - name: Build app (iOS Simulator)
         run: |
@@ -62,11 +68,14 @@ jobs:
 
   mas-build:
     name: Mac App Store Build
-    runs-on: macos-26
+    runs-on: xcode-27
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Install Metal toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
 
       # Keeps the Sparkle-free target compiling: this build has no Sparkle
       # package linked, so every canImport(Sparkle) guard must hold.
