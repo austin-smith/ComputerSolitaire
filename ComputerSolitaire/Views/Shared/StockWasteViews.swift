@@ -232,7 +232,9 @@ struct WasteView: View {
         .background(
             GeometryReader { proxy in
                 Color.clear
-                    .preference(key: WasteFrameKey.self, value: proxy.frame(in: .named("board")))
+                    .preference(key: BoardFrameKey.self, value: BoardFramePreferences(
+                        wasteFrame: proxy.frame(in: .named("board"))
+                    ))
             }
         )
         .onTapGesture {

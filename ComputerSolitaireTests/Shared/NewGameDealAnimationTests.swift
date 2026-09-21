@@ -73,6 +73,23 @@ final class NewGameDealAnimationTests: XCTestCase {
 
     // MARK: - Flight plan
 
+    func testBookDealRetainsDistinctStockFormationAndWasteSizes() throws {
+        let state = GameStateFixtures.seededTriPeaksDeal(seed: 5)
+        let sequence = DealAnimationCoordinator.newGameDealSequence(in: state)
+        let stockFrame = CGRect(x: 580, y: 120, width: 96, height: 139.2)
+        let waste = try XCTUnwrap(state.waste.first)
+        var destinations = frames(for: sequence)
+        destinations[waste.id] = stockFrame.offsetBy(dx: 116, dy: 0)
+        let plan = try XCTUnwrap(DealAnimationCoordinator.makeNewGameDealPlan(
+            dealtCards: sequence, cardFrames: destinations, source: .stock(frame: stockFrame)))
+        for flight in plan.cards {
+            XCTAssertEqual(flight.startSize, stockFrame.size)
+            XCTAssertEqual(flight.endSize, destinations[flight.id]?.size)
+        }
+        XCTAssertNotEqual(plan.cards.first?.endSize, stockFrame.size)
+        XCTAssertEqual(plan.cards.last?.endSize, stockFrame.size)
+    }
+
     func testPlanFliesFromStockWhenStockFrameExists() {
         let state = GameStateFixtures.seededKlondikeDeal(seed: 7)
         let sequence = DealAnimationCoordinator.newGameDealSequence(in: state)

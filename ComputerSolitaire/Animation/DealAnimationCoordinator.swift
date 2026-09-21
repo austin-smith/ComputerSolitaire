@@ -63,7 +63,9 @@ enum DealAnimationCoordinator {
                     card: card,
                     start: CGPoint(x: startFrame.midX, y: startFrame.midY),
                     end: CGPoint(x: endFrame.midX, y: endFrame.midY),
-                    delay: staggerInterval * Double(index)
+                    delay: staggerInterval * Double(index),
+                    startSize: startFrame.size,
+                    endSize: endFrame.size
                 )
             )
         }
@@ -126,14 +128,17 @@ enum DealAnimationCoordinator {
         guard !flying.isEmpty else { return nil }
 
         let start: CGPoint
+        let startSize: CGSize
         switch source {
         case .stock(let stockFrame):
             guard !stockFrame.isEmpty else { return nil }
             start = CGPoint(x: stockFrame.midX, y: stockFrame.midY)
+            startSize = stockFrame.size
         case .aboveBoard(let boardSize):
             guard boardSize.width > 0, boardSize.height > 0 else { return nil }
             let cardHeight = flying[0].frame.height
             start = CGPoint(x: boardSize.width * 0.5, y: -cardHeight)
+            startSize = flying[0].frame.size
         }
 
         let stagger = min(
@@ -146,7 +151,9 @@ enum DealAnimationCoordinator {
                 card: item.card,
                 start: start,
                 end: CGPoint(x: item.frame.midX, y: item.frame.midY),
-                delay: stagger * Double(index)
+                delay: stagger * Double(index),
+                startSize: startSize,
+                endSize: item.frame.size
             )
         }
 

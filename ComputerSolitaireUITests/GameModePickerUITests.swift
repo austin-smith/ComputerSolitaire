@@ -1,6 +1,6 @@
 import XCTest
 
-/// Exercises the game picker overlay's dismissal affordances end-to-end.
+/// Exercises native game-picker presentation and navigation.
 final class GameModePickerUITests: XCTestCase {
 #if os(macOS)
     @MainActor
@@ -14,18 +14,17 @@ final class GameModePickerUITests: XCTestCase {
         XCTAssertTrue(titleButton.waitForExistence(timeout: 5), "Game title button should be on the board")
         titleButton.click()
 
-        let scrim = app.buttons["Dismiss game picker"]
-        XCTAssertTrue(scrim.waitForExistence(timeout: 3), "Picker overlay should open from the title button")
+        let closeButton = app.buttons["Dismiss game picker"]
+        XCTAssertTrue(closeButton.waitForExistence(timeout: 3), "Picker sheet should open from the title button")
 
         app.typeKey(.escape, modifierFlags: [])
 
-        XCTAssertTrue(scrim.waitForNonExistence(timeout: 3), "Escape should dismiss the picker overlay")
+        XCTAssertTrue(closeButton.waitForNonExistence(timeout: 3), "Escape should dismiss the picker sheet")
     }
 
-    /// The custom overlay must behave like a system modal for assistive
-    /// technologies: obscured board controls leave the accessibility tree.
+    /// Rely on the system's sheet semantics for modal accessibility.
     @MainActor
-    func testPickerHidesBoardAccessibility() throws {
+    func testPickerUsesNativeSheet() throws {
         let app = XCUIApplication()
         app.launch()
 
@@ -35,15 +34,17 @@ final class GameModePickerUITests: XCTestCase {
         XCTAssertTrue(titleButton.waitForExistence(timeout: 5), "Game title button should be on the board")
         titleButton.click()
 
-        let scrim = app.buttons["Dismiss game picker"]
-        XCTAssertTrue(scrim.waitForExistence(timeout: 3), "Picker overlay should open from the title button")
-        XCTAssertTrue(
-            titleButton.waitForNonExistence(timeout: 3),
-            "The obscured board should leave the accessibility tree while the picker is open"
-        )
+        let closeButton = app.buttons["Dismiss game picker"]
+        XCTAssertTrue(closeButton.waitForExistence(timeout: 3), "Picker sheet should open from the title button")
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.exists, "The picker should expose native sheet semantics")
+        XCTAssertTrue(sheet.buttons["Dismiss game picker"].isHittable)
+        closeButton.click()
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(titleButton.isHittable)
     }
 
-    /// A window near the supported minimum height can't fit all six family
+    /// A window near the supported minimum height can't fit all the family
     /// cards; the picker must fall back to scrolling so every game stays
     /// reachable.
     @MainActor
@@ -74,35 +75,77 @@ final class GameModePickerUITests: XCTestCase {
     }
 #endif
 #if os(iOS)
-    /// The bottom strip is where a thumb naturally taps to dismiss, and it is
-    /// also where the bottom toolbar's chrome used to swallow scrim taps.
-    /// Regression coverage: the toolbar must leave while the picker is open,
-    /// and a tap in that strip must dismiss the overlay.
     @MainActor
-    func testTapOutsideDismissesGamePicker() throws {
+    func testNativePickerAccessibility() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-screenshotFixture", "freecell"]
+        app.launch()
+        let title = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Switch game mode'")).firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        XCTAssertTrue(app.buttons["Dismiss game picker"].waitForExistence(timeout: 3))
+        try app.performAccessibilityAudit()
+    }
+
+    @MainActor
+    func testOverflowKeepsGameActionsReachable() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-screenshotFixture", "klondike-draw3"]
+        app.launch()
+        let more = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'more'")).firstMatch
+        XCTAssertTrue(more.waitForExistence(timeout: 5), app.debugDescription)
+        more.tap()
+        for action in ["New Game", "Restart", "Statistics", "Rules & Scoring", "Settings"] {
+            XCTAssertTrue(app.buttons[action].waitForExistence(timeout: 3), action)
+        }
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testCloseDismissesGamePickerAndRestoresBoard() throws {
         let app = XCUIApplication()
         app.launch()
-
         let titleButton = app.buttons.matching(
             NSPredicate(format: "label CONTAINS 'Switch game mode'")
         ).firstMatch
-        XCTAssertTrue(titleButton.waitForExistence(timeout: 5), "Game title button should be on the board")
+        XCTAssertTrue(titleButton.waitForExistence(timeout: 5))
         titleButton.tap()
-
-        let scrim = app.buttons["Dismiss game picker"]
-        XCTAssertTrue(scrim.waitForExistence(timeout: 3), "Picker overlay should open from the title button")
-        XCTAssertTrue(
-            app.buttons["Undo"].waitForNonExistence(timeout: 3),
-            "The bottom toolbar must leave while the picker is open — its chrome sits above the overlay and would swallow scrim taps"
-        )
-
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.97)).tap()
-
-        XCTAssertTrue(scrim.waitForNonExistence(timeout: 3), "Tapping the bottom strip outside the panel should dismiss the picker overlay")
-        XCTAssertTrue(
-            app.buttons["Undo"].waitForExistence(timeout: 3),
-            "The bottom toolbar should return once the picker closes"
-        )
+        let closeButton = app.buttons["Dismiss game picker"]
+        XCTAssertTrue(closeButton.waitForExistence(timeout: 3))
+        closeButton.tap()
+        XCTAssertTrue(closeButton.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(titleButton.isHittable)
     }
+
+    @MainActor
+    func testPickerNavigationSurvivesRotation() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let titleButton = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS 'Switch game mode'")
+        ).firstMatch
+        XCTAssertTrue(titleButton.waitForExistence(timeout: 5))
+        titleButton.tap()
+        let klondike = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Klondike'")).firstMatch
+        XCTAssertTrue(klondike.waitForExistence(timeout: 3))
+        klondike.tap()
+        let initialSize = app.windows.firstMatch.frame.size
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let rotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let frame = app.windows.firstMatch.frame
+            return frame.size != initialSize && frame.width > frame.height && frame.height > 0
+        }, object: nil)
+        let rotationResult = XCTWaiter.wait(for: [rotated], timeout: 10)
+        XCTAssertEqual(rotationResult, .completed, "The device did not actually rotate")
+        guard rotationResult == .completed else { return }
+        let threeCard = app.buttons.matching(NSPredicate(format: "label CONTAINS '3-card'")).firstMatch
+        XCTAssertTrue(threeCard.waitForExistence(timeout: 3))
+        threeCard.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS 'Switch game mode'"))
+            .firstMatch.waitForExistence(timeout: 3))
+    }
+
 #endif
 }

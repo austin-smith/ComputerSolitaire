@@ -22,7 +22,7 @@ struct GolfTopRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
+        BoardRow(spacing: columnSpacing) {
             StockView(
                 session: session,
                 stockCount: board.stockCount,
@@ -64,10 +64,10 @@ struct GolfTopRowView: View {
                     )
                     Color.clear
                         .preference(
-                            key: DropTargetFrameKey.self,
-                            value: [
+                            key: BoardFrameKey.self,
+                            value: BoardFramePreferences(dropTargets: [
                                 .waste: DropTargetGeometry(snapFrame: frame, hitFrame: hitFrame)
-                            ]
+                            ])
                         )
                 }
             )

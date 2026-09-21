@@ -18,7 +18,7 @@ struct YukonTopRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
+        BoardRow(spacing: columnSpacing) {
             // Yukon has no stock, waste, or free cells; keep the foundations aligned
             // over tableau columns 4-7, matching their Klondike positions.
             ForEach(0..<3, id: \.self) { _ in
