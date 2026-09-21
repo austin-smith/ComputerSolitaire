@@ -22,7 +22,7 @@ struct PyramidTopRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
+        FormationDrawRow(spacing: columnSpacing, columnCount: 7) {
             StockView(
                 session: session,
                 stockCount: board.stockCount,
@@ -63,21 +63,13 @@ struct PyramidTopRowView: View {
                     )
                     Color.clear
                         .preference(
-                            key: DropTargetFrameKey.self,
-                            value: [
+                            key: BoardFrameKey.self,
+                            value: BoardFramePreferences(dropTargets: [
                                 .waste: DropTargetGeometry(snapFrame: frame, hitFrame: hitFrame)
-                            ]
+                            ])
                         )
                 }
             )
-
-            // Keep the discard aligned over the last tableau column, mirroring
-            // where the other variants park their rightmost foundation.
-            ForEach(0..<4, id: \.self) { _ in
-                Color.clear
-                    .frame(width: cardSize.width, height: cardSize.height)
-                    .accessibilityHidden(true)
-            }
 
             PyramidDiscardView(
                 discard: board.discard,

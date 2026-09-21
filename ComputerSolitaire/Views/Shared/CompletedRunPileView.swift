@@ -47,13 +47,13 @@ struct CompletedRunPileView: View {
                 let boardFrame = proxy.frame(in: .named("board"))
                 Color.clear
                     .preference(
-                        key: DropTargetFrameKey.self,
-                        value: [
+                        key: BoardFrameKey.self,
+                        value: BoardFramePreferences(dropTargets: [
                             .foundation(index): DropTargetGeometry(
                                 snapFrame: boardFrame,
                                 hitFrame: .zero
                             )
-                        ]
+                        ])
                     )
             }
         )

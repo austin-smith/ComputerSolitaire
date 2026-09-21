@@ -67,7 +67,11 @@ struct GameGuideView: View {
             .padding(.horizontal, contentHorizontalPadding)
             .padding(.vertical, contentVerticalPadding)
         }
+#if os(macOS)
         .frame(minWidth: 440, idealWidth: 520, maxWidth: 620, minHeight: 360)
+#else
+        .frame(maxWidth: 620)
+#endif
         .navigationTitle("Rules & Scoring")
 #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

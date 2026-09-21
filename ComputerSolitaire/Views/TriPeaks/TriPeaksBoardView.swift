@@ -37,9 +37,7 @@ struct TriPeaksBoardView: View {
             }
         }
         .frame(width: boardWidth, height: boardHeight, alignment: .topLeading)
-#if os(iOS)
-        .frame(maxWidth: .infinity, alignment: .leading)
-#endif
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     /// Vertical distance between rows: cards naturally show their top ~45%, and
