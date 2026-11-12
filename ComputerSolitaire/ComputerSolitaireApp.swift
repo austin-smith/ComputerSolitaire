@@ -16,7 +16,9 @@ struct ComputerSolitaireApp: App {
 
     var body: some Scene {
 #if os(macOS)
-        WindowGroup {
+        // An explicit title keeps the window titled "Computer Solitaire" in
+        // Debug builds too, whose app name carries a "(Dev)" suffix.
+        WindowGroup("Computer Solitaire") {
 #if DEBUG
             // Screenshot capture (`-screenshotWindowSize`): pin the content
             // area to the exact requested size; windowResizability below

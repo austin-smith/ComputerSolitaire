@@ -33,7 +33,7 @@ struct AppIcon: Identifiable, Equatable {
     /// The blueprint icon that marks development builds; the primary icon in Debug only.
     static let development = AppIcon(
         alternateIconName: nil,
-        name: "Dev",
+        name: "Solitaire (Dev)",
         previewImageName: "AppIconPreviewDev"
     )
 

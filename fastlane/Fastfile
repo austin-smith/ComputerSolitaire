@@ -24,6 +24,7 @@ MAC_DERIVED_DATA = File.join(FASTLANE_DIR, "derived_data", "mac").freeze
 MAC_EXPORT_TMP = File.join(SCREENSHOTS_DIR, "mac-export").freeze
 MAC_RESULT_BUNDLE = File.join(SCREENSHOTS_DIR, "mac.xcresult").freeze
 SCHEME = "ComputerSolitaireScreenshots".freeze
+APP_PROCESS_NAMES = ["Computer Solitaire (Dev)", "Computer Solitaire"].freeze
 
 GAME_TESTS = {
   "klondike-draw3" => "testScreenshot01KlondikeDraw3",
@@ -136,9 +137,13 @@ platform :ios do
     require_test_build!(MAC_DERIVED_DATA, "macOS")
 
     # A previously launched copy prevents the UI test from owning the window.
-    if system("pgrep -xq 'Computer Solitaire'")
-      sh(%q(osascript -e 'with timeout of 3 seconds' -e 'quit app "Computer Solitaire"' -e 'end timeout' 2>/dev/null || true))
-      sh(%q(pkill -x "Computer Solitaire" 2>/dev/null || true; sleep 1; pkill -9 -x "Computer Solitaire" 2>/dev/null || true))
+    # Release builds run as "Computer Solitaire" and Debug builds (which this
+    # lane tests) as "Computer Solitaire (Dev)"; either one blocks the test.
+    APP_PROCESS_NAMES.each do |name|
+      next unless system("pgrep", "-xq", name)
+
+      sh(%(osascript -e 'with timeout of 3 seconds' -e 'quit app "#{name}"' -e 'end timeout' 2>/dev/null || true))
+      sh(%(pkill -x "#{name}" 2>/dev/null || true; sleep 1; pkill -9 -x "#{name}" 2>/dev/null || true))
     end
 
     FileUtils.rm_rf([MAC_EXPORT_TMP, MAC_RESULT_BUNDLE])

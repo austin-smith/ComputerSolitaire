@@ -375,9 +375,9 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ComputerSolitaire/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Computer Solitaire";
-				"INFOPLIST_KEY_CFBundleDisplayName[sdk=iphoneos*]" = Solitaire;
-				"INFOPLIST_KEY_CFBundleDisplayName[sdk=iphonesimulator*]" = Solitaire;
+				INFOPLIST_KEY_CFBundleDisplayName = "Computer Solitaire (Dev)";
+				"INFOPLIST_KEY_CFBundleDisplayName[sdk=iphoneos*]" = "Solitaire (Dev)";
+				"INFOPLIST_KEY_CFBundleDisplayName[sdk=iphonesimulator*]" = "Solitaire (Dev)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.card-games";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -394,7 +394,8 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
-				PRODUCT_NAME = "Computer Solitaire";
+				PRODUCT_MODULE_NAME = Computer_Solitaire;
+				PRODUCT_NAME = "Computer Solitaire (Dev)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -445,6 +446,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
+				PRODUCT_MODULE_NAME = Computer_Solitaire;
 				PRODUCT_NAME = "Computer Solitaire";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -595,7 +597,7 @@
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Computer Solitaire.app/Contents/MacOS/Computer Solitaire";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Computer Solitaire (Dev).app/Contents/MacOS/Computer Solitaire (Dev)";
 			};
 			name = Debug;
 		};
@@ -670,12 +672,13 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "ComputerSolitaire/Info-AppStore.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Computer Solitaire";
+				INFOPLIST_KEY_CFBundleDisplayName = "Computer Solitaire (Dev)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.card-games";
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
-				PRODUCT_NAME = "Computer Solitaire";
+				PRODUCT_MODULE_NAME = Computer_Solitaire;
+				PRODUCT_NAME = "Computer Solitaire (Dev)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -709,6 +712,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
+				PRODUCT_MODULE_NAME = Computer_Solitaire;
 				PRODUCT_NAME = "Computer Solitaire";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
