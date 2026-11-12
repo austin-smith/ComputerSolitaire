@@ -1,6 +1,6 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.96387,0.82275,0.87598,1.00000",
+    "automatic-gradient" : "display-p3:0.78000,0.50000,0.58000,1.00000",
     "orientation" : {
       "start" : {
         "x" : 0.5,
@@ -17,16 +17,25 @@
       "layers" : [
         {
           "glass" : false,
-          "hidden" : false,
-          "image-name" : "cards.png",
-          "name" : "cards",
-          "position" : {
-            "scale" : 1,
-            "translation-in-points" : [
-              0,
-              0
-            ]
-          }
+          "image-name" : "suits.svg",
+          "name" : "suits"
+        }
+      ],
+      "shadow" : {
+        "kind" : "none",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "cards.svg",
+          "name" : "cards"
         }
       ],
       "shadow" : {
@@ -34,7 +43,7 @@
         "opacity" : 0.5
       },
       "translucency" : {
-        "enabled" : true,
+        "enabled" : false,
         "value" : 0.5
       }
     }
