@@ -1,11 +1,12 @@
-#if os(macOS) && canImport(Sparkle)
+#if os(macOS) && canImport(Sparkle) && !DEBUG
 import Combine
 import Sparkle
 import SwiftUI
 
 /// App-lifetime owner of the Sparkle updater for the direct-download build.
-/// Mac App Store builds don't link Sparkle, so this file compiles away and
-/// every call site is guarded the same way.
+/// Mac App Store builds don't link Sparkle, and Debug builds (the separate dev
+/// app) must never offer to install a release over themselves, so in both this
+/// file compiles away and every call site is guarded the same way.
 final class UpdaterController: ObservableObject {
     static let shared = UpdaterController()
 

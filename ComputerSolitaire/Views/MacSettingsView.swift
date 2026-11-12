@@ -10,7 +10,7 @@ import SwiftUI
 struct MacSettingsView: View {
     private enum PaneMetrics {
         static let width: CGFloat = 500
-#if canImport(Sparkle)
+#if canImport(Sparkle) && !DEBUG
         static let generalHeight: CGFloat = 460
 #else
         static let generalHeight: CGFloat = 355
@@ -30,7 +30,7 @@ struct MacSettingsView: View {
                     Section("Gameplay") {
                         GameplaySettingsRows()
                     }
-#if canImport(Sparkle)
+#if canImport(Sparkle) && !DEBUG
                     Section("Updates") {
                         UpdatesSettingsRows()
                     }

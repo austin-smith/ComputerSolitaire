@@ -4,8 +4,12 @@ import UIKit
 
 /// To add a new alternate icon:
 /// 1. Add its Icon Composer package to `AppIcons/`.
-/// 2. Append the icon name to `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` in build settings.
+/// 2. Append the icon name to `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` in the Debug and
+///    Release build settings of both app targets.
 /// 3. Add a flattened preview export to `Assets.xcassets/AppIconPreviews/` and declare it below.
+///
+/// Debug builds use the blueprint `ComputerSolitaireDevAppIcon` as their primary icon, so there
+/// the production icon is selected by name like any other alternate.
 struct AppIcon: Identifiable, Equatable {
     /// The name passed to `setAlternateIconName(_:)`; `nil` selects the primary icon.
     let alternateIconName: String?
@@ -14,10 +18,23 @@ struct AppIcon: Identifiable, Equatable {
 
     var id: String { previewImageName }
 
+    #if DEBUG
+    private static let usesDevelopmentIcon = true
+    #else
+    private static let usesDevelopmentIcon = false
+    #endif
+
     static let `default` = AppIcon(
-        alternateIconName: nil,
+        alternateIconName: usesDevelopmentIcon ? "ComputerSolitaireAppIcon" : nil,
         name: "Default",
         previewImageName: "AppIconPreviewDefault"
+    )
+
+    /// The blueprint icon that marks development builds; the primary icon in Debug only.
+    static let development = AppIcon(
+        alternateIconName: nil,
+        name: "Solitaire (Dev)",
+        previewImageName: "AppIconPreviewDev"
     )
 
     static let queenOfHearts = AppIcon(
@@ -44,11 +61,15 @@ struct AppIcon: Identifiable, Equatable {
         previewImageName: "AppIconPreviewStack"
     )
 
-    static let all: [AppIcon] = [.default, .blue, .pink, .queenOfHearts, .stack]
+    /// The icon shown when no alternate is set.
+    static let primary: AppIcon = usesDevelopmentIcon ? .development : .default
+
+    static let all: [AppIcon] = (usesDevelopmentIcon ? [.development] : [])
+        + [.default, .blue, .pink, .queenOfHearts, .stack]
 
     static func current() -> AppIcon {
         let activeName = UIApplication.shared.alternateIconName
-        return all.first { $0.alternateIconName == activeName } ?? .default
+        return all.first { $0.alternateIconName == activeName } ?? primary
     }
 }
 
