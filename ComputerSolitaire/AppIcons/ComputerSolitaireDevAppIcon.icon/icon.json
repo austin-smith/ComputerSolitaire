@@ -41,8 +41,8 @@
       "layers" : [
         {
           "glass" : false,
-          "image-name" : "construction.svg",
-          "name" : "construction",
+          "image-name" : "annotations.svg",
+          "name" : "annotations",
           "fill-specializations" : [
             {
               "value" : "none"
