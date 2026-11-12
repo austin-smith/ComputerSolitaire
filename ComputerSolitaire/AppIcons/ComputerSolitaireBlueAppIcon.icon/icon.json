@@ -1,16 +1,6 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.18250,0.41357,0.66016,1.00000",
-    "orientation" : {
-      "start" : {
-        "x" : 0.5,
-        "y" : 1
-      },
-      "stop" : {
-        "x" : 0.5,
-        "y" : 0.3
-      }
-    }
+    "solid" : "srgb:0.03920,0.41960,0.67840,1.00000"
   },
   "groups" : [
     {
@@ -45,6 +35,31 @@
       "translucency" : {
         "enabled" : false,
         "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name-specializations" : [
+            {
+              "value" : "felt.png"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "felt-dark.png"
+            }
+          ],
+          "name" : "felt"
+        }
+      ],
+      "shadow" : {
+        "kind" : "none",
+        "opacity" : 0
+      },
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0
       }
     }
   ],
