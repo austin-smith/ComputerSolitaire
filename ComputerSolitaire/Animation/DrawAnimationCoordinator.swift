@@ -7,6 +7,8 @@ struct DrawAnimationCard: Identifiable {
     let start: CGPoint
     let end: CGPoint
     let delay: Double
+    let startSize: CGSize
+    let endSize: CGSize
 }
 
 enum DrawAnimationCoordinator {
@@ -42,7 +44,9 @@ enum DrawAnimationCoordinator {
                 card: card,
                 start: startPoint,
                 end: CGPoint(x: baseX + fanSpacing * CGFloat(index), y: baseY),
-                delay: 0
+                delay: 0,
+                startSize: stockFrame.size,
+                endSize: cardSize
             )
         }
 

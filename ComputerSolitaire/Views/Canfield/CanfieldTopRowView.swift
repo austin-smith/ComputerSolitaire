@@ -27,7 +27,7 @@ struct CanfieldTopRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
+        BoardRow(spacing: columnSpacing) {
             StockView(
                 session: session,
                 stockCount: board.stockCount,
@@ -95,6 +95,8 @@ struct CanfieldTopRowView: View {
 /// stock, as on a physical table — a spacer pair, then the four tableau
 /// piles aligned directly beneath the four foundations.
 struct CanfieldBoardRowView: View {
+    @Environment(\.boardColumns) private var columns
+
     /// Event wiring only; never read in body.
     let session: SolitaireViewModel
     let reserve: [Card]
@@ -116,7 +118,7 @@ struct CanfieldBoardRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
+        BoardRow(spacing: columnSpacing) {
             CanfieldReserveView(
                 session: session,
                 reserve: reserve,
@@ -157,6 +159,8 @@ struct CanfieldBoardRowView: View {
                 hintWiggleToken: hintWiggleToken,
                 dragGesture: dragGesture
             )
+            .environment(\.boardColumns, columns.suffix(from: 3))
+            .boardColumnSpan(4)
         }
 #if os(iOS)
         .frame(maxWidth: .infinity, alignment: .leading)

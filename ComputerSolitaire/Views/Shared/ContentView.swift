@@ -1,23 +1,14 @@
 import SwiftUI
 import SwiftData
 
-struct DropTargetFrameKey: PreferenceKey {
-    static var defaultValue: [DropTarget: DropTargetGeometry] = [:]
-
-    static func reduce(
-        value: inout [DropTarget: DropTargetGeometry],
-        nextValue: () -> [DropTarget: DropTargetGeometry]
-    ) {
-        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
-    }
-}
-
-/// One layout-pass snapshot for fresh-deal source and destination frames.
-/// Keeping them in one preference value prevents a cold layout from combining
-/// current card destinations with a missing or stale stock anchor from another
-/// pass.
+/// One layout-pass snapshot for board bounds, hit targets, and animation anchors.
+/// Publishing them together prevents a resize or fresh deal from combining
+/// current card destinations with stale source or drop-target geometry.
 struct BoardFramePreferences: Equatable {
     var dealEventID: UUID?
+    var layout: BoardLayoutState?
+    var dropTargets: [DropTarget: DropTargetGeometry] = [:]
+    var wasteFrame: CGRect = .zero
     var stockFrame: CGRect = .zero
     var cardFrames: [UUID: CGRect] = [:]
 }
@@ -36,18 +27,10 @@ struct BoardFrameKey: PreferenceKey {
         if !next.stockFrame.isEmpty {
             value.stockFrame = next.stockFrame
         }
+        if let layout = next.layout { value.layout = layout }
+        if !next.wasteFrame.isEmpty { value.wasteFrame = next.wasteFrame }
+        value.dropTargets.merge(next.dropTargets, uniquingKeysWith: { _, new in new })
         value.cardFrames.merge(next.cardFrames, uniquingKeysWith: { _, new in new })
-    }
-}
-
-struct WasteFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        let next = nextValue()
-        if !next.isEmpty {
-            value = next
-        }
     }
 }
 
@@ -93,9 +76,6 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var isReduceMotionEnabled
-#if os(iOS)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-#endif
 #if os(macOS)
     @Environment(\.appearsActive) private var appearsActive
 #endif
@@ -108,6 +88,10 @@ struct ContentView: View {
     // because these fields are written with `withAnimation`, and `@State`
     // preserves that transaction per attribute even when unanimated writes
     // land in the same tick. See DragInteractionController's doc comment.
+    @State private var interactionAnimationToken = UUID()
+    @State private var undoAnimationToken = UUID()
+    @State private var ignoresCurrentDrag = false
+    @GestureState private var isDragGestureActive = false
     @State private var overlayTilt: Double = 0
     @State private var dragReturnOffset: CGSize = .zero
     @State private var isReturningDrag = false
@@ -115,6 +99,7 @@ struct ContentView: View {
     @State private var isDroppingCards = false
     @State private var droppingSelection: Selection?
     @State private var dropAnimationOffset: CGSize = .zero
+    @State private var dropAnimationScale: CGFloat = 1
     @State private var pendingDropDestination: Destination?
     @State private var wasteReturnAnchorCardID: UUID?
     @State private var wasteReturnAnchorFrame: CGRect?
@@ -151,6 +136,7 @@ struct ContentView: View {
     @State private var hiddenCardIDs: Set<UUID> = []
     @State private var wasteFanProgress: [UUID: Double] = [:]
     @State private var boardViewportSize: CGSize = .zero
+    @State private var lastBoardLayout: BoardLayoutState?
     @State private var headerHeight = HeaderView.estimatedHeight
     @State private var previousWasteCount: Int = 0
     @State private var previousStockCount: Int = 0
@@ -250,48 +236,17 @@ struct ContentView: View {
             .environment(\.cardStyle, currentCardStyle)
             .environment(\.motionPolicy, motion)
         )
-        .accessibilityHidden(isShowingGamePicker)
-        .overlay {
-            if isShowingGamePicker {
-                GameModePickerOverlay(
-                    entries: gameModePickerEntries(),
-                    currentMode: viewModel.gameMode,
-                    feltColor: (TableBackgroundColor(rawValue: tableBackgroundColorRawValue)
-                        ?? .defaultValue).color,
-                    onSelect: { mode in
-                        withAnimation(.smooth(duration: 0.25)) {
-                            isShowingGamePicker = false
-                        }
-                        requestGameSwitch(to: mode)
-                    },
-                    onDismiss: {
-                        withAnimation(.smooth(duration: 0.25)) {
-                            isShowingGamePicker = false
-                        }
-                    }
-                )
-                .transition(.opacity)
-            }
-        }
     }
 
-    /// Gives the bottom bar a real navigation host on iOS.
-    ///
-    /// `.bottomBar` expects to be owned by a navigation container. Hosted bare
-    /// in the `WindowGroup` the items are bridged onto the window root, where
-    /// board mutations tear the bar down and `.toolbar(_:for: .bottomBar)` has
-    /// nothing to act on — which is why bar visibility used to be faked by
-    /// emptying the item list.
-    ///
-    /// The stack is purely a host: it never pushes and its own navigation bar
-    /// is hidden. It does add a subtree that reports sizeless frames before
-    /// layout, so the single-frame preference keys reject those explicitly.
     private func toolbarHost(for view: some View) -> some View {
 #if os(iOS)
         NavigationStack {
-            view
-                .toolbar(.hidden, for: .navigationBar)
-                .toolbar(isShowingGamePicker ? .hidden : .visible, for: .bottomBar)
+            if #available(iOS 27.0, *) {
+                // The system overflow menu belongs to the navigation bar.
+                view.toolbar(.visible, for: .navigationBar)
+            } else {
+                view.toolbar(.hidden, for: .navigationBar)
+            }
         }
 #else
         view
@@ -311,76 +266,28 @@ struct ContentView: View {
         view
             .toolbar {
 #if os(iOS)
-                // The bottom bar is UIKit chrome layered above the SwiftUI
-                // overlay: left in place while the picker is up it stays
-                // undimmed and fully tappable, and it swallows scrim taps in
-                // the bottom strip. Removing its items is what keeps the
-                // picker modal — `.toolbar(.hidden, for: .bottomBar)` is inert
-                // here because no NavigationStack hosts the bar.
-                if !isShowingGamePicker {
+                if #available(iOS 27.0, *) {
+                    ToolbarOverflowMenu { gameMenuActions }
+                } else {
                     ToolbarItem(placement: .bottomBar) {
-                        Menu {
-                            Section {
-                                Button("New Game", systemImage: "plus") {
-                                    startNewGameFromUI()
-                                }
-                                Button("Restart", systemImage: "arrow.clockwise") {
-                                    redealFromUI()
-                                }
-                                .disabled(!viewModel.canRedeal)
-                            }
-                            Section {
-                                Button("Statistics", systemImage: "chart.bar") {
-                                    isShowingStats = true
-                                }
-                                Button("Rules & Scoring", systemImage: "book") {
-                                    presentRulesAndScoring(initialSection: .rules)
-                                }
-                            }
-                            Section {
-                                Button("Settings", systemImage: "gear") {
-                                    isShowingSettings = true
-                                }
-                            }
-                        } label: {
+                        Menu { gameMenuActions } label: {
                             Label("More", systemImage: "ellipsis")
                         }
                     }
-                    ToolbarSpacer(.flexible, placement: .bottomBar)
-                    if viewModel.isAutoFinishAvailable {
-                        ToolbarItem(placement: .bottomBar) {
-                            Button {
-                                startAutoFinish()
-                            } label: {
-                                // The bottom bar renders Labels icon-only.
-                                HStack(spacing: 5) {
-                                    Image(systemName: "bolt")
-                                    Text("Auto")
-                                }
-                            }
-                            .accessibilityLabel("Auto Finish")
+                }
+                ToolbarSpacer(.flexible, placement: .bottomBar)
+                if viewModel.isAutoFinishAvailable {
+                    ToolbarItem(placement: .bottomBar) {
+                        Button("Auto Finish", systemImage: "bolt", action: startAutoFinish)
                             .disabled(isAutoFinishDisabled)
-                        }
-                        ToolbarSpacer(.fixed, placement: .bottomBar)
-                    }
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        if isHintButtonVisible {
-                            Button {
-                                triggerHint()
-                            } label: {
-                                Label("Hint", systemImage: "lightbulb")
-                            }
-                            .disabled(isHintDisabled)
-                        }
-                        Button {
-                            stopAutoFinish()
-                            beginUndoAnimationIfNeeded()
-                        } label: {
-                            Label("Undo", systemImage: "arrow.uturn.backward")
-                        }
-                        .disabled(isUndoDisabled)
                     }
                 }
+                if #available(iOS 27.0, *) {
+                    gameplayToolbar.visibilityPriority(.high)
+                } else {
+                    gameplayToolbar
+                }
+
 #endif
 #if os(macOS)
                 ToolbarSpacer(.flexible)
@@ -458,6 +365,39 @@ struct ContentView: View {
             }
     }
 
+#if os(iOS)
+    @ViewBuilder
+    private var gameMenuActions: some View {
+        Section {
+            Button("New Game", systemImage: "plus", action: startNewGameFromUI)
+            Button("Restart", systemImage: "arrow.clockwise", action: redealFromUI)
+                .disabled(!viewModel.canRedeal)
+        }
+        Section {
+            Button("Statistics", systemImage: "chart.bar") { isShowingStats = true }
+            Button("Rules & Scoring", systemImage: "book") { presentRulesAndScoring() }
+        }
+        Section {
+            Button("Settings", systemImage: "gear") { isShowingSettings = true }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var gameplayToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .bottomBar) {
+            if isHintButtonVisible {
+                Button("Hint", systemImage: "lightbulb", action: triggerHint)
+                    .disabled(isHintDisabled)
+            }
+            Button("Undo", systemImage: "arrow.uturn.backward") {
+                stopAutoFinish()
+                beginUndoAnimationIfNeeded()
+            }
+            .disabled(isUndoDisabled)
+        }
+    }
+#endif
+
     private func gameModePickerEntries() -> [GameModePickerView.Entry] {
         GameMode.allCases.map { mode in
             GameModePickerView.Entry(mode: mode, isWon: gameModeIsWon(mode))
@@ -497,6 +437,14 @@ struct ContentView: View {
         }
 #endif
         return view
+            .sheet(isPresented: $isShowingGamePicker) {
+                GameModePickerSheet(
+                    entries: gameModePickerEntries(), currentMode: viewModel.gameMode,
+                    feltColor: (TableBackgroundColor(rawValue: tableBackgroundColorRawValue)
+                        ?? .defaultValue).color,
+                    onSelect: requestGameSwitch
+                )
+            }
             .sheet(isPresented: $isShowingRulesAndScoring) {
                 NavigationStack {
                     GameGuideView(initialSection: rulesAndScoringInitialSection)
@@ -614,31 +562,38 @@ struct ContentView: View {
     private func boardRoot(for geometry: GeometryProxy) -> some View {
         let boardColumnCount = max(viewModel.state.tableau.count, viewModel.gameVariant.boardColumnCount)
         let boardDealEventID = viewModel.latestBoardDealEvent?.id
-#if os(iOS)
-        let metrics = Layout.metrics(
-            for: geometry.size,
-            isRegularWidth: horizontalSizeClass == .regular,
-            tableauColumnCount: boardColumnCount,
+        let viewport = BoardViewport(
+            size: geometry.size, obstructions: geometry.boardObstructions,
+            preservesFormation: viewModel.gameVariant == .pyramid,
             headerHeight: headerHeight
         )
-#else
         let metrics = Layout.metrics(
-            for: geometry.size,
+            for: viewport.formationPanes?.formation.size ?? viewport.frame.size,
             tableauColumnCount: boardColumnCount,
-            headerHeight: headerHeight
+            headerHeight: headerHeight,
+            division: viewport.columnDivision,
+            rowDivision: viewport.rowDivision,
+            headerOcclusions: viewport.headerOcclusions.map {
+                $0.offsetBy(dx: -(viewport.formationPanes?.formation.minX ?? 0), dy: 0)
+            },
+            variant: viewModel.gameVariant,
+            separatesDrawPiles: viewport.formationPanes != nil
         )
-#endif
+        let layoutState = BoardLayoutState(viewportSize: geometry.size, viewport: viewport, metrics: metrics)
         let cardSize = metrics.cardSize
-        let boardContentWidth = (cardSize.width * CGFloat(boardColumnCount))
-            + (metrics.columnSpacing * CGFloat(max(0, boardColumnCount - 1)))
-        let boardScaleFactor = boardScaleFactor(
-            availableWidth: geometry.size.width,
-            requiredWidth: boardContentWidth + (metrics.horizontalPadding * 2)
-        )
-        let effectiveCardSize = CGSize(
-            width: cardSize.width * boardScaleFactor,
-            height: cardSize.height * boardScaleFactor
-        )
+        let boardContentWidth = metrics.columns.width
+        let drawCardSize = viewport.formationPanes?.drawCardSize(
+            headerHeight: headerHeight, padding: metrics.verticalPadding,
+            spacing: metrics.rowSpacing, hasDiscard: viewModel.gameVariant == .pyramid
+        ) ?? cardSize
+        let drawRowWidth = viewport.formationPanes == nil ? boardContentWidth
+            : drawCardSize.width * 2 + FormationDrawLayout.columnGap
+        let surfaceLayout = viewport.formationPanes.map { panes in
+            AnyLayout(BookFormationLayout(panes: panes, horizontalPadding: metrics.horizontalPadding,
+                                          spacing: metrics.rowSpacing))
+        } ?? (metrics.centersFormationGroup
+            ? AnyLayout(ContinuousFormationLayout(spacing: metrics.rowSpacing))
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: metrics.rowSpacing)))
         let isBoardReady = hasLoadedGame && !isHydratingGame
         // One value capture per body pass; the board views render from these
         // slices (and prune when they're unchanged) instead of reading the
@@ -650,35 +605,36 @@ struct ContentView: View {
             return dropTarget(for: destination)
         }()
         let openScoringDetails: () -> Void = { presentRulesAndScoring(initialSection: .scoring) }
-#if os(iOS)
-        let isPadLandscape = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
-#endif
 
         ZStack {
             TableBackground()
             if isBoardReady {
-                let boardLayout = VStack(alignment: .leading, spacing: metrics.rowSpacing) {
+                let boardLayout = surfaceLayout {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         let headerMetrics = headerMetrics(at: context.date)
                         headerView(
                             elapsedSeconds: headerMetrics.elapsedSeconds,
                             score: headerMetrics.score,
-                            boardContentWidth: boardContentWidth,
+                            boardContentWidth: metrics.headerFrame.width,
                             onScoreTapped: openScoringDetails
                         )
-                        .onGeometryChange(for: CGFloat.self) { proxy in
-                            proxy.size.height
-                        } action: { newHeight in
-                            guard abs(newHeight - headerHeight) >= 0.5 else { return }
-                            headerHeight = newHeight
+                        // Measure the header at its natural height. A zero-width
+                        // startup proposal isn't a usable header measurement.
+                        .fixedSize(horizontal: false, vertical: true)
+                        .onGeometryChange(for: CGSize.self) { proxy in
+                            proxy.size
+                        } action: { size in
+                            guard size.width > 0, size.height > 0,
+                                  abs(size.height - headerHeight) >= 0.5 else { return }
+                            headerHeight = size.height
                         }
-                        .animation(boardSpring, value: viewModel.state)
+                        .padding(.leading, metrics.headerFrame.minX)
                     }
                     TopRowView(
                         session: viewModel,
                         board: topRow,
                         selection: selection,
-                        cardSize: cardSize,
+                        cardSize: drawCardSize,
                         columnSpacing: metrics.columnSpacing,
                         wasteFanSpacing: metrics.wasteFanSpacing,
                         activeTarget: drag.activeTarget,
@@ -695,13 +651,14 @@ struct ContentView: View {
                         fanProgress: wasteFanProgress,
                         dragGesture: dragGesture(for:)
                     )
-                    .frame(width: boardContentWidth, alignment: .leading)
+                    .frame(width: drawRowWidth, alignment: .leading)
                     // The move spring is scoped per board region and keyed on
                     // the state slice that region renders, so one region's
                     // change never opens an animation transaction over the
                     // whole board. The top row (stock, waste, foundations,
                     // free cells) is small enough to key on the whole state.
                     .animation(boardSpring, value: viewModel.state)
+                    .padding(.bottom, metrics.tableauSeparation)
                     if viewModel.gameVariant == .pyramid {
                         PyramidBoardView(
                             session: viewModel,
@@ -721,6 +678,7 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
+                        .frame(height: metrics.formationAreaHeight, alignment: .center)
                         .animation(boardSpring, value: viewModel.state.pyramid)
                     } else if viewModel.gameVariant == .tripeaks {
                         TriPeaksBoardView(
@@ -738,6 +696,7 @@ struct ContentView: View {
                             dragGesture: dragGesture(for:)
                         )
                         .frame(width: boardContentWidth, alignment: .leading)
+                        .frame(height: metrics.formationAreaHeight, alignment: .center)
                         .animation(boardSpring, value: viewModel.state.triPeaks)
                     } else if viewModel.gameVariant == .canfield {
                         CanfieldBoardRowView(
@@ -791,20 +750,16 @@ struct ContentView: View {
                     Spacer(minLength: 0)
                 }
                 .allowsHitTesting(!isWinCascadeAnimating)
-#if os(iOS)
-                .frame(
-                    maxWidth: .infinity,
-                    maxHeight: .infinity,
-                    alignment: isPadLandscape ? .top : .topLeading
-                )
-#else
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-#endif
+                .environment(\.boardColumns, metrics.columns)
+                .environment(\.separatesFormationDrawPiles, viewport.formationPanes != nil)
                 .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.vertical, metrics.verticalPadding)
 
                 boardLayout
-                    .scaleEffect(boardScaleFactor, anchor: .top)
+                    .frame(width: viewport.frame.width, height: viewport.frame.height, alignment: .topLeading)
+                    .padding(.leading, viewport.frame.minX)
+                    .padding(.top, viewport.frame.minY)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
                 Button("Cancel Drag") {
                     handleEscape()
@@ -816,35 +771,40 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .coordinateSpace(name: "board")
+        .coordinateSpace(.named("board"))
         .transformPreference(BoardFrameKey.self) { preferences in
             // Geometry belongs to a specific fresh-board event. Including the
             // event in the Equatable preference guarantees that an unchanged
             // redeal still publishes a new, causally tagged snapshot.
             preferences.dealEventID = boardDealEventID
+            preferences.layout = layoutState
         }
         .sensoryFeedback(trigger: hapticFeedback.trigger) {
             hapticFeedback.feedbackForTrigger
         }
-        .onPreferenceChange(DropTargetFrameKey.self) { frames in
-            dropFrames = frames
-            refreshLoadedWinPresentationIfNeeded()
-        }
-        .onPreferenceChange(WasteFrameKey.self) { frame in
-            wasteFrame = frame
-        }
         .onPreferenceChange(BoardFrameKey.self) { frames in
+            guard frames.dealEventID == viewModel.latestBoardDealEvent?.id else { return }
+            if let layout = frames.layout {
+                if let previous = lastBoardLayout, previous != layout {
+                    settleBoardForGeometryChange()
+                }
+                lastBoardLayout = layout
+                boardViewportSize = layout.viewportSize
+            }
+            dropFrames = frames.dropTargets
+            wasteFrame = frames.wasteFrame
             acceptBoardFramePreferences(frames)
+            refreshLoadedWinPresentationIfNeeded()
+            processPendingAutoMoveIfPossible()
+            queueAutoFinishStepIfPossible()
         }
         .onAppear {
             boardViewportSize = geometry.size
             resolvePendingNewGameDealIfReady()
             refreshLoadedWinPresentationIfNeeded()
         }
-        .onChange(of: geometry.size) { _, newSize in
-            boardViewportSize = newSize
-            resolvePendingNewGameDealIfReady()
-            refreshLoadedWinPresentationIfNeeded()
+        .onChange(of: isDragGestureActive) { _, active in
+            if !active { ignoresCurrentDrag = false }
         }
         .onChange(of: viewModel.isWin) { _, isWin in
             guard !isHydratingGame, !isSettlingHydratedGame else { return }
@@ -908,8 +868,8 @@ struct ContentView: View {
                 }
                 startDrawAnimation(
                     for: newCards,
-                    cardSize: effectiveCardSize,
-                    fanSpacing: metrics.wasteFanSpacing * boardScaleFactor
+                    cardSize: drawCardSize,
+                    fanSpacing: metrics.wasteFanSpacing
                 )
             }
             previousWasteCount = newValue
@@ -952,14 +912,12 @@ struct ContentView: View {
                     .zIndex(45)
                     DrawOverlayView(
                         cards: drawAnimationCards,
-                        cardSize: effectiveCardSize,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts
                     )
                     .zIndex(50)
                     DrawOverlayView(
                         cards: dealAnimationCards,
-                        cardSize: effectiveCardSize,
                         isCardTiltEnabled: isCardTiltEnabled,
                         cardTilts: $cardTilts,
                         hidesUntilTakeoff: dealFlightHidesQueuedCards
@@ -983,6 +941,7 @@ struct ContentView: View {
                         isDroppingCards: isDroppingCards,
                         droppingCards: droppingSelection?.cards ?? [],
                         dropAnimationOffset: dropAnimationOffset,
+                        dropAnimationScale: dropAnimationScale,
                         wasteReturnAnchorCardID: wasteReturnAnchorCardID,
                         wasteReturnAnchorFrame: wasteReturnAnchorFrame
                     )
@@ -1296,8 +1255,10 @@ struct ContentView: View {
 
     /// Clears in-flight drag/drop/undo/draw animation state so stale animation
     /// completions cannot mutate the game that replaces the current one.
-    private func resetTransientBoardState() {
-        viewModel.clearHint()
+    private func resetTransientBoardState(clearHint: Bool = true) {
+        interactionAnimationToken = UUID()
+        undoAnimationToken = UUID()
+        if clearHint { viewModel.clearHint() }
         drag.reset()
         overlayTilt = 0
         dragReturnOffset = .zero
@@ -1306,6 +1267,7 @@ struct ContentView: View {
         isDroppingCards = false
         droppingSelection = nil
         dropAnimationOffset = .zero
+        dropAnimationScale = 1
         pendingDropDestination = nil
         wasteReturnAnchorCardID = nil
         wasteReturnAnchorFrame = nil
@@ -1321,7 +1283,31 @@ struct ContentView: View {
         isUndoAnimating = false
         hiddenCardIDs = []
         wasteFanProgress = [:]
-        hintHighlightOpacity = 0
+        if clearHint { hintHighlightOpacity = 0 }
+    }
+
+    /// A resize finishes accepted moves and settles presentation-only flights.
+    /// An unfinished drag returns to its source; its remaining gesture events
+    /// cannot start another pickup using a translation from the old geometry.
+    private func settleBoardForGeometryChange() {
+        guard hasLoadedGame, !isHydratingGame else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            let wasDragging = viewModel.isDragging
+            if let destination = pendingDropDestination {
+                viewModel.handleDrop(to: destination)
+            } else if wasDragging {
+                viewModel.cancelDrag()
+                ignoresCurrentDrag = isDragGestureActive
+            }
+            resetTransientBoardState(clearHint: false)
+            if viewModel.isWin {
+                winCelebration.reset(to: .completed)
+            }
+        }
+        // The caller installs a complete geometry snapshot before resuming
+        // pending automatic moves.
     }
 
     private func startAutoFinish() {
@@ -1395,7 +1381,9 @@ struct ContentView: View {
 
     private func dragGesture(for origin: DragOrigin) -> AnyGesture<DragGesture.Value> {
         let gesture = DragGesture(minimumDistance: 2, coordinateSpace: .named("board"))
+            .updating($isDragGestureActive) { _, active, _ in active = true }
             .onChanged { value in
+                guard !ignoresCurrentDrag else { return }
                 if !viewModel.isDragging {
                     let started = startDrag(from: origin)
                     if !started { return }
@@ -1410,6 +1398,10 @@ struct ContentView: View {
                 drag.setActiveTarget(newTarget)
             }
             .onEnded { _ in
+                if ignoresCurrentDrag {
+                    ignoresCurrentDrag = false
+                    return
+                }
                 finishDrag()
             }
         return AnyGesture(gesture)
@@ -1498,6 +1490,7 @@ struct ContentView: View {
         pendingDropDestination = dest
         isDroppingCards = true
         dropAnimationOffset = .zero
+        dropAnimationScale = 1
         // Keep viewModel.isDragging true to hide original card during animation
 
         let offsetToTarget = CGSize(
@@ -1508,9 +1501,13 @@ struct ContentView: View {
         let dropDuration = isAutoFinishing ? 0.18 : 0.25
         withAnimation(motion.spring(response: dropDuration, dampingFraction: 0.85)) {
             dropAnimationOffset = offsetToTarget
+            dropAnimationScale = targetFrame.width / max(cardFrame.width, 1)
         }
 
+        let token = UUID()
+        interactionAnimationToken = token
         DispatchQueue.main.asyncAfter(deadline: .now() + motion.duration(dropDuration)) {
+            guard interactionAnimationToken == token else { return }
             // Clear old tilts so cards get fresh tilts at new position
             if let cards = droppingSelection?.cards {
                 for card in cards {
@@ -1527,6 +1524,7 @@ struct ContentView: View {
                 }
                 drag.dragTranslation = .zero
                 dropAnimationOffset = .zero
+                dropAnimationScale = 1
                 isDroppingCards = false
                 droppingSelection = nil
                 pendingDropDestination = nil
@@ -1566,7 +1564,10 @@ struct ContentView: View {
             overlayTilt = targetTilt
         }
         let returnDuration = motion.duration(0.32)
+        let token = UUID()
+        interactionAnimationToken = token
         DispatchQueue.main.asyncAfter(deadline: .now() + returnDuration) {
+            guard interactionAnimationToken == token else { return }
             viewModel.cancelDrag()
             wasteReturnAnchorCardID = nil
             wasteReturnAnchorFrame = nil
@@ -1891,6 +1892,8 @@ struct ContentView: View {
             return
         }
 
+        let token = UUID()
+        undoAnimationToken = token
         undoAnimationItems = startingItems
         undoAnimationTargets = targets
         undoAnimationProgress = 0
@@ -1908,10 +1911,10 @@ struct ContentView: View {
 
         if needsPostUndoFrames {
             DispatchQueue.main.async {
-                resolveUndoAnimationTargets(attemptsRemaining: 24)
+                resolveUndoAnimationTargets(token: token, attemptsRemaining: 24)
             }
         } else {
-            resolveUndoAnimationTargets(attemptsRemaining: 0)
+            resolveUndoAnimationTargets(token: token, attemptsRemaining: 0)
         }
     }
 
@@ -1955,7 +1958,8 @@ struct ContentView: View {
         UndoAnimationCoordinator.framesApproximatelyEqual(lhs, rhs)
     }
 
-    private func resolveUndoAnimationTargets(attemptsRemaining: Int) {
+    private func resolveUndoAnimationTargets(token: UUID, attemptsRemaining: Int) {
+        guard undoAnimationToken == token, isUndoAnimating else { return }
         let resolvedItems = undoAnimationItems.compactMap { item -> UndoAnimationItem? in
             guard let target = undoAnimationTargets[item.id],
                   let endFrame = resolveUndoTargetFrame(target) else { return nil }
@@ -1982,7 +1986,7 @@ struct ContentView: View {
             // change, so a card returning to the stock turns face down in the
             // air instead of snapping on landing.
             DispatchQueue.main.async {
-                guard isUndoAnimating else { return }
+                guard undoAnimationToken == token, isUndoAnimating else { return }
                 undoAnimationItems = undoAnimationItems.map { item in
                     var flownCard = item.card
                     flownCard.isFaceUp = item.endFaceUp
@@ -1998,6 +2002,7 @@ struct ContentView: View {
             // Slightly past the flight spring AND the mid-air flip (which
             // starts a turn late and runs 0.32s) so neither gets clipped.
             DispatchQueue.main.asyncAfter(deadline: .now() + motion.duration(0.38)) {
+                guard undoAnimationToken == token else { return }
                 finishUndoAnimation()
             }
             return
@@ -2009,7 +2014,7 @@ struct ContentView: View {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-            resolveUndoAnimationTargets(attemptsRemaining: attemptsRemaining - 1)
+            resolveUndoAnimationTargets(token: token, attemptsRemaining: attemptsRemaining - 1)
         }
     }
 
@@ -2354,13 +2359,6 @@ struct ContentView: View {
         if didChange {
             persistGameNow()
         }
-    }
-
-    /// Width overflow is computed analytically from the same inputs the board
-    /// lays out with; vertical overflow is prevented by per-pile compression.
-    private func boardScaleFactor(availableWidth: CGFloat, requiredWidth: CGFloat) -> CGFloat {
-        guard requiredWidth > 0 else { return 1 }
-        return min(1, availableWidth / requiredWidth)
     }
 
     private func restoreScreenshotFixtureIfRequested() -> Bool {

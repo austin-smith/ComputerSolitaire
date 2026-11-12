@@ -75,13 +75,13 @@ struct FreeCellView: View {
                 )
                 Color.clear
                     .preference(
-                        key: DropTargetFrameKey.self,
-                        value: [
+                        key: BoardFrameKey.self,
+                        value: BoardFramePreferences(dropTargets: [
                             .freeCell(index): DropTargetGeometry(
                                 snapFrame: boardFrame,
                                 hitFrame: hitFrame
                             )
-                        ]
+                        ])
                     )
             }
         )

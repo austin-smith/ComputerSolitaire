@@ -60,13 +60,13 @@ struct PyramidDiscardView: View {
                 )
                 Color.clear
                     .preference(
-                        key: DropTargetFrameKey.self,
-                        value: [
+                        key: BoardFrameKey.self,
+                        value: BoardFramePreferences(dropTargets: [
                             .discard: DropTargetGeometry(
                                 snapFrame: boardFrame,
                                 hitFrame: hitFrame
                             )
-                        ]
+                        ])
                     )
             }
         )

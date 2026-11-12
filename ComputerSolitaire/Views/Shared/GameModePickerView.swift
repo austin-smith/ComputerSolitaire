@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Game switcher presented centered over the board, organized in two levels:
+/// Game switcher organized in two levels:
 /// a gallery of game families (art, name, description) and — for families
 /// with multiple modes — a detail step listing each mode as a full row.
 /// The ring plus checkmark mark the current game. Every game auto-resumes,
@@ -22,26 +22,23 @@ struct GameModePickerView: View {
     let cardBackColor: CardBackColor
     let onSelect: (GameMode) -> Void
 
-    /// The family whose modes the detail step shows; nil shows the gallery.
-    @State private var drilledFamily: GameVariant?
-
     var body: some View {
-        Group {
-            if let family = drilledFamily {
-                familyDetail(family)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else {
-                familyGallery
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-            }
+        ScrollView {
+            familyGallery.padding(16)
         }
-        .padding(14)
+        .navigationTitle("Games")
+        .navigationDestination(for: GameVariant.self) { family in
+            ScrollView {
+                familyDetail(family).padding(16)
+            }
+            .navigationTitle(family.title)
+        }
     }
 
     // MARK: - Family gallery
 
     private var familyGallery: some View {
-        VStack(spacing: 10) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
             ForEach(GameVariant.allCases, id: \.self) { variant in
                 familyCard(variant)
             }
@@ -53,60 +50,64 @@ struct GameModePickerView: View {
         let isMultiMode = modes.count > 1
         let isActiveFamily = currentMode.variant == variant
 
-        return Button {
+        return Group {
             if isMultiMode {
-                withAnimation(.smooth(duration: 0.25)) {
-                    drilledFamily = variant
+                NavigationLink(value: variant) {
+                    familyLabel(variant, isMultiMode: true, isActiveFamily: isActiveFamily)
                 }
             } else if let mode = modes.first {
-                onSelect(mode)
-            }
-        } label: {
-            HStack(spacing: 12) {
-                MiniBoardView(
-                    variant: variant,
-                    feltColor: feltColor,
-                    cardBackColor: cardBackColor,
-                    scale: 0.62
-                )
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 8) {
-                        Text(variant.title)
-                            .font(.system(.subheadline, design: .rounded, weight: .bold))
-                            .foregroundStyle(.primary)
-
-                        Spacer(minLength: 8)
-
-                        if familyHasWonGame(variant) {
-                            wonBadge
-                                .fixedSize()
-                        }
-                    }
-
-                    Text(variant.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if isActiveFamily {
-                    Image(systemName: "checkmark")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.accentColor)
-                }
-
-                if isMultiMode {
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                Button { onSelect(mode) } label: {
+                    familyLabel(variant, isMultiMode: false, isActiveFamily: isActiveFamily)
                 }
             }
-            .selectionChip(isSelected: isActiveFamily)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(familyAccessibilityLabel(for: variant))
         .accessibilityAddTraits(isActiveFamily ? .isSelected : [])
+    }
+
+    private func familyLabel(_ variant: GameVariant, isMultiMode: Bool, isActiveFamily: Bool) -> some View {
+        HStack(spacing: 12) {
+            MiniBoardView(
+                variant: variant,
+                feltColor: feltColor,
+                cardBackColor: cardBackColor,
+                scale: 0.62
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(variant.title)
+                        .font(.system(.subheadline, design: .rounded, weight: .bold))
+                        .foregroundStyle(.primary)
+
+                    Spacer(minLength: 8)
+
+                    if familyHasWonGame(variant) {
+                        wonBadge
+                            .fixedSize()
+                    }
+                }
+
+                Text(variant.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if isActiveFamily {
+                Image(systemName: "checkmark")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            if isMultiMode {
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .selectionChip(isSelected: isActiveFamily)
     }
 
     private func familyHasWonGame(_ variant: GameVariant) -> Bool {
@@ -131,26 +132,6 @@ struct GameModePickerView: View {
 
     private func familyDetail(_ variant: GameVariant) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Button {
-                    withAnimation(.smooth(duration: 0.25)) {
-                        drilledFamily = nil
-                    }
-                } label: {
-                    Label("Games", systemImage: "chevron.left")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.accentColor)
-                }
-                .buttonStyle(.plain)
-
-                Spacer(minLength: 8)
-
-                Text(variant.title)
-                    .font(.system(.subheadline, design: .rounded, weight: .bold))
-                    .foregroundStyle(.primary)
-            }
-            .padding(.horizontal, 2)
-
             HStack(spacing: 12) {
                 MiniBoardView(
                     variant: variant,
@@ -240,141 +221,35 @@ struct GameModePickerView: View {
     }
 }
 
-/// Centered presentation of the game mode picker over a dimmed board,
-/// matching the win overlay's chrome.
-struct GameModePickerOverlay: View {
+/// Native presentation supplies dismissal, focus, and fold avoidance.
+struct GameModePickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(SettingsKey.cardBackColor)
+    private var cardBackColorRawValue = CardBackColor.defaultValue.id
+
     let entries: [GameModePickerView.Entry]
     let currentMode: GameMode
     let feltColor: Color
     let onSelect: (GameMode) -> Void
-    let onDismiss: () -> Void
-
-    @AppStorage(SettingsKey.cardBackColor)
-    private var cardBackColorRawValue = CardBackColor.defaultValue.id
-
-    /// The overlay takes keyboard focus while presented so Escape reaches it;
-    /// a custom overlay sits outside the window's cancel-action routing that
-    /// sheets get for free.
-    @FocusState private var isPickerFocused: Bool
-    @AccessibilityFocusState private var isPickerAccessibilityFocused: Bool
-
-    /// Which panel edges have more content scrolled beyond them, driving the
-    /// edge fades. The bottom starts true because the scrolling fallback only
-    /// exists when the content overflows.
-    @State private var overflowingEdges = OverflowingEdges(top: false, bottom: true)
-
-    private struct OverflowingEdges: Equatable {
-        var top: Bool
-        var bottom: Bool
-    }
 
     var body: some View {
-        ZStack {
-            // The scrim is the picker's cancel button: clicking outside the
-            // panel dismisses, matching a system presentation. Safe areas must
-            // be ignored on the button itself — expanding only the label paints
-            // edge to edge but leaves the hit area inset, deadening taps in the
-            // top and bottom strips on iOS.
-            Button(action: onDismiss) {
-                Color.black.opacity(0.35)
-                    .contentShape(Rectangle())
+        NavigationStack {
+            GameModePickerView(
+                entries: entries, currentMode: currentMode, feltColor: feltColor,
+                cardBackColor: CardBackColor.from(rawValue: cardBackColorRawValue)
+            ) { mode in
+                dismiss()
+                onSelect(mode)
             }
-            .buttonStyle(.plain)
-            .ignoresSafeArea()
-            .accessibilityLabel("Dismiss game picker")
-
-            // Short windows (a ten-family gallery on a phone, macOS near its
-            // minimum size, large accessibility text) can't fit the whole
-            // picker; fall back to scrolling the same content, opened at the
-            // current game and faded at whichever edges hide more of it.
-            ViewThatFits(in: .vertical) {
-                picker
-
-                scrollingPicker
-            }
-            .frame(maxWidth: 360)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.regularMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.3), radius: 24, y: 8)
-            )
-            .environment(\.colorScheme, .dark)
-            .padding(24)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Game picker")
-            .accessibilityFocused($isPickerAccessibilityFocused)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(.isModal)
-        .accessibilityDefaultFocus($isPickerAccessibilityFocused, true)
-        .focusable()
-        .focusEffectDisabled()
-        .focused($isPickerFocused)
-        .onKeyPress(.escape) {
-            onDismiss()
-            return .handled
-        }
-        .onAppear { isPickerFocused = true }
-    }
-
-    private var picker: some View {
-        GameModePickerView(
-            entries: entries,
-            currentMode: currentMode,
-            feltColor: feltColor,
-            cardBackColor: CardBackColor.from(rawValue: cardBackColorRawValue),
-            onSelect: onSelect
-        )
-    }
-
-    private var scrollingPicker: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                picker
-            }
-            .onScrollGeometryChange(for: OverflowingEdges.self) { geometry in
-                OverflowingEdges(
-                    top: geometry.contentOffset.y > 1,
-                    bottom: geometry.contentOffset.y + geometry.containerSize.height
-                        < geometry.contentSize.height - 1
-                )
-            } action: { _, edges in
-                overflowingEdges = edges
-            }
-            .mask(edgeFadeMask)
-            .onAppear {
-                // Land on the current game: a below-the-fold selection scrolls
-                // just into view, a visible one stays put.
-                proxy.scrollTo(currentMode.variant)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", systemImage: "xmark") { dismiss() }
+                        .accessibilityLabel("Dismiss game picker")
+                        .keyboardShortcut(.cancelAction)
+                }
             }
         }
-    }
-
-    /// Fades the content at each edge that hides more of it, so the fold
-    /// reads as "scroll for more" instead of an accidental clip.
-    private var edgeFadeMask: some View {
-        VStack(spacing: 0) {
-            LinearGradient(
-                colors: [.black.opacity(overflowingEdges.top ? 0 : 1), .black],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 24)
-
-            Color.black
-
-            LinearGradient(
-                colors: [.black, .black.opacity(overflowingEdges.bottom ? 0 : 1)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 24)
-        }
-        .animation(.easeInOut(duration: 0.15), value: overflowingEdges)
+        .presentationSizing(.form)
     }
 }
 

@@ -3,7 +3,6 @@ import Observation
 
 struct DrawOverlayView: View {
     let cards: [DrawAnimationCard]
-    let cardSize: CGSize
     let isCardTiltEnabled: Bool
     @Binding var cardTilts: [UUID: Double]
     /// Fresh-board deals queue every card on one shared anchor, so waiting
@@ -17,7 +16,8 @@ struct DrawOverlayView: View {
         ForEach(cards) { item in
             DrawOverlayCardView(
                 card: item.card,
-                cardSize: cardSize,
+                startSize: item.startSize,
+                endSize: item.endSize,
                 start: item.start,
                 end: item.end,
                 delay: item.delay,
@@ -131,6 +131,10 @@ struct UndoOverlayView: View {
                 cardTilts: .constant([:]),
                 isAccessibilityElement: false
             )
+            .scaleEffect(
+                x: 1 + (item.endFrame.width / max(item.startFrame.width, 1) - 1) * progress,
+                y: 1 + (item.endFrame.height / max(item.startFrame.height, 1) - 1) * progress
+            )
             .position(x: currentX, y: currentY)
         }
         .allowsHitTesting(false)
@@ -210,7 +214,8 @@ struct WinCascadeOverlayView: View {
 
 private struct DrawOverlayCardView: View {
     let card: Card
-    let cardSize: CGSize
+    let startSize: CGSize
+    let endSize: CGSize
     let start: CGPoint
     let end: CGPoint
     let delay: Double
@@ -227,7 +232,7 @@ private struct DrawOverlayCardView: View {
         CardView(
             card: card,
             isSelected: false,
-            cardSize: cardSize,
+            cardSize: endSize,
             // Shares the real card's tilt so the resting pose is already
             // there when the overlay hands off — no post-landing tilt pop.
             isCardTiltEnabled: isCardTiltEnabled,
@@ -237,6 +242,8 @@ private struct DrawOverlayCardView: View {
             flipDelay: delay,
             isAccessibilityElement: false
         )
+        .scaleEffect(x: startSize.width / max(endSize.width, 1) * (1 - progress) + progress,
+                     y: startSize.height / max(endSize.height, 1) * (1 - progress) + progress)
         .position(x: currentX, y: currentY)
         // See DrawOverlayView: only fresh-board deals hide their queue.
         .opacity(!hidesUntilTakeoff || hasTakenOff ? 1 : 0)
@@ -276,6 +283,7 @@ struct DragOverlayView: View {
     let isDroppingCards: Bool
     let droppingCards: [Card]
     let dropAnimationOffset: CGSize
+    let dropAnimationScale: CGFloat
     let wasteReturnAnchorCardID: UUID?
     let wasteReturnAnchorFrame: CGRect?
 
@@ -325,6 +333,7 @@ struct DragOverlayView: View {
                         cardTilts: .constant([:]),
                         isAccessibilityElement: false
                     )
+                    .scaleEffect(isDroppingCards ? dropAnimationScale : 1)
                     .rotationEffect(.degrees(overlayTilt))
                     .position(x: frame.midX, y: frame.midY)
                     .offset(

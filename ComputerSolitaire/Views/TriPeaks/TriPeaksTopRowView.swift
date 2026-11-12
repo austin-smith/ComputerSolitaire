@@ -22,7 +22,7 @@ struct TriPeaksTopRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
+        FormationDrawRow(spacing: columnSpacing, columnCount: 10) {
             StockView(
                 session: session,
                 stockCount: board.stockCount,
@@ -64,21 +64,13 @@ struct TriPeaksTopRowView: View {
                     )
                     Color.clear
                         .preference(
-                            key: DropTargetFrameKey.self,
-                            value: [
+                            key: BoardFrameKey.self,
+                            value: BoardFramePreferences(dropTargets: [
                                 .waste: DropTargetGeometry(snapFrame: frame, hitFrame: hitFrame)
-                            ]
+                            ])
                         )
                 }
             )
-
-            // Fill the ten-column board width so the stock and waste align
-            // with the leftmost peak columns.
-            ForEach(0..<(TriPeaksGeometry.baseRowLength - 2), id: \.self) { _ in
-                Color.clear
-                    .frame(width: cardSize.width, height: cardSize.height)
-                    .accessibilityHidden(true)
-            }
         }
 #if os(iOS)
         .frame(maxWidth: .infinity, alignment: .leading)

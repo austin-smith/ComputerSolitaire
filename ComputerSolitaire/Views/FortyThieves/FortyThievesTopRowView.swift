@@ -23,7 +23,7 @@ struct FortyThievesTopRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
+        BoardRow(spacing: columnSpacing) {
             // Stock and waste on the left like Klondike's, then the eight
             // foundations — two per suit — aligned over tableau columns 3-10.
             StockView(

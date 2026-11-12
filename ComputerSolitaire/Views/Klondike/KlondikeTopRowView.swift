@@ -23,7 +23,7 @@ struct KlondikeTopRowView: View {
     let dragGesture: (DragOrigin) -> AnyGesture<DragGesture.Value>
 
     var body: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
+        BoardRow(spacing: columnSpacing) {
             StockView(
                 session: session,
                 stockCount: board.stockCount,

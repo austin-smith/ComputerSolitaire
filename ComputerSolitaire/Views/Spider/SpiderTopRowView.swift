@@ -15,7 +15,7 @@ struct SpiderTopRowView: View {
     let hintWiggleToken: UUID
 
     var body: some View {
-        HStack(alignment: .top, spacing: columnSpacing) {
+        BoardRow(spacing: columnSpacing) {
             // Stock on the left like Klondike's, one clear column, then the
             // eight banked-run piles aligned over tableau columns 3-10.
             TableauStockView(
