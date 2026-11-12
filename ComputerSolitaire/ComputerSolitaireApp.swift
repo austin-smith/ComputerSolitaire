@@ -89,7 +89,7 @@ struct ComputerSolitaireApp: App {
                 }
             )
         }
-#if canImport(Sparkle)
+#if canImport(Sparkle) && !DEBUG
         CommandGroup(after: .appInfo) {
             CheckForUpdatesButton()
         }
