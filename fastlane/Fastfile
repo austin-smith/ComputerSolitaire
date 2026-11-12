@@ -141,10 +141,11 @@ platform :ios do
     # Release build ("Computer Solitaire") is a separate app, but its windows
     # could still overlap the capture, so quit both.
     APP_PROCESS_NAMES.each do |name|
-      next unless system("pgrep", "-xq", name)
+      pattern = process_name_pattern(name)
+      next unless system("pgrep", "-xq", pattern)
 
       sh(%(osascript -e 'with timeout of 3 seconds' -e 'quit app "#{name}"' -e 'end timeout' 2>/dev/null || true))
-      sh(%(pkill -x "#{name}" 2>/dev/null || true; sleep 1; pkill -9 -x "#{name}" 2>/dev/null || true))
+      sh(%(pkill -x '#{pattern}' 2>/dev/null || true; sleep 1; pkill -9 -x '#{pattern}' 2>/dev/null || true))
     end
 
     FileUtils.rm_rf([MAC_EXPORT_TMP, MAC_RESULT_BUNDLE])
@@ -251,6 +252,12 @@ def test_identifiers(games)
   games.map do |game|
     "ComputerSolitaireUITests/ScreenshotCaptureUITests/#{GAME_TESTS.fetch(game)}"
   end
+end
+
+# pgrep and pkill match extended regular expressions, so a process name such
+# as "Computer Solitaire (Dev)" must have its special characters escaped.
+def process_name_pattern(name)
+  name.gsub(/[.^$|?*+()\[\]{}\\]/) { |character| "\\#{character}" }
 end
 
 def require_test_build!(derived_data_path, platform_name)
