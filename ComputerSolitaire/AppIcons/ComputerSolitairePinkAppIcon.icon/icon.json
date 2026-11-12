@@ -1,6 +1,16 @@
 {
   "fill" : {
-    "solid" : "srgb:0.82750,0.48630,0.58040,1.00000"
+    "automatic-gradient" : "display-p3:0.78000,0.50000,0.58000,1.00000",
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 1
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.3
+      }
+    }
   },
   "groups" : [
     {
@@ -41,15 +51,20 @@
       "layers" : [
         {
           "glass" : false,
-          "image-name-specializations" : [
+          "hidden-specializations" : [
             {
-              "value" : "felt.png"
+              "value" : false
             },
             {
               "appearance" : "dark",
-              "value" : "felt-dark.png"
+              "value" : true
+            },
+            {
+              "appearance" : "tinted",
+              "value" : true
             }
           ],
+          "image-name" : "felt.png",
           "name" : "felt"
         }
       ],
