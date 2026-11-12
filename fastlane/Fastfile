@@ -137,8 +137,9 @@ platform :ios do
     require_test_build!(MAC_DERIVED_DATA, "macOS")
 
     # A previously launched copy prevents the UI test from owning the window.
-    # Release builds run as "Computer Solitaire" and Debug builds (which this
-    # lane tests) as "Computer Solitaire (Dev)"; either one blocks the test.
+    # This lane tests the Debug build ("Computer Solitaire (Dev)"). A running
+    # Release build ("Computer Solitaire") is a separate app, but its windows
+    # could still overlap the capture, so quit both.
     APP_PROCESS_NAMES.each do |name|
       next unless system("pgrep", "-xq", name)
 

@@ -393,7 +393,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
+				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire.dev;
 				PRODUCT_MODULE_NAME = Computer_Solitaire;
 				PRODUCT_NAME = "Computer Solitaire (Dev)";
 				REGISTER_APP_GROUPS = YES;
@@ -676,7 +676,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.card-games";
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire;
+				PRODUCT_BUNDLE_IDENTIFIER = com.crapshack.ComputerSolitaire.dev;
 				PRODUCT_MODULE_NAME = Computer_Solitaire;
 				PRODUCT_NAME = "Computer Solitaire (Dev)";
 				REGISTER_APP_GROUPS = YES;
