@@ -4,8 +4,8 @@ import UIKit
 
 /// To add a new alternate icon:
 /// 1. Add its Icon Composer package to `AppIcons/`.
-/// 2. Append the icon name to `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` in build settings
-///    (both the Debug and Release configurations).
+/// 2. Append the icon name to `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` in the Debug and
+///    Release build settings of both app targets.
 /// 3. Add a flattened preview export to `Assets.xcassets/AppIconPreviews/` and declare it below.
 ///
 /// Debug builds use the blueprint `ComputerSolitaireDevAppIcon` as their primary icon, so there
