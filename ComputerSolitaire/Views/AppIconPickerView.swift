@@ -38,7 +38,13 @@ struct AppIcon: Identifiable, Equatable {
         previewImageName: "AppIconPreviewPink"
     )
 
-    static let all: [AppIcon] = [.default, .blue, .pink, .queenOfHearts]
+    static let stack = AppIcon(
+        alternateIconName: "StackAppIcon",
+        name: "Stack",
+        previewImageName: "AppIconPreviewStack"
+    )
+
+    static let all: [AppIcon] = [.default, .blue, .pink, .queenOfHearts, .stack]
 
     static func current() -> AppIcon {
         let activeName = UIApplication.shared.alternateIconName
